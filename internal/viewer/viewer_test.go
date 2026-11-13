@@ -169,7 +169,7 @@ func TestLaunchSwitchesToAnOpenFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// And again once a tab shows it: switch to that tab.
+	// Launched again once a tab shows it: switch to that tab.
 	s.Launch([]string{path}, "/")
 	if !slices.Equal(s.windows.created, []string{"window-1+"}) ||
 		!slices.Equal(s.windows.focused, []string{"window-1", "window-1"}) {
@@ -275,7 +275,7 @@ func TestDocumentsLiveWhileATabShowsThem(t *testing.T) {
 		t.Error("releasing one tab's document dropped another tab's")
 	}
 
-	// A document two windows show survives one of them letting go.
+	// A document shown by two windows survives the closing of one of them.
 	s.win("two").docs[docB.ID] = true
 	s.WindowClosed("one")
 	if s.doc(docB.ID) == nil || s.doc(docC.ID) == nil {
@@ -446,7 +446,7 @@ func TestServeHTTP(t *testing.T) {
 		}
 	}
 
-	// The route prefix may or may not reach the handler.
+	// ServeHTTP accepts the path with or without the route prefix.
 	if res := get(s.Service, "/1/a.pdf", nil); res.StatusCode != http.StatusOK {
 		t.Errorf("prefix-stripped path: status %d", res.StatusCode)
 	}
@@ -472,7 +472,7 @@ func TestServeHTTPUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if os.Getuid() != 0 { // root ignores file permissions
+	if os.Getuid() != 0 { // Root ignores file permissions.
 		if err := os.Chmod(path, 0); err != nil {
 			t.Fatal(err)
 		}

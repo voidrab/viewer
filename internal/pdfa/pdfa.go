@@ -21,9 +21,9 @@ const maxMessages = 5
 // ErrUnknownProfile is returned for a profile name Profiles does not list.
 var ErrUnknownProfile = errors.New("unknown profile")
 
-// Error is a failure from this package: Error returns a sentence fit to show
-// the user, and Unwrap the cause, so errors.Is still matches gopdfrab's
-// sentinel errors.
+// Error is a failure from this package. Its Error method returns a sentence
+// suitable for showing to the user, and Unwrap returns the cause, so errors.Is
+// still matches gopdfrab's sentinel errors.
 type Error struct {
 	Msg string
 	Err error

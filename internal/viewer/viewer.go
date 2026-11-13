@@ -35,7 +35,7 @@ import (
 // Route is where documents are served; mount the Service there.
 const Route = "/doc"
 
-// Events the Service emits, wrapped in a Targeted payload.
+// Names of the events the Service emits. Each is sent as a Targeted payload.
 const (
 	// EventOpenFiles carries paths ([]string) to open, each in a tab.
 	EventOpenFiles = "files:open"
@@ -85,8 +85,8 @@ type Document struct {
 	// URL is where the frontend fetches the bytes: Route/<ID>/<name>.
 	URL  string    `json:"url"`
 	Info pdfa.Info `json:"info"`
-	// Note explains why Info is incomplete, when gopdfrab could not read the
-	// file but it may still render.
+	// Note gives the reason Info is incomplete when gopdfrab could not read the
+	// file, which may still render.
 	Note string `json:"note,omitempty"`
 }
 
@@ -196,8 +196,9 @@ func (s *Service) openWindow(files []string) {
 	s.windows.New(name, len(files) > 0)
 }
 
-// find names the window showing or about to open path and, if it shows it,
-// the document's ID; or returns "".
+// find returns the name of the window that shows path or has it pending to
+// open. If the window already shows path, find also returns the document's
+// ID. Otherwise it returns "" and 0.
 func (s *Service) find(path string) (string, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -214,8 +215,8 @@ func (s *Service) find(path string) (string, int) {
 	return "", 0
 }
 
-// InitialFiles marks the calling window ready and returns the files it
-// should open, once.
+// InitialFiles marks the calling window ready and returns the files pending
+// for it. Each file is returned at most once.
 func (s *Service) InitialFiles(ctx context.Context) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -364,12 +365,13 @@ func (s *Service) Convert(ctx context.Context, id int, profile string) (*pdfa.Co
 	return &cr, nil
 }
 
-// ServeHTTP serves a document's bytes, with range support, at
-// Route/<ID>/<name>; the name only makes the URL readable.
+// ServeHTTP serves a document's bytes at Route/<ID>/<name> and supports range
+// requests. The name part of the path is ignored; it only makes the URL
+// readable.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, Route), "/")
 	idText, _, _ := strings.Cut(rest, "/")
-	id, _ := strconv.Atoi(idText) // 0 if malformed, which no document has
+	id, _ := strconv.Atoi(idText) // A malformed ID yields 0, which no document has
 	doc := s.doc(id)
 	if doc == nil {
 		http.Error(w, ErrNoDocument.Error(), http.StatusNotFound)
@@ -381,7 +383,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	var modified time.Time // zero, which ServeContent ignores, if Stat fails
+	var modified time.Time // Zero, which ServeContent ignores, if Stat fails
 	if st, err := f.Stat(); err == nil {
 		modified = st.ModTime()
 	}

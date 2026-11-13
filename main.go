@@ -20,8 +20,9 @@ import (
 	"viewer/internal/viewer"
 )
 
-// appID identifies the app to the desktop: GTK, the Wayland window and the
-// installed build/linux/<appID>.desktop entry must all carry the same one.
+// appID identifies the app to the desktop. The GTK application ID, the Wayland
+// window's app ID and the installed build/linux/<appID>.desktop entry must all
+// equal it.
 const appID = "com.voidrab.gopdfrab.Viewer"
 
 //go:embed all:frontend/dist
@@ -86,7 +87,7 @@ type desktopWindows struct {
 func (d *desktopWindows) New(name string, opening bool) {
 	url := "/"
 	if opening {
-		url = "/?opening" // the page shows its loading bar from first paint
+		url = "/?opening" // The page shows its loading bar from its first paint
 	}
 	win := d.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             name,
