@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -117,6 +118,14 @@ func (d *desktopWindows) New(name string, opening bool) {
 	})
 	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 		d.svc.WindowClosed(name)
+	})
+	// Lets a closed window be freed (see releaseWindowRef). The runtime is
+	// ready once the native window exists; a reload makes it ready again.
+	var release sync.Once
+	win.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		release.Do(func() {
+			application.InvokeSync(func() { releaseWindowRef(win.NativeWindow()) })
+		})
 	})
 }
 
