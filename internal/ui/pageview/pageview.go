@@ -6,6 +6,7 @@ package pageview
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -147,16 +148,22 @@ func (v *View) Close() {
 // scale. Cached bitmaps are keyed by this value.
 func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
 
-// Draw paints the visible pages into c, whose bounds are the viewport. A page
-// still being rendered shows a stretched earlier bitmap of it if there is one,
-// or blank paper.
-func (v *View) Draw(c *paint.Canvas) {
-	c.Fill(c.Bounds(), v.opts.Background)
+// Draw paints the visible pages into all of c, whose bounds are the viewport.
+// A page still being rendered shows a stretched earlier bitmap of it if there
+// is one, or blank paper.
+func (v *View) Draw(c *paint.Canvas) { v.DrawIn(c, c.Bounds()) }
+
+// DrawIn paints the view into rect of c, which must be the viewport the view
+// was sized to.
+func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
+	c.PushClip(rect)
+	defer c.PopClip()
+	c.Fill(rect, v.opts.Background)
 	first, last := v.lay.Visible()
 	dpi := dpiFor(v.lay.Scale())
 	v.cancelHidden(first, last)
 	for i := first; i < last; i++ {
-		r := v.lay.ViewRect(i)
+		r := v.lay.ViewRect(i).Add(rect.Min)
 		c.Fill(r, color.NRGBA{255, 255, 255, 255})
 		if img := v.lookup(key{i, dpi}); img != nil {
 			c.DrawScaled(r, img)
@@ -167,6 +174,55 @@ func (v *View) Draw(c *paint.Canvas) {
 		}
 		v.schedule(key{i, dpi})
 	}
+}
+
+// Page returns the zero-based index of the page at the middle of the view.
+func (v *View) Page() int { return v.lay.Current() }
+
+// Pages returns the number of pages.
+func (v *View) Pages() int { return v.lay.Pages() }
+
+// GoToPage scrolls to page i, clamped to the document.
+func (v *View) GoToPage(i int) { v.lay.GoTo(i) }
+
+// ZoomIn and ZoomOut change the zoom by one step.
+func (v *View) ZoomIn()  { v.zoomBy(zoomStep) }
+func (v *View) ZoomOut() { v.zoomBy(1 / zoomStep) }
+
+// zoomPresets are the scales CycleZoom steps through after the two fit modes.
+var zoomPresets = []float64{0.5, 0.75, 1, 1.25, 1.5, 2, 3}
+
+// CycleZoom steps to the next zoom preset: fit width, fit page, then the fixed
+// scales in ascending order, and round again. From a scale between presets it
+// goes to the next one up.
+func (v *View) CycleZoom() {
+	switch v.lay.Mode() {
+	case layout.ZoomFitWidth:
+		v.lay.SetMode(layout.ZoomFitPage)
+		return
+	case layout.ZoomFitPage:
+		v.lay.SetZoom(zoomPresets[0])
+		return
+	}
+	for _, p := range zoomPresets {
+		if p > v.lay.Scale()+1e-9 {
+			v.lay.SetZoom(p)
+			return
+		}
+	}
+	v.lay.SetMode(layout.ZoomFitWidth)
+}
+
+// ZoomLabel describes the zoom for display: "Fit width", "Fit page" or a
+// percentage.
+func (v *View) ZoomLabel() string {
+	switch v.lay.Mode() {
+	case layout.ZoomFitWidth:
+		return "Fit width"
+	case layout.ZoomFitPage:
+		return "Fit page"
+	}
+	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()*100)))
 }
 
 // lookup returns the cached bitmap for k and marks it recently used.

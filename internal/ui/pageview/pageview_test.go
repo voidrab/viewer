@@ -346,3 +346,72 @@ func TestDefaultOptions(t *testing.T) {
 		t.Errorf("defaults = %+v", o)
 	}
 }
+
+func TestDrawInPaintsOnlyItsRectangle(t *testing.T) {
+	v, inv := newView(t, openDoc(t, 2), image.Pt(124, 124), Options{})
+	c := paint.New(300, 300)
+	rect := image.Rect(100, 150, 224, 274)
+	v.DrawIn(c, rect)
+	waitInv(t, inv)
+	v.DrawIn(c, rect)
+	if got := c.Img.RGBAAt(99, 200); got.A != 0 {
+		t.Errorf("painted left of the rectangle: %v", got)
+	}
+	if got := c.Img.RGBAAt(150, 149); got.A != 0 {
+		t.Errorf("painted above the rectangle: %v", got)
+	}
+	// The first page starts at the layout's offset inside the rectangle.
+	r := v.Layout().ViewRect(0).Add(rect.Min)
+	mid := r.Min.Add(r.Size().Div(2))
+	if got := c.Img.RGBAAt(mid.X, mid.Y); got != red {
+		t.Errorf("page pixel = %v, want red", got)
+	}
+}
+
+func TestPageNavigationAndZoomSteps(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 5), image.Pt(124, 124), Options{})
+	if v.Pages() != 5 || v.Page() != 0 {
+		t.Fatalf("pages %d, page %d", v.Pages(), v.Page())
+	}
+	v.GoToPage(3)
+	if v.Page() != 3 {
+		t.Errorf("after GoToPage(3), page %d", v.Page())
+	}
+	v.GoToPage(99)
+	if v.Page() != 4 {
+		t.Errorf("after GoToPage(99), page %d", v.Page())
+	}
+	before := v.Layout().Scale()
+	v.ZoomIn()
+	if v.Layout().Scale() <= before {
+		t.Error("ZoomIn did not zoom in")
+	}
+	v.ZoomOut()
+	v.ZoomOut()
+	if v.Layout().Scale() >= before {
+		t.Error("ZoomOut did not zoom out")
+	}
+}
+
+func TestCycleZoomStepsThroughThePresets(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 3), image.Pt(124, 124), Options{})
+	want := []string{"Fit width", "Fit page", "50%", "75%", "100%", "125%", "150%", "200%", "300%", "Fit width"}
+	for i, label := range want {
+		if got := v.ZoomLabel(); got != label {
+			t.Fatalf("step %d: label %q, want %q", i, got, label)
+		}
+		v.CycleZoom()
+	}
+	// From a scale between two presets it goes to the next one up.
+	v.Layout().SetZoom(1.1)
+	v.CycleZoom()
+	if got := v.ZoomLabel(); got != "125%" {
+		t.Errorf("from 110%%: %q, want 125%%", got)
+	}
+	// Past the largest preset it wraps to fit width.
+	v.Layout().SetZoom(5)
+	v.CycleZoom()
+	if got := v.ZoomLabel(); got != "Fit width" {
+		t.Errorf("from 500%%: %q, want Fit width", got)
+	}
+}
