@@ -140,7 +140,8 @@ func (a *App) selectTab(i int) {
 	}
 }
 
-// findUnavailable is the message shown where find would start.
+// findUnavailable is the warning shown when find is requested, which the app
+// does not yet support.
 const findUnavailable = "Find is not available yet"
 
 // key handles shortcuts, passing everything else to the active view. It
@@ -158,8 +159,8 @@ func (a *App) key(ev platform.KeyEvent) (quit bool) {
 	return false
 }
 
-// shortcut carries out a Ctrl shortcut and reports whether ev was one. Ctrl+Q
-// is recognised but left to the caller, which quits.
+// shortcut runs the action of the Ctrl shortcut ev and reports whether ev is
+// one. Ctrl+Q counts as a shortcut but does nothing here; the caller quits.
 func (a *App) shortcut(ev platform.KeyEvent) bool {
 	switch {
 	case ev.Rune == 'q':

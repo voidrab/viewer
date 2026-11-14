@@ -28,8 +28,9 @@ type Options struct {
 	Background color.NRGBA
 	// CacheBytes bounds the memory of cached page bitmaps; zero means 256 MiB.
 	CacheBytes int
-	// Workers is the number of pages rendered at once; zero means one, since
-	// the pages of a document render one after another whatever the number.
+	// Workers is the number of pages rendered at once; zero means one. Renders
+	// of one document serialize on its lock, so larger values add no
+	// parallelism.
 	Workers int
 	// ScrollSpeed multiplies wheel scroll distances; zero means 5.
 	ScrollSpeed float64
@@ -164,7 +165,7 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	for i := first; i < last; i++ {
 		r := v.lay.ViewRect(i).Add(rect.Min)
 		if img := v.lookup(key{i, dpi}); img != nil {
-			c.DrawScaled(r, img) // rendered pages are opaque: no paper needed under them
+			c.DrawScaled(r, img) // Rendered pages are opaque, so they need no white fill.
 			continue
 		}
 		c.Fill(r, color.NRGBA{255, 255, 255, 255})

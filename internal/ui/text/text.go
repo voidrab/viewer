@@ -135,7 +135,8 @@ func (f *Face) Fit(s string, maxWidth int) string {
 		return ""
 	}
 	runes := []rune(s)
-	// The widest prefix that fits: widths only grow with the prefix, so search.
+	// Prefix widths never decrease, so sort.Search finds the shortest prefix
+	// that does not fit; the prefix one rune shorter is the widest that fits.
 	n := sort.Search(len(runes), func(n int) bool { return f.Width(string(runes[:n+1])) > room })
 	if n == 0 {
 		return ellipsis
