@@ -38,8 +38,10 @@ func (s *server) send(obj uint32, opcode uint16, build func(*Encoder)) {
 	}
 }
 
-// compositor answers the core requests: get_registry advertises globals,
-// sync completes with a done and a delete_id, and bind is passed to onBind.
+// compositor returns a handler that answers the core requests.
+// It advertises the globals in reply to wl_display.get_registry, answers
+// wl_display.sync with a callback done event and a delete_id event, and
+// passes wl_registry.bind requests to onBind.
 func compositor(globals []Global, onBind func(s *server, g Global, version, id uint32), other func(s *server, ev Event, d *Decoder)) func(*server, Event, *Decoder) {
 	return func(s *server, ev Event, d *Decoder) {
 		switch {

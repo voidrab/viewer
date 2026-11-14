@@ -49,7 +49,7 @@ func (e *ProtocolError) Error() string {
 
 // Client tracks the objects of one connection and routes events to their
 // handlers. Dispatch must be driven by a single goroutine; Send and NewID may
-// be called from any.
+// be called from any goroutine.
 type Client struct {
 	conn *Conn
 
