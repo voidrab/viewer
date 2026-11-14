@@ -152,8 +152,8 @@ func TestRecvBadHeader(t *testing.T) {
 	}
 }
 
-// TestMalformedControlMessages feeds takeFDs control data the kernel would
-// never produce: it must neither panic nor queue a descriptor.
+// TestMalformedControlMessages verifies that takeFDs neither panics on nor
+// queues descriptors from control data the kernel would never produce.
 func TestMalformedControlMessages(t *testing.T) {
 	_, b := pair(t)
 	oob := make([]byte, syscall.CmsgSpace(4))

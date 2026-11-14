@@ -9,7 +9,7 @@ import (
 	"math"
 )
 
-// Fixed-point and framing constants of the wire format.
+// Framing constants of the wire format.
 const (
 	headerSize = 8
 	// MaxMessage is the largest message the protocol can frame: the size
@@ -60,7 +60,8 @@ func (e *Encoder) Array(b []byte) *Encoder {
 	return e
 }
 
-// FD sends fd out of band with the message; it occupies no payload bytes.
+// FD queues fd to be passed out of band with the message. It adds no payload
+// bytes.
 func (e *Encoder) FD(fd int) *Encoder { e.fds = append(e.fds, fd); return e }
 
 func (e *Encoder) pad() {

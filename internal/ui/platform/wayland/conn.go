@@ -19,8 +19,8 @@ type Event struct {
 	args   []byte
 }
 
-// Conn is one end of a Wayland socket. Send may be used from any goroutine;
-// Recv from one.
+// Conn is one end of a Wayland socket. Send is safe for concurrent use;
+// Recv must not be called from more than one goroutine at a time.
 type Conn struct {
 	sock *net.UnixConn
 
@@ -126,16 +126,16 @@ func (c *Conn) frameEvent() (Event, bool, error) {
 	return ev, true, nil
 }
 
-// takeFDs queues the descriptors in oob. The kernel never produces malformed
-// control data; if it did, the descriptors are dropped and the decoder that
-// needs one reports its absence.
+// takeFDs queues the descriptors carried in oob. Malformed control data is
+// ignored, so a decoder that needs a missing descriptor reports an error.
 func (c *Conn) takeFDs(oob []byte) {
 	msgs, err := syscall.ParseSocketControlMessage(oob)
 	if err != nil {
 		return
 	}
 	for _, m := range msgs {
-		// ParseUnixRights panics on a ragged length, so check it first.
+		// ParseUnixRights indexes past the end of its result for a data
+		// length that is not a multiple of four, so such data is skipped.
 		if m.Header.Level != syscall.SOL_SOCKET || m.Header.Type != syscall.SCM_RIGHTS || len(m.Data)%4 != 0 {
 			continue
 		}
