@@ -6,8 +6,6 @@ import (
 	"image"
 	"runtime"
 	"sync"
-
-	"viewer/internal/ui/layout"
 )
 
 // PoolOptions tunes a Pool. The zero value is usable.
@@ -16,16 +14,16 @@ type PoolOptions struct {
 	// CPUs, at least one.
 	Workers int
 	// CacheBytes bounds the memory of all cached page bitmaps; zero means
-	// 192 MiB.
+	// 128 MiB.
 	CacheBytes int
 }
 
-// Pool renders pages for any number of views on a few workers and keeps their
-// bitmaps under one memory budget. Work is ordered by priority: the page in the
-// middle of the active view first, then its neighbours, then the background
-// views. A view has at most one render running, because the pages of one
-// document render one after another whatever the number of workers, and work
-// for a zoom level that is no longer wanted is dropped.
+// Pool renders parts of pages for any number of views on a few workers and
+// keeps their bitmaps under one memory budget. Work is ordered by priority:
+// what is in the active view first, nearest its middle, then what lies just
+// beyond it, then the background views. A view has at most one render running,
+// because the pages of one document render one after another whatever the
+// number of workers, and work that is no longer wanted is dropped.
 type Pool struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -39,11 +37,15 @@ type Pool struct {
 	cache  map[cacheKey]*entry
 	lru    *list.List // front is most recently used
 	bytes  int
-	latest map[viewPage]int // dpi of the newest bitmap of each page
+	byPage map[viewPage][]*entry // the cached bitmaps of each page
+	seq    int                   // counts stores, to tell the newest
 }
 
-// cacheKey identifies a rendered bitmap: a page of a view at a whole dpi.
-type cacheKey struct{ view, page, dpi int }
+// cacheKey identifies a rendered bitmap: part of a page of a view.
+type cacheKey struct {
+	view int
+	k    key
+}
 
 // viewPage identifies a page of a view.
 type viewPage struct{ view, page int }
@@ -52,17 +54,18 @@ type entry struct {
 	key  cacheKey
 	img  *image.RGBA
 	elem *list.Element
+	seq  int // when it was stored
 }
 
 // penalty is added to the priority of every job of an inactive view, which
 // puts the active view's work first whatever the distance of its pages.
 const penalty = 1000
 
-// job is one page render.
+// job is the render of one part of a page.
 type job struct {
 	v       *View
 	k       key
-	base    int // how far the page is from the middle of its view
+	base    int // how far the part is from the middle of its view; lower runs first
 	ctx     context.Context
 	cancel  context.CancelFunc
 	started bool
@@ -74,11 +77,11 @@ func NewPool(opts PoolOptions) *Pool {
 		opts.Workers = max(1, runtime.NumCPU()/2)
 	}
 	if opts.CacheBytes <= 0 {
-		opts.CacheBytes = 192 << 20
+		opts.CacheBytes = 128 << 20
 	}
 	p := &Pool{
 		budget: opts.CacheBytes,
-		cache:  map[cacheKey]*entry{}, lru: list.New(), latest: map[viewPage]int{},
+		cache:  map[cacheKey]*entry{}, lru: list.New(), byPage: map[viewPage][]*entry{},
 	}
 	p.cond = sync.NewCond(&p.mu)
 	for range opts.Workers {
@@ -104,7 +107,7 @@ func (p *Pool) Close() {
 }
 
 func (p *Pool) clearCache() {
-	p.cache, p.latest, p.bytes = map[cacheKey]*entry{}, map[viewPage]int{}, 0
+	p.cache, p.byPage, p.bytes = map[cacheKey]*entry{}, map[viewPage][]*entry{}, 0
 	p.lru.Init()
 }
 
@@ -135,29 +138,25 @@ func (p *Pool) detach(v *View) {
 	}
 }
 
-// has reports whether page k of v is cached, without touching its recency.
+// has reports whether part k of v is cached, without touching its recency.
 func (p *Pool) has(v *View, k key) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.cache[cacheKey{v.id, k.page, k.dpi}] != nil
+	return p.cache[cacheKey{v.id, k}] != nil
 }
 
-// tooBig reports whether the bitmaps of pages [lo, hi) of lay, at its scale,
-// would take more than half the budget, leaving the rest to other views.
-func (p *Pool) tooBig(lay *layout.Layout, lo, hi int) bool {
-	need := 0
-	for i := lo; i < hi; i++ {
-		r := lay.ViewRect(i)
-		need += 4 * r.Dx() * r.Dy()
-	}
-	return need > p.budget/2
+// hasPage reports whether anything of page is cached.
+func (p *Pool) hasPage(v *View, page int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.byPage[viewPage{v.id, page}]) > 0
 }
 
-// lookup returns the bitmap of page k of v and marks it recently used.
+// lookup returns the bitmap of part k of v and marks it recently used.
 func (p *Pool) lookup(v *View, k key) *image.RGBA {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	e := p.cache[cacheKey{v.id, k.page, k.dpi}]
+	e := p.cache[cacheKey{v.id, k}]
 	if e == nil {
 		return nil
 	}
@@ -165,20 +164,60 @@ func (p *Pool) lookup(v *View, k key) *image.RGBA {
 	return e.img
 }
 
-// standIn returns the newest bitmap of a page at any scale, to show in place
-// of the one being rendered.
-func (p *Pool) standIn(v *View, page int) *image.RGBA {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	e := p.cache[cacheKey{v.id, page, p.latest[viewPage{v.id, page}]}]
-	if e == nil {
-		return nil
-	}
-	return e.img
+// piece is a cached bitmap with the part of the page it shows.
+type piece struct {
+	k   key
+	img *image.RGBA
 }
 
-// submit asks for page k of v to be rendered, base being how far the page is
-// from the middle of the view. A render already asked for keeps its place but
+// standIns returns the bitmaps of page that are not at dpi, from the newest
+// resolution among them, to show where a part at dpi is not rendered yet. They
+// count as used, so the budget does not evict what is on screen.
+func (p *Pool) standIns(v *View, page, dpi int) []piece {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	newest := (*entry)(nil)
+	for _, e := range p.byPage[viewPage{v.id, page}] {
+		if e.key.k.dpi != dpi && (newest == nil || e.seq > newest.seq) {
+			newest = e
+		}
+	}
+	if newest == nil {
+		return nil
+	}
+	var out []piece
+	for _, e := range p.byPage[viewPage{v.id, page}] {
+		if e.key.k.dpi == newest.key.k.dpi {
+			p.lru.MoveToFront(e.elem)
+			out = append(out, piece{e.key.k, e.img})
+		}
+	}
+	return out
+}
+
+// prune drops the bitmaps of page that only stand in for what is at dpi: all
+// of them, or with keepOther all but the newest resolution, which still shows
+// where parts are to come. The preview stays; it is small.
+func (p *Pool) prune(v *View, page, dpi int, keepOther bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	list := append([]*entry(nil), p.byPage[viewPage{v.id, page}]...)
+	var newest *entry
+	for _, e := range list {
+		if keepOther && e.key.k.dpi != dpi && e.key.k.dpi != previewDPI && (newest == nil || e.seq > newest.seq) {
+			newest = e
+		}
+	}
+	for _, e := range list {
+		d := e.key.k.dpi
+		if d != dpi && d != previewDPI && (newest == nil || d != newest.key.k.dpi) {
+			p.remove(e)
+		}
+	}
+}
+
+// submit asks for part k of v to be rendered, base being how far it is from
+// the middle of the view, or lower to run sooner. A render already asked for keeps its place but
 // takes the new base.
 func (p *Pool) submit(v *View, k key, base int) {
 	p.mu.Lock()
@@ -282,7 +321,7 @@ func (p *Pool) work() {
 		j.v.running = true
 		p.mu.Unlock()
 
-		img, err := j.v.render(j.ctx, j.v.pages[j.k.page], float64(j.k.dpi)/72)
+		img, err := j.v.render(j.ctx, j.v.pages[j.k.page], float64(j.k.dpi)/72, j.k.rect)
 
 		p.mu.Lock()
 		j.v.running = false
@@ -304,18 +343,20 @@ func (p *Pool) work() {
 	}
 }
 
-// store caches img for page k of v and evicts the least recently used bitmaps,
+// store caches img for part k of v and evicts the least recently used bitmaps,
 // of any view, beyond the budget. The caller holds p.mu.
 func (p *Pool) store(v *View, k key, img *image.RGBA) {
-	ck := cacheKey{v.id, k.page, k.dpi}
+	ck := cacheKey{v.id, k}
 	if old := p.cache[ck]; old != nil {
 		p.remove(old)
 	}
-	e := &entry{key: ck, img: img}
+	p.seq++
+	e := &entry{key: ck, img: img, seq: p.seq}
 	e.elem = p.lru.PushFront(e)
 	p.cache[ck] = e
+	vp := viewPage{v.id, k.page}
+	p.byPage[vp] = append(p.byPage[vp], e)
 	p.bytes += len(img.Pix)
-	p.latest[viewPage{v.id, k.page}] = k.dpi
 	for p.bytes > p.budget && p.lru.Len() > 1 {
 		p.remove(p.lru.Back().Value.(*entry))
 	}
@@ -326,8 +367,17 @@ func (p *Pool) remove(e *entry) {
 	p.lru.Remove(e.elem)
 	delete(p.cache, e.key)
 	p.bytes -= len(e.img.Pix)
-	vp := viewPage{e.key.view, e.key.page}
-	if p.latest[vp] == e.key.dpi {
-		delete(p.latest, vp)
+	vp := viewPage{e.key.view, e.key.k.page}
+	list := p.byPage[vp]
+	for i, q := range list {
+		if q == e {
+			list = append(list[:i], list[i+1:]...)
+			break
+		}
+	}
+	if len(list) == 0 {
+		delete(p.byPage, vp)
+	} else {
+		p.byPage[vp] = list
 	}
 }

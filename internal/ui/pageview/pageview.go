@@ -53,8 +53,12 @@ func (o *Options) fill() {
 // zoomStep is the factor by which one zoom step multiplies the scale.
 const zoomStep = 1.25
 
-// key identifies a rendered bitmap: a page at a whole dpi.
-type key struct{ page, dpi int }
+// key identifies a rendered bitmap: the part rect of a page, in pixels at a
+// whole dpi counted from the page's top-left corner.
+type key struct {
+	page, dpi int
+	rect      image.Rectangle
+}
 
 // Document is the part of *gopdfrab.Document a View needs.
 type Document interface {
@@ -62,17 +66,18 @@ type Document interface {
 	Page(i int) (*gopdfrab.Page, error)
 }
 
-// renderFunc renders p at scale; tests replace it.
-type renderFunc func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error)
+// renderFunc renders the part region of p at scale; tests replace it.
+type renderFunc func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error)
 
-func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
-	return p.Render(ctx, gopdfrab.RenderOptions{Scale: scale})
+func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+	return p.Render(ctx, gopdfrab.RenderOptions{Scale: scale, Region: region})
 }
 
 // View is a document in a viewport. Draw and HandleEvent belong to one
 // goroutine; rendering happens on the pool's workers.
 type View struct {
 	pages      []*gopdfrab.Page
+	sizes      []layout.Size // of the pages, in points
 	render     renderFunc
 	opts       Options
 	invalidate func()
@@ -106,6 +111,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 		w, h := p.Size()
 		sizes[i] = layout.Size{W: w, H: h}
 	}
+	v.sizes = sizes
 	v.lay = layout.New(sizes, viewport, opts.Gap, opts.Margin)
 	if v.pool == nil {
 		v.pool, v.ownsPool = NewPool(PoolOptions{Workers: opts.Workers, CacheBytes: opts.CacheBytes}), true
@@ -130,17 +136,27 @@ func (v *View) Close() {
 // in the background render after those of the active view.
 func (v *View) SetActive(active bool) { v.pool.setActive(v, active) }
 
-// Prefetch asks for the pages now in view to be rendered at the current zoom,
-// without drawing them, so that they are ready when the view is shown.
+// Prefetch asks for what is now in view to be rendered at the current zoom,
+// without drawing it, so that it is ready when the view is shown.
 func (v *View) Prefetch() { v.want(nil, image.Rectangle{}) }
 
 // dpiFor returns the whole dpi, at least 1, that a page is rendered at for
 // scale. Cached bitmaps are keyed by this value.
 func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
 
+// Pages are rendered whole up to wholePage pixels, and in square tiles of
+// tileSize pixels beyond that, so that a page zoomed far in costs what is
+// looked at and not what it measures. A page with nothing cached is first
+// drawn from a render at previewDPI, which is quick.
+const (
+	wholePage  = 3 << 20
+	tileSize   = 1024
+	previewDPI = 36
+)
+
 // Draw paints the visible pages into all of c, whose bounds are the viewport.
-// A page still being rendered shows a stretched earlier bitmap of it if there
-// is one, or blank paper.
+// What is still being rendered shows a stretched earlier bitmap of the page if
+// there is one, or blank paper.
 func (v *View) Draw(c *paint.Canvas) { v.DrawIn(c, c.Bounds()) }
 
 // DrawIn paints the view into rect of c, which must be the viewport the view
@@ -152,43 +168,178 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	v.want(c, rect)
 }
 
-// want asks the pool for the visible pages at the current zoom, dropping
-// requests for pages scrolled away and for zoom levels other than the current
-// one. With a canvas it also draws what it has of each page: its bitmap, or a
-// stretched earlier bitmap while the one at the current zoom renders, or blank
-// paper.
-func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
-	first, last := v.lay.Visible()
-	dpi := dpiFor(v.lay.Scale())
-	// One page beyond each edge is rendered ahead, so that scrolling finds it
-	// ready instead of blank. The pool ranks it behind the visible pages. At
-	// a zoom where those pages would not fit the pool's budget they would
-	// push each other out, and be rendered over and over, so it is skipped.
-	lo, hi := max(first-1, 0), min(last+1, v.lay.Pages())
-	if v.pool.tooBig(v.lay, lo, hi) {
-		lo, hi = first, last
+// pixelSize returns the size of page i rendered at dpi, which is what the
+// parts of it are counted in.
+func (v *View) pixelSize(i, dpi int) image.Point {
+	s := v.sizes[i]
+	return image.Pt(max(1, int(math.Ceil(s.W*float64(dpi)/72))), max(1, int(math.Ceil(s.H*float64(dpi)/72))))
+}
+
+// parts returns the parts a page of pixel size px is rendered in: itself, or a
+// grid of tiles.
+func parts(px image.Point) []image.Rectangle {
+	if px.X*px.Y <= wholePage {
+		return []image.Rectangle{{Max: px}}
 	}
-	v.pool.cancelStale(v, func(k key) bool { return k.dpi == dpi && k.page >= lo && k.page < hi })
-	mid := v.lay.Current()
-	for i := lo; i < hi; i++ {
-		k := key{i, dpi}
-		visible := i >= first && i < last
-		if c == nil || !visible {
-			if !v.pool.has(v, k) {
-				v.pool.submit(v, k, abs(i-mid))
+	var out []image.Rectangle
+	for y := 0; y < px.Y; y += tileSize {
+		for x := 0; x < px.X; x += tileSize {
+			out = append(out, image.Rect(x, y, min(x+tileSize, px.X), min(y+tileSize, px.Y)))
+		}
+	}
+	return out
+}
+
+// place returns where part r of a page of pixel size px lies, given the
+// rectangle vr the page occupies in the view. Neighbouring parts share their
+// edges exactly, so tiles leave no seams.
+func place(vr image.Rectangle, r image.Rectangle, px image.Point) image.Rectangle {
+	x := func(v int) int { return vr.Min.X + (v*vr.Dx()+px.X/2)/px.X }
+	y := func(v int) int { return vr.Min.Y + (v*vr.Dy()+px.Y/2)/px.Y }
+	return image.Rect(x(r.Min.X), y(r.Min.Y), x(r.Max.X), y(r.Max.Y))
+}
+
+// want is one pass over what the view shows. It works out which parts of which
+// pages are wanted: those in the viewport, and, behind them in priority, those
+// within half a viewport of it, which are rendered ahead so that scrolling
+// finds them ready. It drops requests for anything else, asks the pool for what
+// is not cached and, with a canvas, draws what there is: for each page paper,
+// then an earlier bitmap of it stretched in place, then the parts at the
+// current zoom.
+func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
+	dpi := dpiFor(v.lay.Scale())
+	view := image.Rectangle{Max: v.lay.Viewport()}
+	plan := v.plan(dpi, view, true)
+	if plan.bytes > v.pool.budget/2 {
+		// Rendering ahead would push the parts in view out of the cache, and
+		// they would be rendered over and over.
+		plan = v.plan(dpi, view, false)
+	}
+	keep := make(map[key]bool, len(plan.wanted)+len(plan.pages))
+	for _, w := range plan.wanted {
+		keep[w.k] = true
+	}
+	var previews []key
+	for _, pg := range plan.pages {
+		if !v.pool.hasPage(v, pg.page) {
+			previews = append(previews, v.previewKey(pg.page))
+		}
+	}
+	for _, k := range previews {
+		keep[k] = true
+	}
+	v.pool.cancelStale(v, func(k key) bool { return keep[k] })
+	for _, k := range previews {
+		v.pool.submit(v, k, -1)
+	}
+	for _, pg := range plan.pages {
+		if c != nil {
+			v.drawPage(c, rect, pg, dpi)
+		}
+	}
+	for _, w := range plan.wanted {
+		if !v.pool.has(v, w.k) {
+			v.pool.submit(v, w.k, w.base)
+		}
+	}
+}
+
+// wantedPart is a part to have rendered, with how far from the viewport's
+// middle it lies, in steps of 64 pixels, or more if it is beyond the viewport.
+type wantedPart struct {
+	k    key
+	base int
+}
+
+// pagePlan is a page with something in view and where it lies.
+type pagePlan struct {
+	page int
+	vr   image.Rectangle // where the page lies in the view
+}
+
+// framePlan is what one pass over the view wants.
+type framePlan struct {
+	wanted []wantedPart
+	pages  []pagePlan // the pages that intersect the viewport
+	bytes  int        // the bitmap memory the wanted parts take
+}
+
+// previewKey is the key of the quick render that stands in for page.
+func (v *View) previewKey(page int) key {
+	px := v.pixelSize(page, previewDPI)
+	return key{page: page, dpi: previewDPI, rect: image.Rectangle{Max: px}}
+}
+
+// plan works out the parts wanted for the viewport view at dpi: those that
+// intersect it, and with ahead also those within half a viewport of it.
+func (v *View) plan(dpi int, view image.Rectangle, ahead bool) framePlan {
+	reach := view
+	if ahead {
+		reach = view.Inset(-max(view.Dx(), view.Dy()) / 2)
+	}
+	centre := image.Pt(view.Dx()/2, view.Dy()/2)
+	var fp framePlan
+	for i := range v.pages {
+		vr := v.lay.ViewRect(i)
+		if !vr.Overlaps(reach) {
+			continue
+		}
+		visible := vr.Overlaps(view)
+		if visible {
+			fp.pages = append(fp.pages, pagePlan{i, vr})
+		}
+		px := v.pixelSize(i, dpi)
+		for _, r := range parts(px) {
+			at := place(vr, r, px)
+			if !at.Overlaps(reach) {
+				continue
 			}
+			mid := at.Min.Add(at.Max).Div(2)
+			dist := max(abs(mid.X-centre.X), abs(mid.Y-centre.Y)) / 64
+			if !at.Overlaps(view) {
+				dist += 1000 // ahead of the view: after everything in it
+			}
+			fp.wanted = append(fp.wanted, wantedPart{key{i, dpi, r}, dist})
+			fp.bytes += 4 * r.Dx() * r.Dy()
+		}
+	}
+	return fp
+}
+
+// drawPage paints page pg: paper, an earlier bitmap of it stretched in place,
+// then each part cached at dpi over that.
+func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi int) {
+	vr := pg.vr.Add(rect.Min)
+	px := v.pixelSize(pg.page, dpi)
+	type placed struct {
+		at  image.Rectangle
+		img *image.RGBA
+	}
+	var done []placed
+	covered := true
+	for _, r := range parts(px) {
+		at := place(vr, r, px)
+		if !at.Overlaps(rect) {
 			continue
 		}
-		r := v.lay.ViewRect(i).Add(rect.Min)
-		if img := v.pool.lookup(v, k); img != nil {
-			c.DrawScaled(r, img) // Rendered pages are opaque, so they need no white fill.
-			continue
+		if img := v.pool.lookup(v, key{pg.page, dpi, r}); img != nil {
+			done = append(done, placed{at, img})
+		} else {
+			covered = false
 		}
-		c.Fill(r, color.NRGBA{255, 255, 255, 255})
-		if img := v.pool.standIn(v, i); img != nil {
-			c.DrawScaled(r, img)
+	}
+	v.pool.prune(v, pg.page, dpi, !covered)
+	if !covered {
+		// Paper, and an earlier bitmap of the page stretched in place, show
+		// where parts are still to come. A page fully rendered needs neither,
+		// and does not keep the bitmaps of earlier zoom levels.
+		c.Fill(vr, color.NRGBA{255, 255, 255, 255})
+		for _, old := range v.pool.standIns(v, pg.page, dpi) {
+			c.DrawScaled(place(vr, old.k.rect, v.pixelSize(pg.page, old.k.dpi)), old.img)
 		}
-		v.pool.submit(v, k, abs(i-mid))
+	}
+	for _, d := range done {
+		c.DrawScaled(d.at, d.img)
 	}
 }
 

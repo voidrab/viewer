@@ -57,6 +57,9 @@ func inflightCount(v *View) int {
 	return len(v.inflight)
 }
 
+// testKey is the key of a 5x5 part of a page at dpi.
+func testKey(page, dpi int) key { return key{page: page, dpi: dpi, rect: image.Rect(0, 0, 5, 5)} }
+
 func waitInv(t *testing.T, inv chan struct{}) {
 	t.Helper()
 	select {
@@ -68,6 +71,11 @@ func waitInv(t *testing.T, inv chan struct{}) {
 
 func TestDrawRendersVisiblePagesInTheBackground(t *testing.T) {
 	v, inv := newView(t, openDoc(t, 3), image.Pt(124, 200), Options{Gap: 12, Margin: 12})
+	gate := make(chan struct{})
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		<-gate // nothing is rendered until the placeholder has been looked at
+		return renderPage(ctx, p, scale, region)
+	}
 	c := paint.New(124, 200)
 	v.Draw(c)
 	r := v.Layout().ViewRect(0)
@@ -78,6 +86,7 @@ func TestDrawRendersVisiblePagesInTheBackground(t *testing.T) {
 	if got := c.Img.RGBAAt(2, 2); got != (color.RGBA{0x3a, 0x3b, 0x3f, 255}) {
 		t.Errorf("background pixel = %v", got)
 	}
+	close(gate)
 	waitInv(t, inv)
 	v.Draw(c)
 	if got := c.Img.RGBAAt(mid.X, mid.Y); got != red {
@@ -88,11 +97,11 @@ func TestDrawRendersVisiblePagesInTheBackground(t *testing.T) {
 func TestStaleBitmapStandsInWhileRerendering(t *testing.T) {
 	gate := make(chan struct{})
 	v, inv := newView(t, openDoc(t, 1), image.Pt(124, 124), Options{})
-	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
-		if scale > 1.5 { // the re-render after zooming waits
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		if scale > 1.1 { // the render after zooming waits
 			<-gate
 		}
-		return renderPage(ctx, p, scale)
+		return renderPage(ctx, p, scale, region)
 	}
 	c := paint.New(124, 124)
 	v.Draw(c)
@@ -111,7 +120,7 @@ func TestSchedulingIsDeduplicated(t *testing.T) {
 	var calls atomic.Int32
 	gate := make(chan struct{})
 	v, inv := newView(t, openDoc(t, 1), image.Pt(124, 124), Options{})
-	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 		calls.Add(1)
 		<-gate
 		return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
@@ -122,7 +131,9 @@ func TestSchedulingIsDeduplicated(t *testing.T) {
 	v.Draw(c)
 	close(gate)
 	waitInv(t, inv)
-	if n := calls.Load(); n != 1 {
+	waitFor(t, "the renders to finish", func() bool { return inflightCount(v) == 0 })
+	// One quick preview and the page itself, however often it was drawn.
+	if n := calls.Load(); n != 2 {
 		t.Errorf("render called %d times", n)
 	}
 }
@@ -131,7 +142,10 @@ func TestRenderFailureIsNotCachedAndIsRetried(t *testing.T) {
 	var calls atomic.Int32
 	done := make(chan struct{}, 4)
 	v, inv := newView(t, openDoc(t, 1), image.Pt(124, 124), Options{})
-	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		if scale < 0.6 { // the preview never succeeds
+			return nil, errors.New("no preview")
+		}
 		defer func() { done <- struct{}{} }()
 		if calls.Add(1) == 1 {
 			return nil, errors.New("boom")
@@ -155,7 +169,7 @@ func TestRenderFailureIsNotCachedAndIsRetried(t *testing.T) {
 	v.Draw(c)
 	waitInv(t, inv)
 	if calls.Load() != 2 {
-		t.Errorf("render called %d times", calls.Load())
+		t.Errorf("the page was rendered %d times", calls.Load())
 	}
 }
 
@@ -164,7 +178,7 @@ func TestScrollingAwayCancelsRenders(t *testing.T) {
 	var mu sync.Mutex
 	ran := map[int]bool{}
 	v, inv := newView(t, openDoc(t, 12), image.Pt(124, 300), Options{Workers: 1})
-	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 		mu.Lock()
 		for i, q := range v.pages {
 			if q == p {
@@ -205,7 +219,7 @@ func TestStaleResultIsDiscarded(t *testing.T) {
 	started := make(chan struct{})
 	v, inv := newView(t, openDoc(t, 12), image.Pt(124, 300), Options{})
 	var once sync.Once
-	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RGBA, error) {
+	v.render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 		once.Do(func() { close(started) })
 		<-gate // ignores cancellation and still succeeds
 		return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
@@ -232,15 +246,15 @@ func TestCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	p := v.pool
 	p.mu.Lock()
 	for i := range 3 {
-		p.store(v, key{i, 72}, image.NewRGBA(image.Rect(0, 0, 5, 5))) // 100 bytes each
+		p.store(v, testKey(i, 72), image.NewRGBA(image.Rect(0, 0, 5, 5))) // 100 bytes each
 	}
 	n := len(p.cache)
-	_, oldest := p.cache[cacheKey{v.id, 0, 72}]
+	_, oldest := p.cache[cacheKey{v.id, testKey(0, 72)}]
 	p.mu.Unlock()
 	if n != 1 || oldest {
 		t.Errorf("cache holds %d entries, oldest kept: %v", n, oldest)
 	}
-	if p.lookup(v, key{2, 72}) == nil || p.lookup(v, key{0, 72}) != nil {
+	if p.lookup(v, testKey(2, 72)) == nil || p.lookup(v, testKey(0, 72)) != nil {
 		t.Error("lookup disagrees with eviction")
 	}
 }

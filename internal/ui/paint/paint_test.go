@@ -142,3 +142,38 @@ func TestDrawScaled(t *testing.T) {
 	same.DrawScaled(image.Rectangle{}, src)
 	same.DrawScaled(image.Rect(0, 0, 2, 2), image.NewRGBA(image.Rectangle{}))
 }
+
+func TestDrawScaledSameSizePartlyOutsideTheClip(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 3, 3))
+	for y := 0; y < 3; y++ {
+		for x := 0; x < 3; x++ {
+			src.SetRGBA(x, y, color.RGBA{uint8(10 * x), uint8(10 * y), 7, 255})
+		}
+	}
+	c := New(4, 4)
+	c.DrawScaled(image.Rect(-1, -2, 2, 1), src) // only the source's lower-right 2x1 part shows
+	for _, p := range [][2]int{{0, 0}, {1, 0}} {
+		want := color.RGBA{uint8(10 * (p[0] + 1)), 20, 7, 255}
+		if got := at(c, p[0], p[1]); got != want {
+			t.Errorf("(%d,%d) = %v, want %v", p[0], p[1], got, want)
+		}
+	}
+	if at(c, 2, 0).A != 0 || at(c, 0, 1).A != 0 {
+		t.Error("painted outside the destination")
+	}
+	// A destination wholly outside the canvas draws nothing.
+	c.DrawScaled(image.Rect(10, 10, 13, 13), src)
+	c.DrawScaled(image.Rect(10, 10, 20, 20), src)
+}
+
+func TestOpaqueFillReplacesWhatIsThere(t *testing.T) {
+	c := New(3, 3)
+	c.Fill(c.Bounds(), color.NRGBA{9, 9, 9, 128})
+	c.Fill(image.Rect(1, 0, 3, 2), color.NRGBA{200, 100, 50, 255})
+	if got := at(c, 2, 1); got != (color.RGBA{200, 100, 50, 255}) {
+		t.Errorf("opaque fill = %v", got)
+	}
+	if got := at(c, 0, 0); got.A != 128 {
+		t.Errorf("a pixel outside the fill changed: %v", got)
+	}
+}

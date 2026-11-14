@@ -770,7 +770,7 @@ func TestRunDrivesTheWindow(t *testing.T) {
 	// The fake window starts with a resize and a frame: the file opens and is drawn.
 	waitFor(t, "the first page to be rendered and presented", func() bool {
 		for _, img := range fw.Presented() {
-			if img.RGBAAt(winW/2, 200) == (color.RGBA{255, 255, 255, 255}) { // paper
+			if img.RGBAAt(winW/2, 200) == (color.RGBA{255, 0, 0, 255}) { // the page, rendered
 				return true
 			}
 		}

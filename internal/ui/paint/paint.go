@@ -49,6 +49,18 @@ func (c *Canvas) Fill(r image.Rectangle, col color.NRGBA) {
 		return
 	}
 	pre := color.RGBAModel.Convert(col).(color.RGBA)
+	if col.A == 255 {
+		// An opaque fill replaces what is there: the first row is written
+		// once and copied to the others.
+		first := c.Img.Pix[c.Img.PixOffset(r.Min.X, r.Min.Y):][:4*r.Dx()]
+		for i := 0; i < len(first); i += 4 {
+			first[i], first[i+1], first[i+2], first[i+3] = pre.R, pre.G, pre.B, 255
+		}
+		for y := r.Min.Y + 1; y < r.Max.Y; y++ {
+			copy(c.Img.Pix[c.Img.PixOffset(r.Min.X, y):][:4*r.Dx()], first)
+		}
+		return
+	}
 	for y := r.Min.Y; y < r.Max.Y; y++ {
 		row := c.Img.Pix[c.Img.PixOffset(r.Min.X, y):][:4*r.Dx()]
 		for i := 0; i < len(row); i += 4 {
@@ -100,29 +112,38 @@ func blend(d []uint8, src color.RGBA) {
 }
 
 // DrawScaled draws src stretched to fill dst, using nearest-neighbour
-// sampling. src must be opaque or premultiplied. It is meant for showing a
-// page rendered at a slightly different size than its slot.
+// sampling. src must be opaque: its pixels replace the canvas's, which is what
+// a rendered page does, and a stretch of them is copied a row at a time. It is
+// also meant for showing a page rendered at a slightly different size than its
+// slot.
 func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
 	sw, sh := src.Rect.Dx(), src.Rect.Dy()
 	if dst.Empty() || sw == 0 || sh == 0 {
 		return
 	}
-	if dst.Dx() == sw && dst.Dy() == sh {
-		c.DrawImage(dst.Min, src)
+	clip := dst.Intersect(c.Clip())
+	if clip.Empty() {
 		return
 	}
-	clip := dst.Intersect(c.Clip())
+	if dst.Dx() == sw && dst.Dy() == sh {
+		from := clip.Min.Sub(dst.Min).Add(src.Rect.Min)
+		for y := 0; y < clip.Dy(); y++ {
+			copy(c.Img.Pix[c.Img.PixOffset(clip.Min.X, clip.Min.Y+y):][:4*clip.Dx()], src.Pix[src.PixOffset(from.X, from.Y+y):])
+		}
+		return
+	}
 	// The source column of each destination column is the same on every row.
 	cols := make([]int, clip.Dx())
 	for i := range cols {
-		cols[i] = src.Rect.Min.X + (clip.Min.X+i-dst.Min.X)*sw/dst.Dx()
+		cols[i] = 4 * ((clip.Min.X + i - dst.Min.X) * sw / dst.Dx())
 	}
 	for y := clip.Min.Y; y < clip.Max.Y; y++ {
 		sy := src.Rect.Min.Y + (y-dst.Min.Y)*sh/dst.Dy()
+		srow := src.Pix[src.PixOffset(src.Rect.Min.X, sy):]
 		row := c.Img.Pix[c.Img.PixOffset(clip.Min.X, y):][:4*clip.Dx()]
 		for i := 0; i < len(row); i += 4 {
-			p := src.Pix[src.PixOffset(cols[i/4], sy):][:4]
-			blend(row[i:i+4:i+4], color.RGBA{p[0], p[1], p[2], p[3]})
+			s := srow[cols[i/4] : cols[i/4]+4 : cols[i/4]+4]
+			row[i], row[i+1], row[i+2], row[i+3] = s[0], s[1], s[2], s[3]
 		}
 	}
 }
