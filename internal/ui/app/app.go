@@ -80,6 +80,9 @@ type App struct {
 
 	face *text.Face
 
+	// pool renders the pages of every document, under one memory budget.
+	pool *pageview.Pool
+
 	toolbar *widget.Toolbar
 	tabs    *widget.TabBar
 	status  *widget.StatusBar
@@ -128,7 +131,7 @@ func New(win platform.Window, opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{win: win, opts: opts, face: face, active: -1, inbox: make(chan func(), 16)}
+	a := &App{win: win, opts: opts, face: face, pool: pageview.NewPool(pageview.PoolOptions{}), active: -1, inbox: make(chan func(), 16)}
 	a.toolbar = widget.NewToolbar(opts.Palette, face)
 	a.tabs = widget.NewTabBar(opts.Palette, face)
 	a.status = widget.NewStatusBar(opts.Palette, small)
@@ -271,7 +274,7 @@ func (a *App) load(path string) (*document, error) {
 	// Once the document is added the tab bar is shown, so the view is sized
 	// for the layout with it.
 	_, _, content, _ := a.layoutFor(true)
-	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{}, a.win.Invalidate)
+	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{Pool: a.pool}, a.win.Invalidate)
 	if err != nil {
 		doc.Close()
 		return nil, err
@@ -280,6 +283,8 @@ func (a *App) load(path string) (*document, error) {
 	if info, err := a.opts.Inspect(path); err == nil {
 		d.claimed = info.Claimed
 	}
+	// Start on the first pages now, so that the tab is ready when it is shown.
+	view.Prefetch()
 	return d, nil
 }
 
@@ -307,6 +312,7 @@ func (a *App) closeAll() {
 		d.close()
 	}
 	a.docs, a.active = nil, -1
+	a.pool.Close()
 }
 
 // afterChange relays out what a change of tabs affects and asks for a frame.

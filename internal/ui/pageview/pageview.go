@@ -4,13 +4,11 @@
 package pageview
 
 import (
-	"container/list"
 	"context"
 	"fmt"
 	"image"
 	"image/color"
 	"math"
-	"sync"
 
 	"github.com/voidrab/gopdfrab"
 
@@ -26,12 +24,13 @@ type Options struct {
 	Gap, Margin int
 	// Background is painted behind the pages.
 	Background color.NRGBA
-	// CacheBytes bounds the memory of cached page bitmaps; zero means 256 MiB.
-	CacheBytes int
-	// Workers is the number of pages rendered at once; zero means one. Renders
-	// of one document serialize on its lock, so larger values add no
-	// parallelism.
-	Workers int
+	// Pool renders the view's pages and caches their bitmaps; views of
+	// several documents should share one. When nil the view makes a pool of its
+	// own from CacheBytes and Workers, and closes it with itself.
+	Pool *Pool
+	// CacheBytes bounds the bitmap memory, and Workers the renders in flight,
+	// of a pool the view makes for itself.
+	CacheBytes, Workers int
 	// ScrollSpeed multiplies wheel scroll distances; zero means 5.
 	ScrollSpeed float64
 }
@@ -46,12 +45,6 @@ func (o *Options) fill() {
 	if o.Background == (color.NRGBA{}) {
 		o.Background = color.NRGBA{0x3a, 0x3b, 0x3f, 255}
 	}
-	if o.CacheBytes == 0 {
-		o.CacheBytes = 256 << 20
-	}
-	if o.Workers == 0 {
-		o.Workers = 1
-	}
 	if o.ScrollSpeed == 0 {
 		o.ScrollSpeed = 5
 	}
@@ -62,12 +55,6 @@ const zoomStep = 1.25
 
 // key identifies a rendered bitmap: a page at a whole dpi.
 type key struct{ page, dpi int }
-
-type entry struct {
-	key  key
-	img  *image.RGBA
-	elem *list.Element
-}
 
 // Document is the part of *gopdfrab.Document a View needs.
 type Document interface {
@@ -83,7 +70,7 @@ func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RG
 }
 
 // View is a document in a viewport. Draw and HandleEvent belong to one
-// goroutine; rendering happens on workers it starts itself.
+// goroutine; rendering happens on the pool's workers.
 type View struct {
 	pages      []*gopdfrab.Page
 	render     renderFunc
@@ -91,16 +78,13 @@ type View struct {
 	invalidate func()
 	lay        *layout.Layout
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	sem    chan struct{}
-	wg     sync.WaitGroup
-
-	mu       sync.Mutex
-	cache    map[key]*entry
-	lru      *list.List // front is most recently used
-	bytes    int
-	inflight map[key]context.CancelFunc
+	pool     *Pool
+	ownsPool bool
+	// The rest is the pool's: it is guarded by the pool's lock.
+	id       int
+	inflight map[key]*job // the renders asked for and not yet delivered
+	running  bool         // a render of this view is in progress
+	inactive bool         // the view is in the background
 }
 
 // New builds a view of doc sized to the viewport. invalidate is called from
@@ -111,12 +95,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	if err != nil {
 		return nil, err
 	}
-	v := &View{
-		opts: opts, invalidate: invalidate, render: renderPage,
-		sem: make(chan struct{}, opts.Workers), cache: map[key]*entry{},
-		lru: list.New(), inflight: map[key]context.CancelFunc{},
-	}
-	v.ctx, v.cancel = context.WithCancel(context.Background())
+	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool}
 	sizes := make([]layout.Size, n)
 	for i := range n {
 		p, err := doc.Page(i)
@@ -128,21 +107,32 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 		sizes[i] = layout.Size{W: w, H: h}
 	}
 	v.lay = layout.New(sizes, viewport, opts.Gap, opts.Margin)
+	if v.pool == nil {
+		v.pool, v.ownsPool = NewPool(PoolOptions{Workers: opts.Workers, CacheBytes: opts.CacheBytes}), true
+	}
+	v.pool.attach(v)
 	return v, nil
 }
 
 // Layout exposes the geometry for hit testing and status display.
 func (v *View) Layout() *layout.Layout { return v.lay }
 
-// Close stops all rendering and releases the cache. The document stays open.
+// Close drops the view's pending renders and cached bitmaps, and returns once
+// none of its renders is running. The document stays open.
 func (v *View) Close() {
-	v.cancel()
-	v.wg.Wait()
-	v.mu.Lock()
-	v.cache, v.bytes = map[key]*entry{}, 0
-	v.lru.Init()
-	v.mu.Unlock()
+	v.pool.detach(v)
+	if v.ownsPool {
+		v.pool.Close()
+	}
 }
+
+// SetActive says whether the view is the one being looked at. Pages of a view
+// in the background render after those of the active view.
+func (v *View) SetActive(active bool) { v.pool.setActive(v, active) }
+
+// Prefetch asks for the pages now in view to be rendered at the current zoom,
+// without drawing them, so that they are ready when the view is shown.
+func (v *View) Prefetch() { v.want(nil, image.Rectangle{}) }
 
 // dpiFor returns the whole dpi, at least 1, that a page is rendered at for
 // scale. Cached bitmaps are keyed by this value.
@@ -159,22 +149,40 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	c.PushClip(rect)
 	defer c.PopClip()
 	c.Fill(rect, v.opts.Background)
+	v.want(c, rect)
+}
+
+// want asks the pool for the visible pages at the current zoom, dropping
+// requests for pages scrolled away and for zoom levels left behind. With a
+// canvas it also draws what it has of each page: its bitmap, or a stretched
+// earlier one while the right one renders, or blank paper.
+func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 	first, last := v.lay.Visible()
 	dpi := dpiFor(v.lay.Scale())
-	v.cancelHidden(first, last)
+	v.pool.cancelStale(v, func(k key) bool { return k.dpi == dpi && k.page >= first && k.page < last })
+	mid := v.lay.Current()
 	for i := first; i < last; i++ {
+		k := key{i, dpi}
+		if c == nil {
+			if !v.pool.has(v, k) {
+				v.pool.submit(v, k, abs(i-mid))
+			}
+			continue
+		}
 		r := v.lay.ViewRect(i).Add(rect.Min)
-		if img := v.lookup(key{i, dpi}); img != nil {
+		if img := v.pool.lookup(v, k); img != nil {
 			c.DrawScaled(r, img) // Rendered pages are opaque, so they need no white fill.
 			continue
 		}
 		c.Fill(r, color.NRGBA{255, 255, 255, 255})
-		if img := v.anyRender(i); img != nil {
+		if img := v.pool.standIn(v, i); img != nil {
 			c.DrawScaled(r, img)
 		}
-		v.schedule(key{i, dpi})
+		v.pool.submit(v, k, abs(i-mid))
 	}
 }
+
+func abs(v int) int { return max(v, -v) }
 
 // Page returns the zero-based index of the page at the middle of the view.
 func (v *View) Page() int { return v.lay.Current() }
@@ -223,109 +231,6 @@ func (v *View) ZoomLabel() string {
 		return "Fit page"
 	}
 	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()*100)))
-}
-
-// lookup returns the cached bitmap for k and marks it recently used.
-func (v *View) lookup(k key) *image.RGBA {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	e := v.cache[k]
-	if e == nil {
-		return nil
-	}
-	v.lru.MoveToFront(e.elem)
-	return e.img
-}
-
-// anyRender returns some cached bitmap of page i at another scale.
-func (v *View) anyRender(i int) *image.RGBA {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	for el := v.lru.Front(); el != nil; el = el.Next() {
-		if e := el.Value.(*entry); e.key.page == i {
-			return e.img
-		}
-	}
-	return nil
-}
-
-// cancelHidden stops renders of pages outside [first, last).
-func (v *View) cancelHidden(first, last int) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	for k, cancel := range v.inflight {
-		if k.page < first || k.page >= last {
-			cancel()
-			delete(v.inflight, k)
-		}
-	}
-}
-
-// schedule starts rendering k unless it is already underway.
-func (v *View) schedule(k key) {
-	v.mu.Lock()
-	if _, busy := v.inflight[k]; busy {
-		v.mu.Unlock()
-		return
-	}
-	ctx, cancel := context.WithCancel(v.ctx)
-	v.inflight[k] = cancel
-	v.mu.Unlock()
-
-	v.wg.Add(1)
-	go func() {
-		defer v.wg.Done()
-		defer cancel()
-		acquired := false
-		select {
-		case v.sem <- struct{}{}:
-			acquired = true
-		case <-ctx.Done():
-		}
-		if acquired {
-			defer func() { <-v.sem }()
-		}
-		// select picks at random when both cases are ready, so a cancelled
-		// job may have acquired a worker; it must not render.
-		if ctx.Err() != nil {
-			v.drop(k)
-			return
-		}
-		img, err := v.render(ctx, v.pages[k.page], float64(k.dpi)/72)
-		v.mu.Lock()
-		// Only the render that is still wanted may store its result.
-		_, wanted := v.inflight[k]
-		if err == nil && wanted {
-			v.store(k, img)
-		}
-		delete(v.inflight, k)
-		v.mu.Unlock()
-		if err == nil && wanted {
-			v.invalidate()
-		}
-	}()
-}
-
-// drop forgets that k is in flight.
-func (v *View) drop(k key) {
-	v.mu.Lock()
-	delete(v.inflight, k)
-	v.mu.Unlock()
-}
-
-// store caches img under k and evicts the least recently used bitmaps beyond
-// the budget. The caller holds v.mu.
-func (v *View) store(k key, img *image.RGBA) {
-	e := &entry{key: k, img: img}
-	e.elem = v.lru.PushFront(e)
-	v.cache[k] = e
-	v.bytes += len(img.Pix)
-	for v.bytes > v.opts.CacheBytes && v.lru.Len() > 1 {
-		old := v.lru.Back().Value.(*entry)
-		v.lru.Remove(old.elem)
-		delete(v.cache, old.key)
-		v.bytes -= len(old.img.Pix)
-	}
 }
 
 // HandleEvent applies a resize, scroll or key event and reports whether the

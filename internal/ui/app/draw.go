@@ -39,6 +39,9 @@ func (a *App) chrome() {
 		a.tabs.Titles = append(a.tabs.Titles, x.name)
 	}
 	a.tabs.Active = a.active
+	for i, x := range a.docs {
+		x.view.SetActive(i == a.active)
+	}
 
 	for _, id := range viewButtons {
 		tb.Disabled[id] = d == nil

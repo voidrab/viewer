@@ -50,6 +50,13 @@ func newView(t *testing.T, doc Document, vp image.Point, opts Options) (*View, c
 	return v, inv
 }
 
+// inflightCount returns how many renders v has asked for and not received.
+func inflightCount(v *View) int {
+	v.pool.mu.Lock()
+	defer v.pool.mu.Unlock()
+	return len(v.inflight)
+}
+
 func waitInv(t *testing.T, inv chan struct{}) {
 	t.Helper()
 	select {
@@ -137,10 +144,7 @@ func TestRenderFailureIsNotCachedAndIsRetried(t *testing.T) {
 	// The failed attempt leaves nothing behind, so the next Draw tries again.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		v.mu.Lock()
-		idle := len(v.inflight) == 0
-		v.mu.Unlock()
-		if idle {
+		if inflightCount(v) == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -208,29 +212,29 @@ func TestStaleResultIsDiscarded(t *testing.T) {
 	close(gate)
 	v.Close()
 	// Only the renders of pages still on screen may have invalidated.
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	for k := range v.cache {
-		if k.page < 6 {
-			t.Errorf("a result for the hidden page %d was cached", k.page)
-		}
+	// The view's bitmaps were dropped with it, and a late result is not kept.
+	v.pool.mu.Lock()
+	defer v.pool.mu.Unlock()
+	if len(v.pool.cache) != 0 {
+		t.Errorf("%d bitmaps survived the view", len(v.pool.cache))
 	}
 	_ = inv
 }
 
 func TestCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	v, _ := newView(t, openDoc(t, 1), image.Pt(124, 124), Options{CacheBytes: 100})
-	v.mu.Lock()
+	p := v.pool
+	p.mu.Lock()
 	for i := range 3 {
-		v.store(key{i, 72}, image.NewRGBA(image.Rect(0, 0, 5, 5))) // 100 bytes each
+		p.store(v, key{i, 72}, image.NewRGBA(image.Rect(0, 0, 5, 5))) // 100 bytes each
 	}
-	n := len(v.cache)
-	_, oldest := v.cache[key{0, 72}]
-	v.mu.Unlock()
+	n := len(p.cache)
+	_, oldest := p.cache[cacheKey{v.id, 0, 72}]
+	p.mu.Unlock()
 	if n != 1 || oldest {
 		t.Errorf("cache holds %d entries, oldest kept: %v", n, oldest)
 	}
-	if v.lookup(key{2, 72}) == nil || v.lookup(key{0, 72}) != nil {
+	if p.lookup(v, key{2, 72}) == nil || p.lookup(v, key{0, 72}) != nil {
 		t.Error("lookup disagrees with eviction")
 	}
 }
@@ -342,7 +346,7 @@ func TestNewReportsDocumentErrors(t *testing.T) {
 func TestDefaultOptions(t *testing.T) {
 	v, _ := newView(t, openDoc(t, 1), image.Pt(10, 10), Options{})
 	o := v.opts
-	if o.Gap != 12 || o.Margin != 12 || o.CacheBytes != 256<<20 || o.Workers < 1 || o.ScrollSpeed != 5 {
+	if o.Gap != 12 || o.Margin != 12 || o.ScrollSpeed != 5 {
 		t.Errorf("defaults = %+v", o)
 	}
 }
