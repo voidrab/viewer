@@ -362,8 +362,9 @@ func (a *App) pick() {
 		return // a dialog is already open
 	}
 	a.picking = true
-	// The dialog is modal and slow: ask for it off the event loop, which keeps
-	// repainting meanwhile, and open what it returns back on it.
+	// The dialog blocks until the user answers, so it runs off the event loop,
+	// which keeps repainting meanwhile. The result is opened back on the event
+	// loop through inbox.
 	go func() {
 		paths, err := a.opts.PickFiles()
 		a.inbox <- func() {

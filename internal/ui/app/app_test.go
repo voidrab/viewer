@@ -382,7 +382,8 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 	}
 }
 
-// drain runs the work that background goroutines handed back to the event loop.
+// drain runs the next function that a background goroutine handed back through
+// inbox. It fails the test if none arrives within five seconds.
 func (f *fixture) drain() {
 	f.t.Helper()
 	select {
