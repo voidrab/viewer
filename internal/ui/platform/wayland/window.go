@@ -95,8 +95,8 @@ func Open(conn *Conn) (*Backend, error) {
 			return nil, err
 		}
 	}
-	// Server-side decoration is optional too: without it the window has no
-	// title bar of the compositor's making.
+	// Server-side decoration is optional. Without zxdg_decoration_manager_v1,
+	// windows do not request it and the compositor's default applies.
 	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
 	go b.run()
 	return b, nil
@@ -177,7 +177,8 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 }
 
 // requestServerDecoration asks the compositor to draw the window's title bar
-// and borders, when it offers to.
+// and borders. It does nothing when the compositor does not offer
+// zxdg_decoration_manager_v1.
 func (w *window) requestServerDecoration() error {
 	if w.b.decoration == 0 {
 		return nil
