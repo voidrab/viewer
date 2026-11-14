@@ -26,8 +26,10 @@ type Conn struct {
 
 	wmu sync.Mutex
 
-	in  []byte // received bytes not yet framed into events
-	fds []int  // received descriptors not yet claimed by a decoder
+	in []byte // received bytes not yet framed into events
+
+	fmu sync.Mutex // guards fds, which Close also touches
+	fds []int      // received descriptors not yet claimed by a decoder
 }
 
 // Dial connects to the compositor named by $WAYLAND_DISPLAY (default
@@ -56,10 +58,12 @@ func NewConn(sock *net.UnixConn) *Conn { return &Conn{sock: sock} }
 
 // Close closes the socket and any descriptors received but never claimed.
 func (c *Conn) Close() error {
+	c.fmu.Lock()
 	for _, fd := range c.fds {
 		syscall.Close(fd)
 	}
 	c.fds = nil
+	c.fmu.Unlock()
 	return c.sock.Close()
 }
 
@@ -142,7 +146,9 @@ func (c *Conn) takeFDs(oob []byte) {
 			continue
 		}
 		fds, _ := syscall.ParseUnixRights(&m)
+		c.fmu.Lock()
 		c.fds = append(c.fds, fds...)
+		c.fmu.Unlock()
 	}
 }
 
@@ -153,6 +159,8 @@ func (c *Conn) Decode(ev Event) *Decoder {
 }
 
 func (c *Conn) nextFD() (int, error) {
+	c.fmu.Lock()
+	defer c.fmu.Unlock()
 	if len(c.fds) == 0 {
 		return -1, errors.New("wayland: no file descriptor received with the message")
 	}
