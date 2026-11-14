@@ -1,5 +1,5 @@
-// Command nativeview opens a PDF in a pure-Go window: no webview, no cgo. It
-// is the native viewer under construction and only runs on Wayland for now.
+// Command nativeview opens a PDF in a pure-Go window, with no webview and no
+// cgo. It uses only the Wayland platform backend.
 package main
 
 import (

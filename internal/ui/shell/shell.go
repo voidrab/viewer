@@ -19,8 +19,9 @@ var ErrNoSize = errors.New("shell: window closed before it had a size")
 // the shell for a redraw and may be called from any goroutine.
 type NewView func(size image.Point, invalidate func()) (*pageview.View, error)
 
-// Run drives win until the user closes it or its event stream ends, creating the view from newView on
-// the first ResizeEvent. It closes the window and the view before returning.
+// Run drives win until the user closes it or its event stream ends. It
+// creates the view from newView on the first ResizeEvent and closes the
+// window and the view before returning.
 func Run(win platform.Window, newView NewView) error {
 	defer win.Close()
 	var (
