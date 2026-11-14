@@ -261,8 +261,9 @@ func (w *window) Present(img *image.RGBA) {
 	c.Send(w.surface, surfaceCommit, nil)
 }
 
-// freeBuffer returns an idle buffer of size, creating one when every
-// existing buffer is in use. The caller holds w.mu.
+// freeBuffer returns an idle buffer of size, creating one when no idle buffer
+// of that size exists. It returns nil if the memory cannot be allocated. The
+// caller holds w.mu.
 func (w *window) freeBuffer(size platform.Size) *buffer {
 	for _, b := range w.buffers {
 		if !b.busy && !b.stale && b.size == size {

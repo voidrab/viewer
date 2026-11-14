@@ -459,8 +459,8 @@ func TestCloseDestroysBuffers(t *testing.T) {
 	f.wait("destroy_buffer")
 }
 
-// TestShutdownIsIdempotent covers the window being ended by both Close and
-// the backend's connection loss.
+// TestShutdownIsIdempotent verifies that calling shutdown twice on a window
+// neither panics nor closes the Events channel twice.
 func TestShutdownIsIdempotent(t *testing.T) {
 	_, _, _, win := openWindow(t, 4, 2)
 	w := win.(*window)

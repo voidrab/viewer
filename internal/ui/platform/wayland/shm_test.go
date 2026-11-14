@@ -43,7 +43,7 @@ func TestShmMemErrors(t *testing.T) {
 }
 
 func TestCopyARGBSwapsRedAndBlue(t *testing.T) {
-	src := image.NewRGBA(image.Rect(5, 5, 7, 7)) // a sub-image-like origin
+	src := image.NewRGBA(image.Rect(5, 5, 7, 7)) // Bounds start at (5, 5).
 	src.SetRGBA(5, 5, color.RGBA{1, 2, 3, 4})
 	src.SetRGBA(6, 6, color.RGBA{10, 20, 30, 40})
 	dst := make([]byte, 2*12) // stride wider than the image: 12 bytes per row
