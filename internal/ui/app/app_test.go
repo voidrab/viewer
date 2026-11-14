@@ -19,7 +19,7 @@ import (
 	"viewer/internal/ui/widget"
 )
 
-// fixture is an App on a fake window of a known size, with its time and
+// fixture wraps an App on a fake window of a known size, with its time and
 // system dependencies replaced.
 type fixture struct {
 	t      *testing.T
@@ -149,7 +149,8 @@ func TestOpenReportsFailuresAndSwitchesToOpenFiles(t *testing.T) {
 	if len(f.a.docs) != 2 || f.a.active != 0 {
 		t.Errorf("docs %d, active %d", len(f.a.docs), f.a.active)
 	}
-	// Relative names work too.
+	// A relative path resolves against the working directory and switches to
+	// the tab already open.
 	cwd, _ := os.Getwd()
 	defer os.Chdir(cwd)
 	os.Chdir(f.dir)
@@ -183,14 +184,15 @@ func TestDrawPresentsTheWholeWindow(t *testing.T) {
 	if f.win.Title() != "doc.pdf — Viewer" {
 		t.Errorf("title = %q", f.win.Title())
 	}
-	// Status line: file info on the left and the conformance, zoom and page on the right.
+	// The status line shows the file info on the left, and the conformance,
+	// zoom and page on the right.
 	st := f.a.status
 	if st.Info == "" || len(st.Right) != 3 || st.Right[0] != "PDF/A-1b" || st.Right[1] != "Fit width" || st.Right[2] != "1 / 3" {
 		t.Errorf("status info %q right %v", st.Info, st.Right)
 	}
-	// A second frame leaves the title alone.
+	// A second frame does not change the title.
 	f.a.Handle(platform.FrameEvent{})
-	// No size yet: a frame draws nothing.
+	// Before the window has a size, a frame draws nothing.
 	g := newFixture(t)
 	g.a.Handle(platform.FrameEvent{})
 	if len(g.win.Presented()) != 0 {
@@ -204,7 +206,7 @@ func TestNoDocumentShowsAHintAndDisablesTheToolbar(t *testing.T) {
 	f.a.Handle(platform.FrameEvent{})
 	shots := f.win.Presented()
 	img := shots[len(shots)-1]
-	// Some ink in the middle of the empty content area.
+	// The hint is drawn as ink in the middle of the empty content area.
 	ink := false
 	for y := winH/2 - 30; y < winH/2+30 && !ink; y++ {
 		for x := winW/2 - 150; x < winW/2+150; x++ {
@@ -302,13 +304,13 @@ func TestClosingTabsKeepsTheRightOneActive(t *testing.T) {
 	}
 	f := newFixture(t)
 	f.open(f.pdf("only.pdf", 1))
-	f.a.closeTab(5)  // no such tab
-	f.a.closeTab(-1) // nor this
+	f.a.closeTab(5)  // past the last tab
+	f.a.closeTab(-1) // a negative index
 	f.a.closeTab(0)
 	if len(f.a.docs) != 0 || f.a.active != -1 || f.a.current() != nil {
 		t.Errorf("closing the only tab: docs %d active %d", len(f.a.docs), f.a.active)
 	}
-	// With no tabs left there is nothing for the tab bar to take room for.
+	// With no documents open, the layout gives the tab bar no space.
 	if _, tabs, _, _ := f.a.layout(); !tabs.Empty() {
 		t.Error("the tab bar stayed after the last tab closed")
 	}
@@ -363,7 +365,7 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 	f.open(f.pdf("a.pdf", 1))
 	f.a.Handle(platform.FrameEvent{})
 	f.clickButton(widget.ButtonOpen)
-	if f.a.messageKind != widget.MessageWarn { // no file dialog yet
+	if f.a.messageKind != widget.MessageWarn { // no PickFiles option is set
 		t.Errorf("Open without a dialog: kind %d message %q", f.a.messageKind, f.a.message)
 	}
 	f.clickButton(widget.ButtonFind)
@@ -490,8 +492,9 @@ func TestTabBarClicksAndDrags(t *testing.T) {
 	}
 	f.a.Handle(platform.FrameEvent{})
 
-	// Drag the first tab past the last, releasing below the bar: the press
-	// owns the pointer until the button is released.
+	// Drag the first tab past the last and release it below the bar. The press
+	// keeps the pointer until the button is released, so the drop still
+	// reorders.
 	f.a.Handle(platform.FrameEvent{})
 	x, y = f.tabPoint(0)
 	last := f.a.tabs.TabRect(1)
@@ -520,7 +523,7 @@ func TestPointerRoutingAndHover(t *testing.T) {
 	f.open(f.pdf("a.pdf", 2))
 	f.a.Handle(platform.FrameEvent{})
 	r := f.a.toolbar.ButtonRect(widget.ButtonOpen)
-	// Hover the toolbar, then move down to the page: the toolbar is left.
+	// Moving the pointer from the toolbar onto the page leaves the toolbar.
 	f.pointer(platform.Move, platform.None, r.Min.X+3, r.Min.Y+3)
 	if f.a.hover != sectionToolbar {
 		t.Errorf("hover = %d", f.a.hover)
@@ -561,11 +564,11 @@ func TestScrollAndKeysReachTheView(t *testing.T) {
 	if view.Layout().Scroll().Y <= y {
 		t.Error("Page Down did not scroll")
 	}
-	// Key releases and keys nothing wants are ignored.
+	// A key release is ignored, and so is a key the view does not use.
 	f.a.Handle(platform.KeyEvent{Key: platform.KeyDown})
 	f.special(platform.KeyTab, 0)
 	f.a.Handle(platform.FocusEvent{Focused: true})
-	// Ctrl+0 is the view's, not the app's.
+	// Ctrl+0 is not an app shortcut, so the view handles it.
 	f.key('+', platform.Ctrl)
 	f.key('0', platform.Ctrl)
 	if view.ZoomLabel() != "Fit width" {
@@ -583,7 +586,8 @@ func TestResizeRelaysOutEveryDocument(t *testing.T) {
 			t.Errorf("%s viewport %v, content %v", d.name, vp, content)
 		}
 	}
-	// A window too small for the chrome gives the page no room but does not break.
+	// In a window too small for the chrome, the content area is empty and the
+	// status line does not overlap it.
 	f.a.Handle(platform.ResizeEvent{Size: platform.Size{W: 40, H: 30}, Scale: 1})
 	f.a.Handle(platform.FrameEvent{})
 	_, _, tiny, status := f.a.layout()
@@ -658,7 +662,7 @@ func TestNewAppliesDefaults(t *testing.T) {
 	if a.palette != theme.Light() || a.opts.Verify == nil || a.opts.Inspect == nil || a.opts.Now == nil || a.opts.AfterFunc == nil {
 		t.Error("defaults were not applied")
 	}
-	// The default timer really fires.
+	// The default AfterFunc runs its function after the delay.
 	fired := make(chan struct{})
 	a.opts.AfterFunc(time.Millisecond, func() { close(fired) })
 	select {
@@ -691,7 +695,7 @@ func TestRunDrivesTheWindow(t *testing.T) {
 	dir := t.TempDir()
 	path := testpdf.Write(t, dir, "run.pdf", testpdf.BuildPages([][2]int{{200, 300}, {200, 300}}))
 
-	// Where the PDF/A button will be: the same document gives the same toolbar.
+	// A fixture with the same document gives the position of the PDF/A button.
 	ref := newFixture(t)
 	ref.open(path)
 	ref.a.Handle(platform.FrameEvent{})

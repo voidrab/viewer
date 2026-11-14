@@ -31,8 +31,8 @@ const messageTime = 4 * time.Second
 type Options struct {
 	// Palette is the colour scheme; the zero value means the light one.
 	Palette theme.Palette
-	// PickFiles asks the user for files to open. Nil means the platform has no
-	// file dialog yet.
+	// PickFiles asks the user for files to open. Nil means the platform
+	// provides no file dialog.
 	PickFiles func() ([]string, error)
 	// Verify and Inspect default to the pdfa package's.
 	Verify  func(ctx context.Context, path, profile string) (pdfa.Report, error)
@@ -169,8 +169,8 @@ func (a *App) layoutFor(tabBar bool) (toolbar, tabs, content, status image.Recta
 		tabs = image.Rect(0, y, w, y+theme.TabBarHeight)
 		y += theme.TabBarHeight
 	}
-	// In a window too small for the chrome the content area is empty and the
-	// status line is squeezed out, rather than the rectangles inverting.
+	// In a window too small for the chrome, the content area is empty and the
+	// status line gets the height that is left, so the rectangles never invert.
 	bottom := max(y, h-theme.StatusHeight)
 	content = image.Rect(0, y, w, bottom)
 	status = image.Rect(0, bottom, w, max(bottom, h))
@@ -267,7 +267,8 @@ func (a *App) load(path string) (*document, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The document brings the tab bar with it, so its space is counted.
+	// Once the document is added the tab bar is shown, so the view is sized
+	// for the layout with it.
 	_, _, content, _ := a.layoutFor(true)
 	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{}, a.win.Invalidate)
 	if err != nil {

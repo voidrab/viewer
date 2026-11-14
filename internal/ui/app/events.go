@@ -70,8 +70,9 @@ func (a *App) pointer(ev platform.PointerEvent) {
 	a.win.Invalidate()
 }
 
-// deliver passes ev, in section coordinates, to the section and acts on what
-// it asks for.
+// deliver passes ev, in section coordinates, to the toolbar or the tab bar
+// and carries out the action it returns. The content and status sections take
+// no pointer events.
 func (a *App) deliver(s section, ev platform.PointerEvent) {
 	switch s {
 	case sectionToolbar:
