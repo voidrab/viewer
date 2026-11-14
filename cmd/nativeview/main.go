@@ -1,53 +1,38 @@
-// Command nativeview opens a PDF in a pure-Go window, with no webview and no
-// cgo. It uses only the Wayland platform backend.
+// Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
+// using only the Wayland platform backend. Every argument opens in its own
+// tab.
 package main
 
 import (
 	"fmt"
-	"image"
 	"os"
-	"path/filepath"
 
-	"github.com/voidrab/gopdfrab"
-
-	"viewer/internal/ui/pageview"
+	"viewer/internal/ui/app"
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/platform/wayland"
-	"viewer/internal/ui/shell"
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: nativeview file.pdf")
-		os.Exit(2)
-	}
-	if err := run(os.Args[1]); err != nil {
+	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "nativeview:", err)
 		os.Exit(1)
 	}
 }
 
-func run(path string) error {
-	doc, err := gopdfrab.Open(path)
-	if err != nil {
-		return err
-	}
-	defer doc.Close()
+func run(paths []string) error {
 	be, err := wayland.New()
 	if err != nil {
 		return err
 	}
 	defer be.Close()
 	win, err := be.NewWindow(platform.WindowOptions{
-		Title:   filepath.Base(path),
+		Title:   "Viewer",
 		AppID:   "com.voidrab.gopdfrab.Viewer",
-		Size:    platform.Size{W: 900, H: 700},
-		MinSize: platform.Size{W: 360, H: 240},
+		Size:    platform.Size{W: 1100, H: 800},
+		MinSize: platform.Size{W: 480, H: 360},
 	})
 	if err != nil {
 		return err
 	}
-	return shell.Run(win, func(size image.Point, invalidate func()) (*pageview.View, error) {
-		return pageview.New(doc, size, pageview.Options{}, invalidate)
-	})
+	return app.Run(win, paths, app.Options{})
 }
