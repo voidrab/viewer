@@ -69,8 +69,8 @@ func (c *Canvas) Stroke(r image.Rectangle, width int, col color.NRGBA) {
 	c.Fill(image.Rect(r.Max.X-w, r.Min.Y+w, r.Max.X, r.Max.Y-w), col)
 }
 
-// DrawImage copies src, an opaque or premultiplied bitmap, with its top-left
-// corner at p, blending source-over.
+// DrawImage blends src over the canvas with its top-left corner at p. src
+// must be premultiplied, as image.RGBA samples are.
 func (c *Canvas) DrawImage(p image.Point, src *image.RGBA) {
 	dst := src.Rect.Sub(src.Rect.Min).Add(p).Intersect(c.Clip())
 	if dst.Empty() {

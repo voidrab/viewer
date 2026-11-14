@@ -1,6 +1,6 @@
 // Package platform is the seam between the viewer and the operating system's
-// windowing: a Window shows a bitmap and delivers input events. Real backends
-// live in sub-packages; Fake serves tests.
+// windowing: a Window shows a bitmap and delivers input events. Fake is an
+// in-memory implementation for tests.
 package platform
 
 import "image"
@@ -91,8 +91,8 @@ type PointerEvent struct {
 	Mods   Modifiers
 }
 
-// ScrollEvent reports wheel or touchpad scrolling; positive DY moves content
-// up, as when reading downwards.
+// ScrollEvent reports wheel or touchpad scrolling. A positive DY moves
+// content up.
 type ScrollEvent struct {
 	DX, DY float64
 	Mods   Modifiers
@@ -127,8 +127,8 @@ type WindowOptions struct {
 // Window is a top-level window. Events must be drained by one goroutine;
 // Present and the setters may be called from any goroutine.
 type Window interface {
-	// Events delivers input and lifecycle events until the window closes, when
-	// the channel is closed.
+	// Events returns the channel that delivers input and lifecycle events.
+	// The channel is closed when the window closes.
 	Events() <-chan Event
 	// Present shows img, which must match the last reported size. The backend
 	// copies it, so the caller may reuse the buffer.

@@ -66,12 +66,12 @@ func TestStroke(t *testing.T) {
 	if at(c, 4, 4).A != 0 || at(c, 0, 0).A != 0 {
 		t.Error("stroke painted the inside or outside")
 	}
-	c.Stroke(image.Rect(0, 0, 4, 4), 0, red) // zero width draws nothing more
+	c.Stroke(image.Rect(0, 0, 4, 4), 0, red) // A zero width draws nothing.
 	if at(c, 0, 0).A != 0 {
 		t.Error("zero-width stroke painted")
 	}
 	small := New(4, 4)
-	small.Stroke(small.Bounds(), 9, red) // wider than the box: fills it
+	small.Stroke(small.Bounds(), 9, red) // A width larger than the box fills it.
 	if at(small, 2, 2).A != 255 {
 		t.Error("oversized stroke left a hole")
 	}

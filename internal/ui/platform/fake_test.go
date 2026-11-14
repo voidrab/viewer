@@ -73,7 +73,7 @@ func TestFakeNewWindowError(t *testing.T) {
 	}
 }
 
-// TestEventsImplementEvent pins that every event type satisfies Event.
+// TestEventsImplementEvent verifies that every event type satisfies Event.
 func TestEventsImplementEvent(t *testing.T) {
 	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}}
 	for _, e := range evs {
