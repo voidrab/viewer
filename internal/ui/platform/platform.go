@@ -118,6 +118,43 @@ type StateEvent struct {
 	Decorated bool
 }
 
+// DragKind tells what a DragEvent reports.
+type DragKind uint8
+
+// Drag event kinds.
+const (
+	DragEnter DragKind = iota
+	DragMove
+	DragLeave
+)
+
+// DragEvent reports a drag over the window at (X, Y), in device pixels from
+// its top-left corner: files from another program, or, with Own set, the
+// program's own drag, which one of its windows began with StartDrag. A drop
+// ends it with a DropEvent instead of a DragLeave.
+type DragEvent struct {
+	Kind DragKind
+	X, Y float64
+	Own  bool
+}
+
+// DropEvent reports a drop on the window at (X, Y): the program's own drag,
+// with Own set, or else the local files in Paths.
+type DropEvent struct {
+	X, Y  float64
+	Own   bool
+	Paths []string
+}
+
+// DragEndEvent reports, to the window that began it, the end of a drag begun
+// with StartDrag. Dropped tells that a window of the program took it; a drag
+// that was not dropped was cancelled, and Outside tells that it ended away
+// from every window of the program.
+type DragEndEvent struct {
+	Dropped bool
+	Outside bool
+}
+
 // KeyEvent reports a key press or release. Rune is the text the key produces,
 // or zero for a key without text.
 type KeyEvent struct {
@@ -136,6 +173,9 @@ func (ScrollEvent) isEvent()  {}
 func (KeyEvent) isEvent()     {}
 func (PasteEvent) isEvent()   {}
 func (StateEvent) isEvent()   {}
+func (DragEvent) isEvent()    {}
+func (DropEvent) isEvent()    {}
+func (DragEndEvent) isEvent() {}
 
 // Edge is a set of window edges, the side or corner a resize pulls on. The
 // values are those of xdg_toplevel's resize_edge.
@@ -234,6 +274,11 @@ type Window interface {
 	// ShowMenu opens the compositor's window menu at (x, y), following the
 	// button press last delivered.
 	ShowMenu(x, y int)
+	// StartDrag begins a drag of the program's own from the button press last
+	// delivered, showing icon, if not nil, under the pointer with hotspot, a
+	// point in icon, at the pointer. It reports whether the drag began; one
+	// that did ends with a DragEndEvent.
+	StartDrag(icon *image.RGBA, hotspot image.Point) bool
 	// SetCursor sets the pointer's image while it is over the window.
 	SetCursor(c Cursor)
 	// Close destroys the window and closes the Events channel.

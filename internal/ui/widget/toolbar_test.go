@@ -127,6 +127,22 @@ func TestToolbarClicksFireOnRelease(t *testing.T) {
 	}
 }
 
+func TestToolbarLogoDragsEveryTab(t *testing.T) {
+	tb := newToolbar(t)
+	x, y := mid(tb.logo)
+	tb.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	if a := tb.HandleEvent(ptr(platform.Move, platform.None, x+10, y)); a != (Action{Kind: ActionDragOut, Index: -1, At: image.Pt(x+10, y)}) {
+		t.Errorf("drag of the logo = %+v", a)
+	}
+	// Without a document there is nothing to drag, so the logo moves the
+	// window as the rest of the bar does.
+	tb.NoDocument = true
+	tb.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	if a := tb.HandleEvent(ptr(platform.Move, platform.None, x+10, y)); a.Kind != ActionMove {
+		t.Errorf("drag of the logo without a document = %+v", a)
+	}
+}
+
 func TestToolbarEmptySpaceIsATitleBar(t *testing.T) {
 	tb := newToolbar(t)
 	x, y := empty(tb)

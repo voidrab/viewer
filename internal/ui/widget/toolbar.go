@@ -92,7 +92,8 @@ type Toolbar struct {
 	hover    ButtonID // -1 when none
 	press    ButtonID // -1 when none
 	// grab is where a left button went down on the bar's empty part, or nil.
-	// Moving the pointer beyond dragSlop from it starts a window move.
+	// Moving the pointer beyond dragSlop from it starts a window move, or,
+	// from the logo with a document open, a drag of every tab.
 	grab *image.Point
 }
 
@@ -212,7 +213,8 @@ func (t *Toolbar) hitTest(p image.Point) ButtonID {
 // except for the page field and the zoom drop-down, which return it on the
 // press: the page field to take the keys, and the zoom drop-down to open its
 // menu. On the empty part of the bar, a left press returns ActionTitlePress,
-// the first move past dragSlop returns ActionMove, and a right press returns
+// the first move past dragSlop returns ActionMove, or ActionDragOut with Index
+// -1 from the logo while a document is open, and a right press returns
 // ActionMenu; these carry At set to the pointer. Other events return the zero
 // Action.
 func (t *Toolbar) HandleEvent(ev platform.PointerEvent) Action {
@@ -225,6 +227,9 @@ func (t *Toolbar) HandleEvent(ev platform.PointerEvent) Action {
 		t.hover = t.hitTest(p)
 		if g := t.grab; g != nil && (abs(p.X-g.X) > dragSlop || abs(p.Y-g.Y) > dragSlop) {
 			t.grab = nil
+			if g.In(t.logo) && !t.NoDocument {
+				return Action{Kind: ActionDragOut, Index: -1, At: p}
+			}
 			return Action{Kind: ActionMove, At: p}
 		}
 	case platform.Leave:

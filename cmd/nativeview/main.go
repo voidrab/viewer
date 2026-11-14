@@ -1,6 +1,7 @@
 // Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
 // using only the Wayland platform backend. Every argument opens in its own
-// tab, in the window of the instance already running if there is one.
+// tab, in the window last used of the instance already running if there is
+// one.
 package main
 
 import (
@@ -73,18 +74,21 @@ func run(paths []string) error {
 		return err
 	}
 	defer be.Close()
-	win, err := be.NewWindow(platform.WindowOptions{
-		Title: "Viewer",
-		AppID: "com.voidrab.gopdfrab.Viewer",
-		Size:  platform.Size{W: 1100, H: 800},
-		// Wide enough for the toolbar and its window controls.
-		MinSize: platform.Size{W: 600, H: 360},
-	})
+	newWindow := func() (platform.Window, error) {
+		return be.NewWindow(platform.WindowOptions{
+			Title: "Viewer",
+			AppID: "com.voidrab.gopdfrab.Viewer",
+			Size:  platform.Size{W: 1100, H: 800},
+			// Wide enough for the toolbar and its window controls.
+			MinSize: platform.Size{W: 600, H: 360},
+		})
+	}
+	win, err := newWindow()
 	if err != nil {
 		return err
 	}
 	return app.Run(win, paths, app.Options{
 		PickFiles: pickFiles, SaveFile: saveFile, Requests: requests, OpenURI: openURI,
-		Dark: dark, Themes: themeChanges, SaveTheme: saveTheme(theme),
+		Dark: dark, Themes: themeChanges, SaveTheme: saveTheme(theme), NewWindow: newWindow,
 	})
 }

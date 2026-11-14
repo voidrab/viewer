@@ -10,6 +10,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/voidrab/gopdfrab"
@@ -58,8 +59,35 @@ type Options struct {
 	// to addresses do nothing.
 	OpenURI func(uri string)
 	// Requests, if not nil, delivers requests from later launches of the
-	// program to open files here, which are opened in new tabs.
+	// program to open files, which are opened in new tabs of the window last
+	// focused.
 	Requests <-chan instance.Request
+	// NewWindow opens another window, for Ctrl+N and for tabs dragged out of
+	// every window. Nil means the program has a single window.
+	NewWindow func() (platform.Window, error)
+}
+
+// withDefaults returns opts with the zero fields that have defaults set.
+func (opts Options) withDefaults() Options {
+	if opts.Palette == (theme.Palette{}) {
+		opts.Palette = theme.Of(opts.Dark)
+	}
+	if opts.Verify == nil {
+		opts.Verify = pdfa.Verify
+	}
+	if opts.Convert == nil {
+		opts.Convert = pdfa.Convert
+	}
+	if opts.Inspect == nil {
+		opts.Inspect = pdfa.Inspect
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
+	if opts.AfterFunc == nil {
+		opts.AfterFunc = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
+	}
+	return opts
 }
 
 // close releases the document's view and file.
@@ -76,6 +104,9 @@ var (
 
 // document is one open PDF, shown in one tab.
 type document struct {
+	// owner is the window whose tab shows the document, which its view asks
+	// to redraw. It changes when the tab moves to another window.
+	owner            atomic.Pointer[App]
 	path, name       string
 	bytes            int64
 	version, claimed string
@@ -98,14 +129,23 @@ const (
 	sectionFrame // the window's edges, which resize it
 )
 
-// App is the viewer's single window.
+// invalidate asks the window showing d to redraw.
+func (d *document) invalidate() {
+	if a := d.owner.Load(); a != nil {
+		a.win.Invalidate()
+	}
+}
+
+// App is one of the viewer's windows.
 type App struct {
+	s    *session
 	win  platform.Window
 	opts Options
 
 	face *text.Face
 
-	// pool renders the pages of every document, under one memory budget.
+	// pool renders the pages of every document of every window, under one
+	// memory budget.
 	pool *pageview.Pool
 
 	toolbar  *widget.Toolbar
@@ -120,6 +160,9 @@ type App struct {
 	size    platform.Size
 	canvas  *paint.Canvas
 	pending []string // files to open once the window has a size
+	// pendingDocs are documents moved here from another window before this
+	// one had a size, which it shows once it has one.
+	pendingDocs []*document
 
 	capture section // the section a pressed pointer button belongs to
 	hover   section
@@ -148,30 +191,22 @@ type App struct {
 	titlePress           time.Time       // when the title bar was last pressed
 	quitting             bool            // the window's close control was clicked
 
-	picking bool        // a file dialog is open
-	inbox   chan func() // work finished off the event loop, run on it
+	picking bool          // a file dialog is open
+	inbox   chan func()   // work finished off the event loop, run on it
+	done    chan struct{} // closed when the event loop has ended
+
+	drag     *tabDrag // the drag of this window's tabs under way, or nil
+	dropTint bool     // a drop on the content area is wanted: tint it
 }
 
-// New returns an App for win.
+// New returns an App for win, the only window of its own session.
 func New(win platform.Window, opts Options) (*App, error) {
-	if opts.Palette == (theme.Palette{}) {
-		opts.Palette = theme.Of(opts.Dark)
-	}
-	if opts.Verify == nil {
-		opts.Verify = pdfa.Verify
-	}
-	if opts.Convert == nil {
-		opts.Convert = pdfa.Convert
-	}
-	if opts.Inspect == nil {
-		opts.Inspect = pdfa.Inspect
-	}
-	if opts.Now == nil {
-		opts.Now = time.Now
-	}
-	if opts.AfterFunc == nil {
-		opts.AfterFunc = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
-	}
+	return newSession(opts.withDefaults()).newApp(win)
+}
+
+// newApp returns an App for win in session s.
+func newApp(s *session, win platform.Window) (*App, error) {
+	opts := s.options()
 	face, err := newFace(theme.FontSize)
 	if err != nil {
 		return nil, err
@@ -180,7 +215,7 @@ func New(win platform.Window, opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{win: win, opts: opts, face: face, pool: pageview.NewPool(pageview.PoolOptions{}), active: -1, inbox: make(chan func(), 16)}
+	a := &App{s: s, win: win, opts: opts, face: face, pool: s.pool, active: -1, inbox: make(chan func(), 64), done: make(chan struct{})}
 	a.toolbar = widget.NewToolbar(opts.Palette, face)
 	a.menu = widget.NewMenu(opts.Palette, face)
 	for _, p := range pageview.ZoomPresets {
@@ -198,42 +233,77 @@ func New(win platform.Window, opts Options) (*App, error) {
 	return a, nil
 }
 
-// Run shows paths in a new App on win and handles events until the window
-// closes. It returns after closing every document.
+// Run shows paths in a new App on win and handles events until every window
+// of the program has closed: win and those opened with opts.NewWindow. It
+// returns after closing every document.
 func Run(win platform.Window, paths []string, opts Options) error {
-	a, err := New(win, opts)
+	s := newSession(opts.withDefaults())
+	a, err := s.newApp(win)
 	if err != nil {
+		s.pool.Close()
 		win.Close()
 		return err
 	}
-	defer a.closeAll()
-	defer win.Close()
 	a.pending = append(a.pending, paths...)
-	events, requests, themes := win.Events(), opts.Requests, opts.Themes
+	s.start(a)
+	requests, themes := opts.Requests, opts.Themes
 	for {
 		select {
+		case <-s.empty:
+			s.wg.Wait()
+			return nil
 		case dark, ok := <-themes:
 			if !ok {
-				themes = nil
+				themes = nil // a closed channel would be ready for ever
 				break
 			}
-			a.setTheme(dark)
-		case ev, ok := <-events:
-			if !ok || a.Handle(ev) {
-				return nil
-			}
+			s.each(nil, func(a *App) { a.setTheme(dark) })
 		case req, ok := <-requests:
 			if !ok {
-				requests = nil // a closed channel would be ready for ever
+				requests = nil
 				break
 			}
-			a.Open(req.Paths...)
-			win.Activate(req.Token)
-			win.Invalidate()
+			s.launch(req)
+		}
+	}
+}
+
+// loop handles the window's events, and the work posted to it, until the
+// window closes, and then closes its documents.
+func (a *App) loop() {
+	defer close(a.done)
+	defer a.closeAll()
+	defer a.win.Close()
+	events := a.win.Events()
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok || a.Handle(ev) {
+				return
+			}
 		case f := <-a.inbox:
 			f()
-			win.Invalidate()
+			if a.quitting {
+				return
+			}
+			a.win.Invalidate()
 		}
+	}
+}
+
+// post runs f on the window's event loop, and reports whether it will: not
+// once the window has closed.
+func (a *App) post(f func()) bool {
+	select {
+	case <-a.done:
+		return false // the inbox may have room, but nothing reads it
+	default:
+	}
+	select {
+	case a.inbox <- f:
+		return true
+	case <-a.done:
+		return false
 	}
 }
 
@@ -283,6 +353,16 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 	switch ev := ev.(type) {
 	case platform.CloseEvent:
 		return true
+	case platform.FocusEvent:
+		if ev.Focused {
+			a.s.focus(a)
+		}
+	case platform.DragEvent:
+		a.dragOver(ev)
+	case platform.DropEvent:
+		a.dropped(ev)
+	case platform.DragEndEvent:
+		a.dragEnded(ev)
 	case platform.ResizeEvent:
 		a.resize(ev.Size)
 	case platform.FrameEvent:
@@ -327,6 +407,10 @@ func (a *App) resize(size platform.Size) {
 	// resizes while the window is dragged allocates one canvas, not one each.
 	a.size = size
 	a.toolbar.Layout(size.W)
+	if docs := a.pendingDocs; len(docs) > 0 {
+		a.pendingDocs = nil
+		a.adopt(docs, 0)
+	}
 	if len(a.pending) > 0 {
 		paths := a.pending
 		a.pending = nil
@@ -383,21 +467,22 @@ func (a *App) load(path string) (*document, error) {
 	// for the layout with it.
 	_, _, content, _ := a.layoutFor(true)
 	pal := a.opts.Palette
-	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
+	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc}
+	d.owner.Store(a)
+	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
 		Pool: a.pool, OpenURI: a.opts.OpenURI, Gap: theme.PageGap, Margin: theme.PageMargin,
 		Background: pal.Canvas, Selection: pal.Selection,
-	}, a.win.Invalidate)
+	}, d.invalidate)
 	if err != nil {
 		doc.Close()
 		return nil, err
 	}
-	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc, view: view}
 	if info, err := a.opts.Inspect(path); err == nil {
 		d.version, d.claimed = info.Version, info.Claimed
 	}
 	// The first pages are rendered in the background, so that the tab is ready
 	// when it is shown.
-	view.Prefetch()
+	d.view.Prefetch()
 	return d, nil
 }
 
@@ -427,13 +512,14 @@ func (a *App) drop(d *document) {
 	d.close()
 }
 
-// closeAll closes every document.
+// closeAll closes every document, those still to be shown too, and takes
+// the window out of its session.
 func (a *App) closeAll() {
-	for _, d := range a.docs {
+	for _, d := range append(a.docs, a.pendingDocs...) {
 		a.drop(d)
 	}
-	a.docs, a.active = nil, -1
-	a.pool.Close()
+	a.docs, a.pendingDocs, a.active = nil, nil, -1
+	a.s.remove(a)
 }
 
 // afterChange relays out what a change of tabs affects and asks for a frame.
@@ -497,9 +583,11 @@ func (a *App) pick() {
 	}()
 }
 
-// setTheme switches the window to the dark palette or the light one.
+// setTheme switches the window to the dark palette or the light one, which
+// windows opened later start with too.
 func (a *App) setTheme(dark bool) {
 	p := theme.Of(dark)
+	a.s.setPalette(p)
 	a.opts.Palette = p
 	a.toolbar.Palette, a.tabs.Palette, a.status.Palette = p, p, p
 	a.findBar.Palette, a.panel.Palette, a.menu.Palette = p, p, p
@@ -509,11 +597,12 @@ func (a *App) setTheme(dark bool) {
 	a.win.Invalidate()
 }
 
-// toggleTheme switches between the light and the dark theme, and passes the
-// new choice to SaveTheme if it is set.
+// toggleTheme switches every window between the light and the dark theme,
+// and passes the new choice to SaveTheme if it is set.
 func (a *App) toggleTheme() {
 	dark := !a.opts.Palette.Dark
 	a.setTheme(dark)
+	a.s.each(a, func(b *App) { b.setTheme(dark) })
 	if a.opts.SaveTheme != nil {
 		a.opts.SaveTheme(dark)
 	}

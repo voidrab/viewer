@@ -74,8 +74,16 @@ colours, status line and Adwaita Mono type.
   `~/.config/viewer/theme`, and switching back to the desktop's theme forgets
   it, so the window follows the desktop again.
 
-- Opening another PDF while it runs adds a tab to the running window (and asks
-  the compositor to bring it forward).
+- One process runs every window. Opening another PDF while it runs adds a tab
+  to the window last used, or switches to the tab already showing it, and
+  asks the compositor to bring that window forward. Ctrl+N opens another
+  window, and Ctrl+Q closes them all.
+- Drop PDFs from the file manager on a window to open them in new tabs.
+- Drag a tab along the tab bar to reorder the tabs. Drag it off the bar to
+  carry it: onto another window's tab bar or pages to move it there, or away
+  from every window to open it in a new one. Dragging the logo, or the empty
+  part of the tab bar, carries every tab, merging the window into the one it
+  is dropped on. A moved tab keeps its document, so nothing is read again.
 - Drag on text to select it (double click a word, triple click a line), Ctrl+C
   to copy. Dragging anywhere else pans the page, as does the middle button;
   the scrollbar thumbs drag and clicking beside them jumps.
@@ -103,7 +111,7 @@ Use `make default` as usual to make it your PDF application.
 | Ctrl+O                | Open (into new tabs)     |
 | Ctrl+T / Ctrl+W       | New tab / close tab      |
 | Ctrl+Tab, Ctrl+PgDn/PgUp | Next / previous tab   |
-| Ctrl+N                | New window               |
+| Ctrl+N / Ctrl+Q       | New window / close every window |
 | ← / →                 | Previous / next page     |
 | Ctrl+F, Enter/Shift+Enter | Find, next / previous match |
 | Ctrl+A / Ctrl+C       | Select all / copy        |

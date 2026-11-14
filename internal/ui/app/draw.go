@@ -148,6 +148,9 @@ func (a *App) draw() {
 	} else {
 		a.hint(content)
 	}
+	if a.dropTint {
+		tint(c, content, a.opts.Palette.Accent)
+	}
 	a.status.Draw(c, status)
 	a.menu.Draw(c)
 	a.win.Present(c.Img)

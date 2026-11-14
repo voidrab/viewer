@@ -82,7 +82,9 @@ type Backend struct {
 	// dataManager is wl_data_device_manager, or zero without one: there is
 	// then no clipboard.
 	dataManager uint32
+	dataVersion uint32 // the version of wl_data_device_manager bound
 	clip        clipboard
+	dnd         dnd
 	// cursorShape is wp_cursor_shape_manager_v1, or zero without one: the
 	// client then sets no cursor.
 	cursorShape uint32
@@ -122,9 +124,9 @@ func Open(conn *Conn) (*Backend, error) {
 			return nil, err
 		}
 	}
-	// The clipboard is optional too, and needs a seat.
+	// The clipboard, and drag and drop, are optional too, and need a seat.
 	if b.seat != 0 {
-		if b.dataManager, _, err = b.c.Bind("wl_data_device_manager", 3, nil); err == nil {
+		if b.dataManager, b.dataVersion, err = b.c.Bind("wl_data_device_manager", 3, nil); err == nil {
 			b.clip.device = b.c.NewID(b.onDataDevice)
 			b.c.Send(b.dataManager, dataManagerGetDevice, func(e *Encoder) { e.Uint(b.clip.device).Uint(b.seat) })
 		}
@@ -447,26 +449,38 @@ func (w *window) freeBuffer(size platform.Size) *buffer {
 			return b
 		}
 	}
+	var buf *buffer
+	buf = w.b.newBuffer(size, func() { w.release(buf) })
+	if buf == nil {
+		return nil
+	}
+	w.buffers = append(w.buffers, buf)
+	return buf
+}
+
+// newBuffer creates a buffer of size in its own shared memory, calling
+// release whenever the compositor releases it. It returns nil if the memory
+// cannot be allocated.
+func (b *Backend) newBuffer(size platform.Size, release func()) *buffer {
 	stride := size.W * 4
 	mem, err := newShmMem(stride * size.H)
 	if err != nil {
 		return nil
 	}
-	c := w.b.c
+	c := b.c
 	buf := &buffer{mem: mem, size: size, stride: stride}
 	buf.pool = c.NewID(nil)
 	buf.id = c.NewID(func(opcode uint16, _ *Decoder) {
 		if opcode == bufferRelease {
-			w.release(buf)
+			release()
 		}
 	})
-	c.Send(w.b.shm, shmCreatePool, func(e *Encoder) { e.Uint(buf.pool).FD(mem.fd).Int(int32(len(mem.data))) })
+	c.Send(b.shm, shmCreatePool, func(e *Encoder) { e.Uint(buf.pool).FD(mem.fd).Int(int32(len(mem.data))) })
 	c.Send(buf.pool, poolCreateBuffer, func(e *Encoder) {
 		e.Uint(buf.id).Int(0).Int(int32(size.W)).Int(int32(size.H)).Int(int32(stride)).Uint(shmFormatARGB8888)
 	})
 	// The buffer keeps the pool's memory alive; the pool object is not needed.
 	c.Send(buf.pool, poolDestroy, nil)
-	w.buffers = append(w.buffers, buf)
 	return buf
 }
 

@@ -337,3 +337,109 @@ func TestTabBarRectangles(t *testing.T) {
 		}
 	}
 }
+
+func TestDraggingATabOffTheBarDragsItOut(t *testing.T) {
+	b := newBar(t, 600, "one.pdf", "two.pdf")
+	x, y := center(b, 1)
+	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	// Along the bar, and a little above or below it, the tab reorders.
+	b.HandleEvent(ptr(platform.Move, platform.None, x-30, -detachReach))
+	b.HandleEvent(ptr(platform.Move, platform.None, x-30, theme.TabBarHeight+detachReach-1))
+	if !b.Dragging() {
+		t.Fatal("the tab is not being dragged along the bar")
+	}
+	// Further off, it leaves the bar, which ends the press.
+	at := image.Pt(x-30, theme.TabBarHeight+detachReach)
+	if a := b.HandleEvent(ptr(platform.Move, platform.None, at.X, at.Y)); a != (Action{Kind: ActionDragOut, Index: 1, At: at}) {
+		t.Errorf("drag off the bar = %+v", a)
+	}
+	if b.Dragging() {
+		t.Error("the bar still drags the tab")
+	}
+	if a := b.HandleEvent(ptr(platform.Release, platform.Left, at.X, at.Y)); a != (Action{}) {
+		t.Errorf("the release after = %+v", a)
+	}
+	// Upwards too.
+	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	if a := b.HandleEvent(ptr(platform.Move, platform.None, x, -detachReach-1)); a.Kind != ActionDragOut || a.Index != 1 {
+		t.Errorf("drag above the bar = %+v", a)
+	}
+}
+
+func TestDraggingTheEmptyBarDragsEveryTab(t *testing.T) {
+	b := newBar(t, 600, "one.pdf")
+	x, y := b.newTab.Max.X+40, 10
+	if a := b.HandleEvent(ptr(platform.Press, platform.Left, x, y)); a != (Action{}) {
+		t.Errorf("press = %+v", a)
+	}
+	if a := b.HandleEvent(ptr(platform.Move, platform.None, x+dragSlop, y)); a != (Action{}) {
+		t.Errorf("a move within the slop = %+v", a)
+	}
+	if a := b.HandleEvent(ptr(platform.Move, platform.None, x, y+dragSlop+1)); a != (Action{Kind: ActionDragOut, Index: -1, At: image.Pt(x, y+dragSlop+1)}) {
+		t.Errorf("drag = %+v", a)
+	}
+	// A release without a drag, a right press, and a bar without tabs do
+	// nothing.
+	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	if a := b.HandleEvent(ptr(platform.Release, platform.Left, x, y)); a != (Action{}) {
+		t.Errorf("release = %+v", a)
+	}
+	b.HandleEvent(ptr(platform.Press, platform.Right, x, y))
+	b.Titles = nil
+	b.Layout(600)
+	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	if a := b.HandleEvent(ptr(platform.Move, platform.None, x+40, y)); a != (Action{}) {
+		t.Errorf("drag of an empty bar = %+v", a)
+	}
+}
+
+func TestDrawMarksADropFromElsewhereAndTheLiftedTab(t *testing.T) {
+	b := newBar(t, 600, "one.pdf", "two.pdf", "three.pdf")
+	b.Active = 0
+	b.Lifted = 1
+	marked := func(gap int) bool {
+		b.DropGap = gap
+		c := paint.New(600, 40)
+		b.Draw(c, image.Point{})
+		x := b.newTab.Min.X
+		if gap < len(b.tabs) {
+			x = b.tabs[gap].Min.X
+		}
+		if b.Lifted == 1 {
+			if got := pixel(c, b.tabs[1].Min.X+3, 4); got == nrgba(palette.Chrome) {
+				t.Errorf("the lifted tab is not washed: %v", got)
+			}
+		}
+		return pixel(c, x, 12) == nrgba(palette.Accent)
+	}
+	// The gaps beside the lifted tab would leave it in place: only the others
+	// are marked.
+	for gap, want := range []bool{true, false, false, true} {
+		if got := marked(gap); got != want {
+			t.Errorf("gap %d marked %v, want %v", gap, got, want)
+		}
+	}
+	// A drag from another window, with no tab lifted, marks every gap.
+	b.Lifted = -1
+	for gap := range 4 {
+		if !marked(gap) {
+			t.Errorf("gap %d of a drag from elsewhere is not marked", gap)
+		}
+	}
+}
+
+func TestDraggingALongTheBarDoesNotMarkTheGapsBesideTheTab(t *testing.T) {
+	b := newBar(t, 600, "one.pdf", "two.pdf")
+	x, y := center(b, 0)
+	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
+	b.HandleEvent(ptr(platform.Move, platform.None, b.tabs[1].Min.X+2, y)) // gap 1, after the tab itself
+	c := paint.New(600, 40)
+	b.Draw(c, image.Point{})
+	if got := pixel(c, b.tabs[1].Min.X, 12); got == nrgba(palette.Accent) {
+		t.Error("the gap after the dragged tab is marked")
+	}
+	// Dropped there, it stays.
+	if a := b.HandleEvent(ptr(platform.Release, platform.Left, b.tabs[1].Min.X+2, y)); a != (Action{}) {
+		t.Errorf("drop = %+v", a)
+	}
+}

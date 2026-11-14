@@ -75,7 +75,7 @@ func TestFakeNewWindowError(t *testing.T) {
 
 // TestEventsImplementEvent verifies that every event type satisfies Event.
 func TestEventsImplementEvent(t *testing.T) {
-	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}, PasteEvent{}, StateEvent{}}
+	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}, PasteEvent{}, StateEvent{}, DragEvent{}, DropEvent{}, DragEndEvent{}}
 	for _, e := range evs {
 		e.isEvent()
 	}
@@ -135,6 +135,17 @@ func TestFakeWindowRecordsWindowManagement(t *testing.T) {
 				t.Errorf("call %d = %q, want %q", i, got[i], want[i])
 			}
 		}
+	}
+	icon := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	if !w.StartDrag(icon, image.Pt(3, 4)) || w.DragIcon() != icon {
+		t.Error("StartDrag did not begin the drag with its icon")
+	}
+	w.NoDrag = true
+	if w.StartDrag(nil, image.Point{}) {
+		t.Error("StartDrag began a drag with NoDrag set")
+	}
+	if got := w.Calls(); got[len(got)-1] != "drag 3 4" {
+		t.Errorf("calls = %q", got)
 	}
 	w.SetCursor(CursorResizeSE)
 	if w.Cursor() != CursorResizeSE {

@@ -31,6 +31,9 @@ type clipSetup struct {
 	destroyed []uint32 // sources and offers the client destroyed
 	received  []receiveRequest
 	log       chan string
+	// extra, if set, sees each request first, and handles it by returning
+	// true. It runs with mu held.
+	extra func(ev Event, d *Decoder) bool
 }
 
 type selectionRequest struct{ source, serial uint32 }
@@ -41,6 +44,12 @@ type receiveRequest struct {
 }
 
 func newClipSetup(t *testing.T, withManager bool) *clipSetup {
+	t.Helper()
+	return newClipSetupVersion(t, withManager, 3)
+}
+
+// newClipSetupVersion is newClipSetup with a data device manager of version.
+func newClipSetupVersion(t *testing.T, withManager bool, version uint32) *clipSetup {
 	t.Helper()
 	cs := &clipSetup{mimes: map[uint32][]string{}, log: make(chan string, 64)}
 	a, b := pair(t)
@@ -59,12 +68,15 @@ func newClipSetup(t *testing.T, withManager bool) *clipSetup {
 	}
 	globals := append(append([]Global(nil), wmGlobals...), Global{Name: 4, Interface: "wl_seat", Version: 5})
 	if withManager {
-		globals = append(globals, Global{Name: 5, Interface: "wl_data_device_manager", Version: 3})
+		globals = append(globals, Global{Name: 5, Interface: "wl_data_device_manager", Version: version})
 	}
 	base := f.handler(globals)
 	cs.srv = serve(t, b, func(s *server, ev Event, d *Decoder) {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
+		if cs.extra != nil && cs.extra(ev, d) {
+			return
+		}
 		switch {
 		case cs.seat != 0 && ev.Object == cs.seat && ev.Opcode == seatGetPointer:
 			cs.pointer = d.Uint()

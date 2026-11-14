@@ -56,6 +56,9 @@ type FakeWindow struct {
 	closed      bool
 	calls       []string
 	cursor      Cursor
+	dragIcon    *image.RGBA
+	// NoDrag, when set, makes StartDrag refuse to begin a drag.
+	NoDrag bool
 }
 
 // Events implements Window.
@@ -142,6 +145,27 @@ func (w *FakeWindow) Minimize() { w.record("minimize") }
 // ShowMenu implements Window by recording the call with its position.
 func (w *FakeWindow) ShowMenu(x, y int) { w.record(fmt.Sprintf("menu %d %d", x, y)) }
 
+// StartDrag implements Window by recording the call as "drag x y", with the
+// hotspot, and keeping the icon. It begins no drag when NoDrag is set; the test
+// ends one that began by sending a DragEndEvent.
+func (w *FakeWindow) StartDrag(icon *image.RGBA, hotspot image.Point) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.NoDrag {
+		return false
+	}
+	w.dragIcon = icon
+	w.calls = append(w.calls, fmt.Sprintf("drag %d %d", hotspot.X, hotspot.Y))
+	return true
+}
+
+// DragIcon returns the icon of the drag last begun.
+func (w *FakeWindow) DragIcon() *image.RGBA {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.dragIcon
+}
+
 // SetCursor implements Window by keeping the cursor.
 func (w *FakeWindow) SetCursor(c Cursor) {
 	w.mu.Lock()
@@ -163,7 +187,8 @@ func (w *FakeWindow) record(call string) {
 }
 
 // Calls returns the window management calls made so far, oldest first, such
-// as "move", "resize 9", "maximize", "unmaximize", "minimize" and "menu 4 5".
+// as "move", "resize 9", "maximize", "unmaximize", "minimize", "menu 4 5" and
+// "drag 3 4".
 func (w *FakeWindow) Calls() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

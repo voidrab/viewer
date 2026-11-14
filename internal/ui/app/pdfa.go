@@ -169,11 +169,17 @@ func (a *App) convert() {
 			a.inbox <- func() {
 				a.job.cancel()
 				a.job = nil
-				d.result = before
+				if slices.Contains(a.docs, d) {
+					d.result = before
+				}
 			}
 			return
 		default:
-			a.inbox <- func() { d.result = &widget.PanelResult{Busy: "Converting to " + prof.Label + "…"} }
+			a.inbox <- func() {
+				if slices.Contains(a.docs, d) { // not moved to another window
+					d.result = &widget.PanelResult{Busy: "Converting to " + prof.Label + "…"}
+				}
+			}
 			var cr pdfa.ConvertReport
 			cr, err = a.opts.Convert(ctx, d.path, out, prof.Name)
 			a.inbox <- func() {

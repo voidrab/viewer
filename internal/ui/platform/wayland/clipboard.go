@@ -54,19 +54,23 @@ type clipboard struct {
 	mimes  map[uint32][]string // the formats each offer lists
 }
 
-// onDataDevice handles the data device's events: offers announced, and the
-// selection naming which one is the clipboard's. Drag and drop is not used.
+// onDataDevice handles the data device's events: offers announced, the
+// selection naming which one is the clipboard's, and drags, which onDrag
+// handles.
 func (b *Backend) onDataDevice(opcode uint16, d *Decoder) {
 	cb := &b.clip
 	switch opcode {
 	case deviceDataOffer:
 		id := d.Uint()
 		b.c.Handle(id, func(opcode uint16, d *Decoder) {
-			if opcode == offerOffer {
+			switch opcode {
+			case offerOffer:
 				mime := d.String()
 				cb.mu.Lock()
 				cb.mimes[id] = append(cb.mimes[id], mime)
 				cb.mu.Unlock()
+			case offerAction:
+				b.onOfferAction(id, d)
 			}
 		})
 	case deviceSelection:
@@ -79,6 +83,8 @@ func (b *Backend) onDataDevice(opcode uint16, d *Decoder) {
 		if old != 0 {
 			b.c.Send(old, offerDestroy, nil)
 		}
+	default:
+		b.onDrag(opcode, d)
 	}
 }
 

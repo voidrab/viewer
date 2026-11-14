@@ -29,6 +29,10 @@ const (
 	ActionTitlePress            // the left button went down on the title bar at At
 	ActionMove                  // the title bar is being dragged: move the window
 	ActionMenu                  // the title bar was right-clicked at At
+	// ActionDragOut asks to begin a drag of the tab at Index, or of every tab
+	// when Index is -1: the tab was dragged off the bar, or the bar's empty
+	// part or the toolbar's logo was dragged. At is where the pointer was.
+	ActionDragOut
 )
 
 // Action is the result of an event handled by a widget.
@@ -49,7 +53,13 @@ const (
 	tabMaxWidth = 220
 	newWidth    = 30
 	dragSlop    = 4
+	// detachReach is how far beyond the bar, above or below it, a tab can be
+	// dragged before it leaves the bar.
+	detachReach = 12
 )
+
+// pressEmpty marks a press on the bar's empty part.
+const pressEmpty = -2
 
 // TabBar is a row of tabs with close buttons and a new-tab button.
 type TabBar struct {
@@ -58,13 +68,19 @@ type TabBar struct {
 	// Titles are the tab titles, in order. Active is the selected tab, or -1.
 	Titles []string
 	Active int
+	// DropGap is the gap, 0..len(Titles), where a drag from elsewhere would
+	// drop, which is marked unless it is beside the Lifted tab; -1 marks
+	// none.
+	DropGap int
+	// Lifted is the tab being dragged elsewhere, which is shaded; -1 for none.
+	Lifted int
 
 	tabs    []image.Rectangle // laid out in the bar's own coordinates
 	newTab  image.Rectangle
 	width   int
 	hover   hit
-	press   int // the tab a button went down on, or -1
-	pressX  int
+	press   int // the tab a button went down on, pressEmpty, or -1
+	pressAt image.Point
 	drag    bool
 	dropAt  int // the gap, 0..len(Titles), a dragged tab would drop into
 	hasHits bool
@@ -81,7 +97,7 @@ var noHit = hit{tab: -1}
 
 // NewTabBar returns a tab bar using palette and face.
 func NewTabBar(palette theme.Palette, face *text.Face) *TabBar {
-	return &TabBar{Palette: palette, Face: face, Active: -1, hover: noHit, press: -1}
+	return &TabBar{Palette: palette, Face: face, Active: -1, DropGap: -1, Lifted: -1, hover: noHit, press: -1}
 }
 
 // Layout sizes the tabs to fit width pixels: each as wide as its title wants,
@@ -134,9 +150,9 @@ func (b *TabBar) hitTest(p image.Point) hit {
 	return noHit
 }
 
-// gapAt returns the drop gap nearest to x: before the first tab whose middle
+// GapAt returns the drop gap nearest to x: before the first tab whose middle
 // lies right of x, or after the last.
-func (b *TabBar) gapAt(x int) int {
+func (b *TabBar) GapAt(x int) int {
 	for i, r := range b.tabs {
 		if x < (r.Min.X+r.Max.X)/2 {
 			return i
@@ -146,17 +162,26 @@ func (b *TabBar) gapAt(x int) int {
 }
 
 // HandleEvent applies a pointer event, in the bar's own coordinates, and
-// returns what it asks for.
+// returns what it asks for. A tab dragged along the bar reorders the tabs; one
+// dragged off it, above or below, and the bar's empty part dragged anywhere,
+// return ActionDragOut, which ends the press.
 func (b *TabBar) HandleEvent(ev platform.PointerEvent) Action {
 	p := image.Pt(int(ev.X), int(ev.Y))
 	switch ev.Kind {
 	case platform.Move:
 		b.hover = b.hitTest(p)
-		if b.press >= 0 && !b.drag && max(p.X-b.pressX, b.pressX-p.X) > dragSlop {
+		moved := max(abs(p.X-b.pressAt.X), abs(p.Y-b.pressAt.Y)) > dragSlop
+		off := p.Y < -detachReach || p.Y >= theme.TabBarHeight+detachReach
+		if b.press == pressEmpty && moved || b.press >= 0 && off {
+			from := max(b.press, -1)
+			b.press, b.drag = -1, false
+			return Action{Kind: ActionDragOut, Index: from, At: p}
+		}
+		if b.press >= 0 && !b.drag && abs(p.X-b.pressAt.X) > dragSlop {
 			b.drag = true
 		}
 		if b.drag {
-			b.dropAt = b.gapAt(p.X)
+			b.dropAt = b.GapAt(p.X)
 		}
 	case platform.Leave:
 		b.hover = noHit
@@ -166,10 +191,13 @@ func (b *TabBar) HandleEvent(ev platform.PointerEvent) Action {
 		case h.plus && ev.Button == platform.Left:
 			return Action{Kind: ActionNew}
 		case h.tab < 0:
+			if ev.Button == platform.Left && len(b.Titles) > 0 {
+				b.press, b.pressAt = pressEmpty, p
+			}
 		case ev.Button == platform.Middle || (ev.Button == platform.Left && h.close):
 			return Action{Kind: ActionClose, Index: h.tab}
 		case ev.Button == platform.Left:
-			b.press, b.pressX, b.drag, b.dropAt = h.tab, p.X, false, h.tab
+			b.press, b.pressAt, b.drag, b.dropAt = h.tab, p, false, h.tab
 			return Action{Kind: ActionSelect, Index: h.tab}
 		}
 	case platform.Release:
@@ -216,7 +244,7 @@ func (b *TabBar) Draw(c *paint.Canvas, origin image.Point) {
 			fg = p.Text
 		}
 		c.Fill(at(image.Rect(r.Max.X-1, r.Min.Y, r.Max.X, r.Max.Y-1)), p.Border)
-		if b.drag && i == b.press {
+		if b.drag && i == b.press || i == b.Lifted {
 			c.Fill(at(r), p.Hover)
 		}
 
@@ -240,10 +268,16 @@ func (b *TabBar) Draw(c *paint.Canvas, origin image.Point) {
 	}
 	icon.Draw(c, nb.Inset((toolButton-toolIcon)/2), icon.Plus, fg, 1.6)
 
+	// The gaps on either side of the tab being moved would leave it where it
+	// is, so they are not marked.
+	gap, moving := b.DropGap, b.Lifted
 	if b.drag {
+		gap, moving = b.dropAt, b.press
+	}
+	if gap >= 0 && (moving < 0 || gap != moving && gap != moving+1) {
 		x := b.newTab.Min.X
-		if b.dropAt < len(b.tabs) {
-			x = b.tabs[b.dropAt].Min.X
+		if gap < len(b.tabs) {
+			x = b.tabs[gap].Min.X
 		}
 		c.Fill(at(image.Rect(x-1, 3, x+1, theme.TabBarHeight-3)), p.Accent)
 	}

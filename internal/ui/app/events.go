@@ -149,11 +149,17 @@ func (a *App) tabAction(act widget.Action) {
 		a.pick()
 	case widget.ActionReorder:
 		a.move(act.Index, act.To)
+	case widget.ActionDragOut:
+		a.beginDrag(act.Index, act.At.Add(a.origin(sectionTabs)))
 	}
 }
 
 // toolbarAction carries out what the toolbar asked for.
 func (a *App) toolbarAction(act widget.Action) {
+	if act.Kind == widget.ActionDragOut {
+		a.beginDrag(act.Index, act.At.Add(a.origin(sectionToolbar)))
+		return
+	}
 	if act.Kind != widget.ActionButton {
 		a.titleAction(act)
 		return
@@ -423,16 +429,19 @@ func (a *App) copySelection() {
 }
 
 // shortcut runs the action of the Ctrl shortcut ev and reports whether ev is
-// one. Ctrl+Q counts as a shortcut but does nothing here; the caller quits.
+// one. Ctrl+Q closes the other windows here; the caller closes this one.
 func (a *App) shortcut(ev platform.KeyEvent) bool {
 	switch {
 	case ev.Rune == 'q':
+		a.s.each(a, func(b *App) { b.quitting = true })
 	case ev.Rune == 'o' || ev.Rune == 't':
 		a.pick()
 	case ev.Rune == 'w':
 		a.closeTab(a.active)
 	case ev.Rune == 'n':
-		a.say(widget.MessageWarn, "Several windows are not available yet")
+		if err := a.s.openWindow(nil, nil); err != nil {
+			a.say(widget.MessageWarn, "Could not open a window: "+err.Error())
+		}
 	case ev.Rune == 'f':
 		a.openFind()
 	case ev.Rune == 'c':

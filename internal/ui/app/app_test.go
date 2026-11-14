@@ -378,7 +378,7 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 		t.Error("the Find button did not open the find bar")
 	}
 	f.key('n', platform.Ctrl)
-	if f.a.message != "Several windows are not available yet" {
+	if f.a.message != "Could not open a window: "+errNoWindows.Error() {
 		t.Errorf("Ctrl+N message %q", f.a.message)
 	}
 }
@@ -503,16 +503,17 @@ func TestTabBarClicksAndDrags(t *testing.T) {
 	}
 	f.a.Handle(platform.FrameEvent{})
 
-	// Drag the first tab past the last and release it below the bar. The press
-	// keeps the pointer until the button is released, so the drop still
+	// Drag the first tab past the last and release it just below the bar. The
+	// press keeps the pointer until the button is released, so the drop still
 	// reorders.
 	f.a.Handle(platform.FrameEvent{})
 	x, y = f.tabPoint(0)
 	last := f.a.tabs.TabRect(1)
 	f.pointer(platform.Press, platform.Left, x, y)
 	f.pointer(platform.Move, platform.None, x+30, y)
-	f.pointer(platform.Move, platform.None, tabs.Min.X+last.Max.X-3, y+200)
-	f.pointer(platform.Release, platform.Left, tabs.Min.X+last.Max.X-3, y+200)
+	below := tabs.Max.Y + 5
+	f.pointer(platform.Move, platform.None, tabs.Min.X+last.Max.X-3, below)
+	f.pointer(platform.Release, platform.Left, tabs.Min.X+last.Max.X-3, below)
 	if got := f.names(); got[0] != "c.pdf" || got[1] != "a.pdf" || f.a.docs[f.a.active].name != "a.pdf" {
 		t.Errorf("after the drag: %v, active %q", got, f.a.docs[f.a.active].name)
 	}
