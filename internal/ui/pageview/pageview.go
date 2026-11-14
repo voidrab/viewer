@@ -160,11 +160,15 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 	first, last := v.lay.Visible()
 	dpi := dpiFor(v.lay.Scale())
-	v.pool.cancelStale(v, func(k key) bool { return k.dpi == dpi && k.page >= first && k.page < last })
+	// One page beyond each edge is rendered ahead, so that scrolling finds it
+	// ready instead of blank. The pool ranks it behind the visible pages.
+	lo, hi := max(first-1, 0), min(last+1, v.lay.Pages())
+	v.pool.cancelStale(v, func(k key) bool { return k.dpi == dpi && k.page >= lo && k.page < hi })
 	mid := v.lay.Current()
-	for i := first; i < last; i++ {
+	for i := lo; i < hi; i++ {
 		k := key{i, dpi}
-		if c == nil {
+		visible := i >= first && i < last
+		if c == nil || !visible {
 			if !v.pool.has(v, k) {
 				v.pool.submit(v, k, abs(i-mid))
 			}

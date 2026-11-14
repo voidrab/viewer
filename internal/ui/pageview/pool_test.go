@@ -409,3 +409,27 @@ func TestSetActiveOnlyActsOnAChange(t *testing.T) {
 		t.Error("the view is not inactive")
 	}
 }
+
+func TestPagesBesideTheViewAreRenderedAhead(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	tr := newTracker(nil)
+	v, _ := sharedView(t, pool, 12, tr)
+	c := paint.New(124, 400)
+	v.GoToPage(5)
+	v.Draw(c)
+	first, last := v.lay.Visible()
+	waitIdle(t, pool)
+	got := map[int]bool{}
+	for _, k := range tr.started() {
+		got[k.page] = true
+	}
+	for i := first - 1; i <= last; i++ {
+		if !got[i] {
+			t.Errorf("page %d, within one page of the view [%d,%d), was not rendered", i, first, last)
+		}
+	}
+	if got[first-2] || got[last+1] {
+		t.Errorf("pages further away were rendered: %v", got)
+	}
+}

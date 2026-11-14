@@ -192,7 +192,7 @@ func (p *Pool) cancelStale(v *View, keep func(key) bool) {
 }
 
 // cancelWhere cancels the jobs of v that keep rejects. One that is running
-// finishes, since a render cannot be interrupted, but its result is dropped.
+// is told to stop, and its result is dropped.
 // The caller holds p.mu.
 func (p *Pool) cancelWhere(v *View, keep func(key) bool) {
 	for k, j := range v.inflight {
