@@ -77,8 +77,9 @@ func (b dbusBus) Subscribe(path string) (<-chan portal.Response, func(), error) 
 	return out, cancel, nil
 }
 
-// parseResponse reads the body of a Request.Response signal: the response code
-// and a dictionary of results that holds the chosen URIs.
+// parseResponse decodes the body of a Request.Response signal, which holds
+// the response code and a dictionary of results. It reports false if the body
+// does not have that shape. The URIs are read from the "uris" entry, if any.
 func parseResponse(body []any) (portal.Response, bool) {
 	if len(body) != 2 {
 		return portal.Response{}, false
