@@ -67,7 +67,8 @@ func TestPickReturnsTheChosenFiles(t *testing.T) {
 	if want := []string{"/home/me/a b.pdf", "/tmp/c.pdf"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("paths = %v, want %v", got, want)
 	}
-	// It subscribed to the predicted path before asking, and tidied up.
+	// It subscribed to the predicted path before opening the dialog, and
+	// cancelled the subscription afterwards.
 	if len(bus.subs) != 1 || bus.subs[0] != wantPath || bus.cancelled != 1 {
 		t.Errorf("subscriptions %v, cancelled %d", bus.subs, bus.cancelled)
 	}

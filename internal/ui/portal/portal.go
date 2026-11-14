@@ -53,7 +53,7 @@ type Filter struct {
 // newToken makes the token that names a request; tests replace it.
 var newToken = func() string {
 	var b [8]byte
-	rand.Read(b[:]) // never fails: the documented behaviour of crypto/rand
+	rand.Read(b[:]) // crypto/rand.Read never returns an error.
 	return "viewer" + hex.EncodeToString(b[:])
 }
 
@@ -88,7 +88,8 @@ func PickPDFs(ctx context.Context, bus Bus, title string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	// An older portal may not honour the token: follow the path it returned.
+	// A portal may ignore handle_token and return another request path, so
+	// the response is subscribed to at the path it returned.
 	if request != path {
 		cancel()
 		if responses, cancel, err = bus.Subscribe(request); err != nil {
