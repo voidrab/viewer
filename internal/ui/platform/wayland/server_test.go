@@ -1,6 +1,8 @@
 package wayland
 
 import (
+	"errors"
+	"net"
 	"sync"
 	"testing"
 )
@@ -33,7 +35,7 @@ func serve(t *testing.T, conn *Conn, fn func(s *server, ev Event, d *Decoder)) *
 
 func (s *server) send(obj uint32, opcode uint16, build func(*Encoder)) {
 	s.t.Helper()
-	if err := s.conn.Send(obj, opcode, build); err != nil {
+	if err := s.conn.Send(obj, opcode, build); err != nil && !errors.Is(err, net.ErrClosed) {
 		s.t.Errorf("server send: %v", err)
 	}
 }

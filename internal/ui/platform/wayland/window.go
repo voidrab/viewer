@@ -55,7 +55,9 @@ const eventQueue = 1024
 type Backend struct {
 	c *Client
 
-	compositor, shm, wmBase uint32
+	compositor, shm, wmBase, seat uint32
+
+	in input
 
 	mu      sync.Mutex
 	windows map[*window]struct{}
@@ -78,6 +80,12 @@ func Open(conn *Conn) (*Backend, error) {
 	}
 	if b.wmBase, _, err = b.c.Bind("xdg_wm_base", 1, b.onWmBase); err != nil {
 		return nil, errors.Join(ErrNoGlobal, err)
+	}
+	// Input is optional: without a seat the windows just show pictures.
+	if b.seat, _, err = b.c.Bind("wl_seat", 5, b.onSeat); err == nil {
+		if err := b.c.Roundtrip(); err != nil {
+			return nil, err
+		}
 	}
 	go b.run()
 	return b, nil

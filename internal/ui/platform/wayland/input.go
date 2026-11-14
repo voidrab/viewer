@@ -1,0 +1,184 @@
+package wayland
+
+import (
+	"io"
+	"os"
+
+	"viewer/internal/ui/platform"
+)
+
+// Opcodes, events and constants of wl_seat, wl_pointer and wl_keyboard.
+const (
+	seatGetPointer  = 0
+	seatGetKeyboard = 1
+	seatCapabilites = 0
+
+	seatCapPointer  = 1
+	seatCapKeyboard = 2
+
+	pointerEnter  = 0
+	pointerLeave  = 1
+	pointerMotion = 2
+	pointerButton = 3
+	pointerAxis   = 4
+
+	keyboardKeymap    = 0
+	keyboardEnter     = 1
+	keyboardLeave     = 2
+	keyboardKey       = 3
+	keyboardModifiers = 4
+
+	axisVertical = 0
+
+	btnLeft   = 0x110
+	btnRight  = 0x111
+	btnMiddle = 0x112
+
+	buttonPressed = 1
+)
+
+// input is the seat state shared by all windows. It is touched only by the
+// dispatching goroutine.
+type input struct {
+	pointer, keyboard uint32 // object IDs, zero until created
+	pointerWin        *window
+	keyboardWin       *window
+	px, py            float64
+	keymap            *Keymap
+	mods, group       uint32
+}
+
+// onSeat creates the pointer and keyboard objects the seat offers.
+func (b *Backend) onSeat(opcode uint16, d *Decoder) {
+	if opcode != seatCapabilites {
+		return
+	}
+	caps := d.Uint()
+	if caps&seatCapPointer != 0 && b.in.pointer == 0 {
+		b.in.pointer = b.c.NewID(b.onPointer)
+		b.c.Send(b.seat, seatGetPointer, func(e *Encoder) { e.Uint(b.in.pointer) })
+	}
+	if caps&seatCapKeyboard != 0 && b.in.keyboard == 0 {
+		b.in.keyboard = b.c.NewID(b.onKeyboard)
+		b.c.Send(b.seat, seatGetKeyboard, func(e *Encoder) { e.Uint(b.in.keyboard) })
+	}
+}
+
+// windowFor returns the window whose wl_surface has the given ID.
+func (b *Backend) windowFor(surface uint32) *window {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for w := range b.windows {
+		if w.surface == surface {
+			return w
+		}
+	}
+	return nil
+}
+
+func (b *Backend) onPointer(opcode uint16, d *Decoder) {
+	in := &b.in
+	switch opcode {
+	case pointerEnter:
+		_, surface, x, y := d.Uint(), d.Uint(), d.Fixed(), d.Fixed()
+		in.pointerWin, in.px, in.py = b.windowFor(surface), x, y
+		in.emitPointer(platform.Enter, platform.None)
+	case pointerLeave:
+		in.emitPointer(platform.Leave, platform.None)
+		in.pointerWin = nil
+	case pointerMotion:
+		_, x, y := d.Uint(), d.Fixed(), d.Fixed()
+		in.px, in.py = x, y
+		in.emitPointer(platform.Move, platform.None)
+	case pointerButton:
+		_, _, button, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		kind := platform.Release
+		if state == buttonPressed {
+			kind = platform.Press
+		}
+		in.emitPointer(kind, mapButton(button))
+	case pointerAxis:
+		_, axis, value := d.Uint(), d.Uint(), d.Fixed()
+		if in.pointerWin == nil {
+			return
+		}
+		ev := platform.ScrollEvent{Mods: modMask(in.mods)}
+		if axis == axisVertical {
+			ev.DY = value
+		} else {
+			ev.DX = value
+		}
+		in.pointerWin.emit(ev)
+	}
+}
+
+func (in *input) emitPointer(kind platform.PointerKind, button platform.Button) {
+	if in.pointerWin == nil {
+		return
+	}
+	in.pointerWin.emit(platform.PointerEvent{Kind: kind, Button: button, X: in.px, Y: in.py, Mods: modMask(in.mods)})
+}
+
+// mapButton converts a Linux input button code.
+func mapButton(code uint32) platform.Button {
+	switch code {
+	case btnLeft:
+		return platform.Left
+	case btnRight:
+		return platform.Right
+	case btnMiddle:
+		return platform.Middle
+	}
+	return platform.None
+}
+
+func (b *Backend) onKeyboard(opcode uint16, d *Decoder) {
+	in := &b.in
+	switch opcode {
+	case keyboardKeymap:
+		_, fd, size := d.Uint(), d.FD(), int(d.Uint())
+		in.keymap = readKeymap(fd, size)
+	case keyboardEnter:
+		_, surface := d.Uint(), d.Uint()
+		d.Array() // the keys held on entry
+		in.keyboardWin = b.windowFor(surface)
+		if in.keyboardWin != nil {
+			in.keyboardWin.emit(platform.FocusEvent{Focused: true})
+		}
+	case keyboardLeave:
+		if in.keyboardWin != nil {
+			in.keyboardWin.emit(platform.FocusEvent{})
+		}
+		in.keyboardWin = nil
+	case keyboardKey:
+		_, _, code, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		if in.keyboardWin == nil || in.keymap == nil {
+			return
+		}
+		key, r := in.keymap.Lookup(code, in.mods, in.group)
+		in.keyboardWin.emit(platform.KeyEvent{Key: key, Rune: r, Down: state == buttonPressed, Mods: modMask(in.mods)})
+	case keyboardModifiers:
+		_, depressed, latched, locked, group := d.Uint(), d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		in.mods, in.group = depressed|latched|locked, group
+	}
+}
+
+// readKeymap reads and parses a keymap of size bytes from fd, which it
+// closes. It returns nil if the keymap cannot be used.
+func readKeymap(fd, size int) *Keymap {
+	if fd < 0 {
+		return nil
+	}
+	f := os.NewFile(uintptr(fd), "keymap")
+	defer f.Close()
+	// The descriptor's offset is the compositor's business: read from zero.
+	text, err := io.ReadAll(io.NewSectionReader(f, 0, int64(size)))
+	if err != nil {
+		return nil
+	}
+	km, err := ParseKeymap(string(text))
+	if err != nil {
+		return nil
+	}
+	return km
+}

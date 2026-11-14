@@ -37,6 +37,9 @@ type fakeWM struct {
 	bufSize    map[uint32][3]int32
 	attached   uint32
 	destroyed  []string
+
+	// afterBind, if set, runs after the compositor handles a bind.
+	afterBind func(s *server, iface string, id uint32)
 }
 
 var wmGlobals = []Global{
@@ -51,6 +54,9 @@ func (f *fakeWM) handler(globals []Global) func(*server, Event, *Decoder) {
 		f.ids[g.Interface] = id
 		f.mu.Unlock()
 		f.log <- "bind " + g.Interface
+		if f.afterBind != nil {
+			f.afterBind(s, g.Interface, id)
+		}
 	}, f.request)
 }
 
