@@ -41,6 +41,10 @@ type Options struct {
 	// Selection is the colour laid over selected text; zero means a
 	// translucent blue.
 	Selection color.NRGBA
+	// Match and CurrentMatch are the colours laid over the matches of a search
+	// and over the one that is current; zero means translucent yellow and
+	// orange.
+	Match, CurrentMatch color.NRGBA
 	// Scrollbar is the colour of the scrollbars drawn over the pages, whose
 	// opacity the view sets; zero means a mid gray.
 	Scrollbar color.NRGBA
@@ -61,6 +65,12 @@ func (o *Options) fill() {
 	}
 	if o.Selection == (color.NRGBA{}) {
 		o.Selection = color.NRGBA{0x3b, 0x72, 0xd9, 0x5a}
+	}
+	if o.Match == (color.NRGBA{}) {
+		o.Match = color.NRGBA{0xff, 0xd0, 0x00, 0x78}
+	}
+	if o.CurrentMatch == (color.NRGBA{}) {
+		o.CurrentMatch = color.NRGBA{0xff, 0x8c, 0x00, 0xb4}
 	}
 	if o.Scrollbar == (color.NRGBA{}) {
 		o.Scrollbar = color.NRGBA{0x9a, 0x9a, 0xa0, 0xff}
@@ -111,6 +121,7 @@ type View struct {
 	glyphs     func(ctx context.Context, page int) ([]gopdfrab.Glyph, error)
 	links      func(ctx context.Context, page int) ([]gopdfrab.Link, error)
 	text       textState
+	find       *findState // the search, or nil
 
 	// Rapid zooming is not rendered until it pauses; see deferring.
 	now       func() time.Time
@@ -170,6 +181,7 @@ func (v *View) Close() {
 	if v.timer != nil {
 		v.timer.Stop()
 	}
+	v.ClearFind()
 	v.loadCancel()
 	v.loadWG.Wait()
 	v.pool.detach(v)
@@ -250,6 +262,7 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	c.PushClip(rect)
 	defer c.PopClip()
 	c.Fill(rect, v.opts.Background)
+	v.revealFind()
 	v.want(c, rect)
 	v.drawText(c, rect.Min)
 	v.drawBars(c, rect.Min)

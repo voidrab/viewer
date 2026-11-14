@@ -339,6 +339,7 @@ func (v *View) drawText(c *paint.Canvas, origin image.Point) {
 		if d == nil {
 			continue
 		}
+		v.drawFind(c, origin, i, d)
 		if lo, hi, ok := v.text.rangeOn(i, len(d.text.Chars)); ok {
 			v.highlight(c, origin, i, d.text.Rects(lo, hi), v.opts.Selection)
 		}
