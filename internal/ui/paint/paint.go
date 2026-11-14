@@ -111,11 +111,10 @@ func blend(d []uint8, src color.RGBA) {
 	d[3] = uint8(uint32(src.A) + (uint32(d[3])*inv+127)/255)
 }
 
-// DrawScaled draws src stretched to fill dst, using nearest-neighbour
-// sampling. src must be opaque: its pixels replace the canvas's, which is what
-// a rendered page does, and a stretch of them is copied a row at a time. It is
-// also meant for showing a page rendered at a slightly different size than its
-// slot.
+// DrawScaled replaces the pixels of dst with src stretched to fill it, using
+// nearest-neighbour sampling. src must be opaque, because its pixels replace
+// the canvas's rather than blend over them. It is meant for showing a page
+// rendered at a slightly different size than its slot.
 func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
 	sw, sh := src.Rect.Dx(), src.Rect.Dy()
 	if dst.Empty() || sw == 0 || sh == 0 {

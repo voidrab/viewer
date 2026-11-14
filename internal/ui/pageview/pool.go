@@ -57,8 +57,9 @@ type entry struct {
 	seq  int // when it was stored
 }
 
-// penalty is added to the priority of every job of an inactive view, which
-// puts the active view's work first whatever the distance of its pages.
+// penalty is added to the priority of every job of an inactive view, and to a
+// part beyond the viewport, which puts what is in view in the active view
+// first, then the rest of the active view and the background views by distance.
 const penalty = 1000
 
 // job is the render of one part of a page.
@@ -170,9 +171,9 @@ type piece struct {
 	img *image.RGBA
 }
 
-// standIns returns the bitmaps of page that are not at dpi, from the newest
-// resolution among them, to show where a part at dpi is not rendered yet. They
-// count as used, so the budget does not evict what is on screen.
+// standIns returns the bitmaps of page at the newest resolution other than dpi,
+// to show in place of parts at dpi that are not rendered yet. It marks them
+// recently used, so they are not evicted while they stand in.
 func (p *Pool) standIns(v *View, page, dpi int) []piece {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -195,9 +196,9 @@ func (p *Pool) standIns(v *View, page, dpi int) []piece {
 	return out
 }
 
-// prune drops the bitmaps of page that only stand in for what is at dpi: all
-// of them, or with keepOther all but the newest resolution, which still shows
-// where parts are to come. The preview stays; it is small.
+// prune drops the bitmaps of page at resolutions other than dpi and the
+// preview. With keepOther it keeps the newest of the other resolutions, which
+// still stands in for parts at dpi that are not rendered yet.
 func (p *Pool) prune(v *View, page, dpi int, keepOther bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -216,9 +217,9 @@ func (p *Pool) prune(v *View, page, dpi int, keepOther bool) {
 	}
 }
 
-// submit asks for part k of v to be rendered, base being how far it is from
-// the middle of the view, or lower to run sooner. A render already asked for keeps its place but
-// takes the new base.
+// submit asks for part k of v to be rendered, with base as its priority: how
+// far it is from the middle of the view, or lower to run sooner. A render
+// already asked for keeps its place but takes the new base.
 func (p *Pool) submit(v *View, k key, base int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

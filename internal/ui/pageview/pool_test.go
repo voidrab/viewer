@@ -69,7 +69,7 @@ func (tr *tracker) started() []key {
 	return append([]key(nil), tr.order...)
 }
 
-// startedParts is started without the previews.
+// startedParts returns the started renders other than the previews.
 func (tr *tracker) startedParts() []key {
 	var out []key
 	for _, k := range tr.started() {
@@ -126,7 +126,8 @@ func waitIdle(t *testing.T, pool *Pool) {
 		defer pool.mu.Unlock()
 		return len(pool.jobs) == 0
 	})
-	// A render may still be running when nothing waits; let it land.
+	// Renders taken from the queue may still be running; the sleep lets them
+	// finish.
 	time.Sleep(30 * time.Millisecond)
 }
 
@@ -510,8 +511,8 @@ func TestNoReadAheadWhenItWouldNotFitTheBudget(t *testing.T) {
 	if all <= seen {
 		t.Fatalf("reading ahead adds nothing: %d, %d bytes", seen, all)
 	}
-	// A budget that holds what is seen but not what is ahead as well: the parts
-	// would evict each other without end.
+	// The budget holds the parts in view but not the parts ahead as well, so
+	// the two would evict each other without end.
 	pool.mu.Lock()
 	pool.budget = 2 * seen
 	pool.mu.Unlock()
@@ -539,7 +540,7 @@ func TestAPageZoomedFarInIsRenderedInTilesInView(t *testing.T) {
 		if k.rect.Dx() > tileSize || k.rect.Dy() > tileSize || k.rect.Dx()*k.rect.Dy() >= 2000*2000 {
 			t.Errorf("rendered a part of %v, more than a tile", k.rect)
 		}
-		// Only tiles near the viewport, which is the top-left corner of the page.
+		// Only tiles near the viewport, at the page's top-left corner.
 		if k.rect.Min.X > 2*tileSize/2+300 || k.rect.Min.Y > 2*tileSize/2+300 {
 			t.Errorf("rendered tile %v far from the viewport", k.rect)
 		}
@@ -576,11 +577,18 @@ func TestTilesAreDrawnWhereTheyBelongWithoutSeams(t *testing.T) {
 	v.lay.SetZoom(2)
 	c := paint.New(2100, 2100)
 	v.Draw(c)
-	waitIdle(t, pool)
-	v.Draw(c)
-	vr := v.lay.ViewRect(0)
 	dpi := dpiFor(v.lay.Scale())
 	px := v.pixelSize(0, dpi)
+	waitFor(t, "every tile to be cached", func() bool {
+		for _, r := range parts(px) {
+			if !pool.has(v, key{0, dpi, r}) {
+				return false
+			}
+		}
+		return true
+	})
+	v.Draw(c)
+	vr := v.lay.ViewRect(0)
 	for _, r := range parts(px) {
 		want := colour(key{0, dpi, r})
 		at := place(vr, r, px)
@@ -591,8 +599,8 @@ func TestTilesAreDrawnWhereTheyBelongWithoutSeams(t *testing.T) {
 			}
 		}
 	}
-	// Neighbouring tiles share their edge: no pixel of the page is left as paper
-	// or background.
+	// Neighbouring tiles share their edges: no pixel of the page is left as
+	// paper or background.
 	for y := vr.Min.Y; y < vr.Max.Y; y += 7 {
 		for x := vr.Min.X; x < vr.Max.X; x += 7 {
 			if got := c.Img.RGBAAt(x, y); got == paper || got.B != 200 {
@@ -642,7 +650,7 @@ func TestPartsPlacementAndSize(t *testing.T) {
 	if area != big.X*big.Y || p[len(p)-1].Max != big {
 		t.Errorf("parts cover %d pixels ending at %v, want %d ending at %v", area, p[len(p)-1].Max, big.X*big.Y, big)
 	}
-	// Placement is in proportion, and shares edges between neighbours.
+	// place scales parts in proportion, and neighbouring parts share edges.
 	vr := image.Rect(10, 20, 10+300, 20+250)
 	a, b := place(vr, p[0], big), place(vr, p[1], big)
 	if a.Max.X != b.Min.X || a.Min != vr.Min {
@@ -676,8 +684,8 @@ func TestPruneKeepsWhatStillStandsIn(t *testing.T) {
 		return out
 	}
 	fill()
-	// While parts at 144 are missing, the newest other resolution, 100, and the
-	// preview stay, and 72 goes.
+	// With parts at 144 still missing, prune keeps the newest other resolution,
+	// 100, and the preview, and drops 72.
 	pool.prune(v, 0, 144, true)
 	if got := dpis(); len(got) != 3 || !got[144] || !got[previewDPI] || !got[100] {
 		t.Errorf("after pruning with stand-ins: %v", got)
