@@ -296,6 +296,11 @@ func TestPagesThatFailToGiveTextHaveNone(t *testing.T) {
 func TestClosingCancelsReadingText(t *testing.T) {
 	v, _, inv := textView(t, 2, nil)
 	started := make(chan struct{}, 4)
+	// No page render may finish and invalidate the view either.
+	v.render = func(ctx context.Context, _ *gopdfrab.Page, _ float64, _ image.Rectangle) (*image.RGBA, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	v.glyphs = func(ctx context.Context, i int) ([]gopdfrab.Glyph, error) {
 		started <- struct{}{}
 		<-ctx.Done()
