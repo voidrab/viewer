@@ -98,3 +98,27 @@ func blend(d []uint8, src color.RGBA) {
 	d[2] = uint8(uint32(src.B) + (uint32(d[2])*inv+127)/255)
 	d[3] = uint8(uint32(src.A) + (uint32(d[3])*inv+127)/255)
 }
+
+// DrawScaled draws src stretched to fill dst, using nearest-neighbour
+// sampling. src must be opaque or premultiplied. It is meant for showing a
+// page rendered at a slightly different size than its slot.
+func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
+	sw, sh := src.Rect.Dx(), src.Rect.Dy()
+	if dst.Empty() || sw == 0 || sh == 0 {
+		return
+	}
+	if dst.Dx() == sw && dst.Dy() == sh {
+		c.DrawImage(dst.Min, src)
+		return
+	}
+	clip := dst.Intersect(c.Clip())
+	for y := clip.Min.Y; y < clip.Max.Y; y++ {
+		sy := src.Rect.Min.Y + (y-dst.Min.Y)*sh/dst.Dy()
+		row := c.Img.Pix[c.Img.PixOffset(clip.Min.X, y):][:4*clip.Dx()]
+		for i := 0; i < len(row); i += 4 {
+			sx := src.Rect.Min.X + (clip.Min.X+i/4-dst.Min.X)*sw/dst.Dx()
+			p := src.Pix[src.PixOffset(sx, sy):][:4]
+			blend(row[i:i+4:i+4], color.RGBA{p[0], p[1], p[2], p[3]})
+		}
+	}
+}

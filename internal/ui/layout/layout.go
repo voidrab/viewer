@@ -55,6 +55,9 @@ func New(pages []Size, viewport image.Point, gap, margin int) *Layout {
 	return l
 }
 
+// Viewport returns the size of the viewport.
+func (l *Layout) Viewport() image.Point { return l.viewport }
+
 // Pages returns the number of pages.
 func (l *Layout) Pages() int { return len(l.pages) }
 

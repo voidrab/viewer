@@ -99,3 +99,46 @@ func TestDrawImage(t *testing.T) {
 		}
 	}
 }
+
+func TestDrawScaled(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	src.SetRGBA(0, 0, color.RGBA{255, 0, 0, 255})
+	src.SetRGBA(1, 0, color.RGBA{0, 255, 0, 255})
+	src.SetRGBA(0, 1, color.RGBA{0, 0, 255, 255})
+	src.SetRGBA(1, 1, color.RGBA{255, 255, 255, 255})
+
+	c := New(8, 8)
+	c.DrawScaled(image.Rect(2, 2, 6, 6), src) // 2x enlargement
+	for _, tc := range []struct {
+		x, y int
+		want color.RGBA
+	}{
+		{2, 2, color.RGBA{255, 0, 0, 255}}, {3, 3, color.RGBA{255, 0, 0, 255}},
+		{4, 2, color.RGBA{0, 255, 0, 255}}, {2, 5, color.RGBA{0, 0, 255, 255}},
+		{5, 5, color.RGBA{255, 255, 255, 255}},
+	} {
+		if got := at(c, tc.x, tc.y); got != tc.want {
+			t.Errorf("(%d,%d) = %v, want %v", tc.x, tc.y, got, tc.want)
+		}
+	}
+	if at(c, 1, 1).A != 0 || at(c, 6, 6).A != 0 {
+		t.Error("painted outside the destination")
+	}
+
+	// Shrinking, with the destination partly clipped away, and the same-size
+	// shortcut.
+	small := New(4, 4)
+	small.PushClip(image.Rect(0, 0, 1, 4))
+	small.DrawScaled(image.Rect(0, 0, 4, 4), src)
+	if at(small, 0, 0) != (color.RGBA{255, 0, 0, 255}) || at(small, 1, 0).A != 0 {
+		t.Errorf("clipped scaled draw: %v %v", at(small, 0, 0), at(small, 1, 0))
+	}
+	same := New(2, 2)
+	same.DrawScaled(image.Rect(0, 0, 2, 2), src)
+	if at(same, 1, 0) != (color.RGBA{0, 255, 0, 255}) {
+		t.Errorf("same-size draw = %v", at(same, 1, 0))
+	}
+	// Degenerate sizes draw nothing and do not panic.
+	same.DrawScaled(image.Rectangle{}, src)
+	same.DrawScaled(image.Rect(0, 0, 2, 2), image.NewRGBA(image.Rectangle{}))
+}

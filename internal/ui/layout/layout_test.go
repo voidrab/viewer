@@ -13,6 +13,9 @@ func sample() *Layout {
 
 func TestFitWidthAndGeometry(t *testing.T) {
 	l := sample()
+	if l.Viewport() != image.Pt(220, 300) {
+		t.Errorf("Viewport = %v", l.Viewport())
+	}
 	if l.Mode() != ZoomFitWidth || l.Pages() != 3 {
 		t.Fatalf("mode %v pages %d", l.Mode(), l.Pages())
 	}

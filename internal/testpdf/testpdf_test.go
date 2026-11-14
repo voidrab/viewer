@@ -64,3 +64,23 @@ func TestWriteFailure(t *testing.T) {
 		t.Fatal("Write into a missing directory did not fail the test")
 	}
 }
+
+func TestBuildPagesIsReadable(t *testing.T) {
+	doc, err := gopdfrab.OpenBytes(BuildPages([][2]int{{100, 200}, {300, 50}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer doc.Close()
+	if n, err := doc.Pages(); err != nil || n != 2 {
+		t.Fatalf("Pages = %d, %v", n, err)
+	}
+	for i, want := range [][2]float64{{100, 200}, {300, 50}} {
+		p, err := doc.Page(i)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w, h := p.Size(); w != want[0] || h != want[1] {
+			t.Errorf("page %d is %vx%v, want %v", i, w, h, want)
+		}
+	}
+}
