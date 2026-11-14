@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"viewer/internal/ui/platform"
@@ -56,6 +57,7 @@ type input struct {
 	px, py            float64
 	keymap            *Keymap
 	mods, group       uint32
+	serial            atomic.Uint32 // that of the latest event that carried one
 
 	// The compositor does not repeat keys; the client does, at the rate and
 	// after the delay it announces. Without an announcement these defaults, the
@@ -64,6 +66,11 @@ type input struct {
 	repeatDelay time.Duration
 	repeating   *keyRepeat // the key being repeated, if any
 }
+
+// lastSerial returns the serial of the latest input event, which the compositor
+// wants with a request, such as setting the clipboard, that an input event
+// caused.
+func (in *input) lastSerial() uint32 { return in.serial.Load() }
 
 // keyRepeat is a held key being repeated until stop is closed.
 type keyRepeat struct {
@@ -138,7 +145,8 @@ func (b *Backend) onPointer(opcode uint16, d *Decoder) {
 	in := &b.in
 	switch opcode {
 	case pointerEnter:
-		_, surface, x, y := d.Uint(), d.Uint(), d.Fixed(), d.Fixed()
+		serial, surface, x, y := d.Uint(), d.Uint(), d.Fixed(), d.Fixed()
+		in.serial.Store(serial)
 		in.pointerWin, in.px, in.py = b.windowFor(surface), x, y
 		in.emitPointer(platform.Enter, platform.None)
 	case pointerLeave:
@@ -149,7 +157,8 @@ func (b *Backend) onPointer(opcode uint16, d *Decoder) {
 		in.px, in.py = x, y
 		in.emitPointer(platform.Move, platform.None)
 	case pointerButton:
-		_, _, button, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		serial, _, button, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		in.serial.Store(serial)
 		kind := platform.Release
 		if state == buttonPressed {
 			kind = platform.Press
@@ -197,7 +206,8 @@ func (b *Backend) onKeyboard(opcode uint16, d *Decoder) {
 		_, fd, size := d.Uint(), d.FD(), int(d.Uint())
 		in.keymap = readKeymap(fd, size)
 	case keyboardEnter:
-		_, surface := d.Uint(), d.Uint()
+		serial, surface := d.Uint(), d.Uint()
+		in.serial.Store(serial)
 		d.Array() // the keys held on entry
 		in.keyboardWin = b.windowFor(surface)
 		if in.keyboardWin != nil {
@@ -210,7 +220,8 @@ func (b *Backend) onKeyboard(opcode uint16, d *Decoder) {
 		}
 		in.keyboardWin = nil
 	case keyboardKey:
-		_, _, code, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		serial, _, code, state := d.Uint(), d.Uint(), d.Uint(), d.Uint()
+		in.serial.Store(serial)
 		if in.keyboardWin == nil || in.keymap == nil {
 			return
 		}

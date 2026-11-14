@@ -89,6 +89,14 @@ func (c *Client) NewID(h Handler) uint32 {
 	return id
 }
 
+// Handle routes the events of obj, an object the compositor created and named
+// in an event, to h.
+func (c *Client) Handle(obj uint32, h Handler) {
+	c.mu.Lock()
+	c.handlers[obj] = h
+	c.mu.Unlock()
+}
+
 // Send issues a request on object obj.
 func (c *Client) Send(obj uint32, opcode uint16, build func(*Encoder)) error {
 	return c.conn.Send(obj, opcode, build)

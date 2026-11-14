@@ -100,6 +100,9 @@ type ScrollEvent struct {
 	Mods   Modifiers
 }
 
+// PasteEvent delivers the clipboard's text, in answer to Window.RequestPaste.
+type PasteEvent struct{ Text string }
+
 // KeyEvent reports a key press or release. Rune is the text the key produces,
 // or zero for a key without text.
 type KeyEvent struct {
@@ -116,6 +119,7 @@ func (FocusEvent) isEvent()   {}
 func (PointerEvent) isEvent() {}
 func (ScrollEvent) isEvent()  {}
 func (KeyEvent) isEvent()     {}
+func (PasteEvent) isEvent()   {}
 
 // WindowOptions describes a window to open.
 type WindowOptions struct {
@@ -142,6 +146,12 @@ type Window interface {
 	// token, the activation token of the user action behind the request. It
 	// does nothing without a token or where the compositor offers no way to ask.
 	Activate(token string)
+	// SetClipboard makes text the clipboard's content, for other programs to
+	// paste. It must follow a key press or click, as the compositor requires.
+	SetClipboard(text string)
+	// RequestPaste asks for the clipboard's text, which arrives later as a
+	// PasteEvent, or not at all if the clipboard holds no text.
+	RequestPaste()
 	// Close destroys the window and closes the Events channel.
 	Close()
 }

@@ -68,6 +68,10 @@ type Backend struct {
 	decoration uint32
 	// activation is xdg_activation_v1, or zero when the compositor has none.
 	activation uint32
+	// dataManager is wl_data_device_manager, or zero without one: there is
+	// then no clipboard.
+	dataManager uint32
+	clip        clipboard
 
 	in input
 
@@ -80,6 +84,7 @@ type Backend struct {
 // xdg_wm_base, and begins dispatching events. Close ends it.
 func Open(conn *Conn) (*Backend, error) {
 	b := &Backend{c: NewClient(conn), windows: map[*window]struct{}{}, done: make(chan struct{})}
+	b.clip.mimes = map[uint32][]string{}
 	b.in.repeatRate, b.in.repeatDelay = defaultRepeatRate, defaultRepeatDelay
 	if err := b.c.LoadGlobals(); err != nil {
 		return nil, err
@@ -98,6 +103,13 @@ func Open(conn *Conn) (*Backend, error) {
 	if b.seat, _, err = b.c.Bind("wl_seat", 5, b.onSeat); err == nil {
 		if err := b.c.Roundtrip(); err != nil {
 			return nil, err
+		}
+	}
+	// The clipboard is optional too, and needs a seat.
+	if b.seat != 0 {
+		if b.dataManager, _, err = b.c.Bind("wl_data_device_manager", 3, nil); err == nil {
+			b.clip.device = b.c.NewID(b.onDataDevice)
+			b.c.Send(b.dataManager, dataManagerGetDevice, func(e *Encoder) { e.Uint(b.clip.device).Uint(b.seat) })
 		}
 	}
 	// Server-side decoration is optional. Without zxdg_decoration_manager_v1,

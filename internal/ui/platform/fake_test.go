@@ -75,7 +75,7 @@ func TestFakeNewWindowError(t *testing.T) {
 
 // TestEventsImplementEvent verifies that every event type satisfies Event.
 func TestEventsImplementEvent(t *testing.T) {
-	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}}
+	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}, PasteEvent{}}
 	for _, e := range evs {
 		e.isEvent()
 	}
@@ -90,4 +90,27 @@ func TestFakeWindowRecordsActivations(t *testing.T) {
 	if got := w.Activations(); len(got) != 2 || got[0] != "a" || got[1] != "" {
 		t.Errorf("activations = %q", got)
 	}
+}
+
+func TestFakeClipboardRoundTrips(t *testing.T) {
+	var f Fake
+	win, _ := f.NewWindow(WindowOptions{})
+	w := win.(*FakeWindow)
+	<-w.Events() // the initial resize
+	w.RequestPaste()
+	select {
+	case ev := <-w.Events():
+		t.Fatalf("an empty clipboard pasted %#v", ev)
+	default:
+	}
+	w.SetClipboard("text")
+	if w.Clipboard() != "text" {
+		t.Errorf("clipboard = %q", w.Clipboard())
+	}
+	w.RequestPaste()
+	if ev := <-w.Events(); ev != (PasteEvent{Text: "text"}) {
+		t.Errorf("paste = %#v", ev)
+	}
+	w.Close()
+	w.RequestPaste() // a closed window gets no event
 }

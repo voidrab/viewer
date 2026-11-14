@@ -51,6 +51,7 @@ type FakeWindow struct {
 	presented   []*image.RGBA
 	invalidated int
 	activations []string
+	clipboard   string
 	closed      bool
 }
 
@@ -95,6 +96,30 @@ func (w *FakeWindow) Activations() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append([]string(nil), w.activations...)
+}
+
+// SetClipboard implements Window by keeping the text.
+func (w *FakeWindow) SetClipboard(text string) {
+	w.mu.Lock()
+	w.clipboard = text
+	w.mu.Unlock()
+}
+
+// Clipboard returns the text last given to SetClipboard.
+func (w *FakeWindow) Clipboard() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.clipboard
+}
+
+// RequestPaste implements Window by queuing the clipboard's text, if any, as a
+// PasteEvent.
+func (w *FakeWindow) RequestPaste() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.clipboard != "" && !w.closed {
+		w.events <- PasteEvent{Text: w.clipboard}
+	}
 }
 
 // Close implements Window; it is idempotent.
