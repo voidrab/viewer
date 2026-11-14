@@ -1,6 +1,6 @@
 // Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
 // using only the Wayland platform backend. Every argument opens in its own
-// tab.
+// tab, in the window of the instance already running if there is one.
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"viewer/internal/ui/app"
+	"viewer/internal/ui/instance"
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/platform/wayland"
 )
@@ -20,6 +21,20 @@ func main() {
 }
 
 func run(paths []string) error {
+	// A second launch hands its files to the running window and ends. Without
+	// a usable socket the program simply runs on its own.
+	var requests <-chan instance.Request
+	srv, forwarded, err := instance.Claim(instance.DefaultPath("viewer-native"), instance.Request{
+		Paths: paths,
+		Token: os.Getenv("XDG_ACTIVATION_TOKEN"),
+	})
+	if forwarded {
+		return nil
+	}
+	if err == nil {
+		defer srv.Close()
+		requests = srv.Requests()
+	}
 	be, err := wayland.New()
 	if err != nil {
 		return err
@@ -34,5 +49,5 @@ func run(paths []string) error {
 	if err != nil {
 		return err
 	}
-	return app.Run(win, paths, app.Options{PickFiles: pickFiles})
+	return app.Run(win, paths, app.Options{PickFiles: pickFiles, Requests: requests})
 }

@@ -39,6 +39,8 @@ const (
 	decorationSetMode     = 1
 	decorationModeServer  = 2
 
+	activationActivate = 2 // xdg_activation_v1.activate(token, surface)
+
 	toplevelDestroy     = 0
 	toplevelSetTitle    = 2
 	toplevelSetAppID    = 3
@@ -64,6 +66,8 @@ type Backend struct {
 	// decoration is zxdg_decoration_manager_v1, or zero when the compositor
 	// does not offer it.
 	decoration uint32
+	// activation is xdg_activation_v1, or zero when the compositor has none.
+	activation uint32
 
 	in input
 
@@ -99,6 +103,8 @@ func Open(conn *Conn) (*Backend, error) {
 	// Server-side decoration is optional. Without zxdg_decoration_manager_v1,
 	// windows do not request it and the compositor's default applies.
 	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
+	// Likewise xdg_activation_v1, which lets a window ask to be brought forward.
+	b.activation, _, _ = b.c.Bind("xdg_activation_v1", 1, nil)
 	go b.run()
 	return b, nil
 }
@@ -272,6 +278,14 @@ func (w *window) Events() <-chan platform.Event { return w.events }
 
 // Invalidate implements platform.Window.
 func (w *window) Invalidate() { w.emit(platform.FrameEvent{}) }
+
+// Activate implements platform.Window with xdg_activation_v1.
+func (w *window) Activate(token string) {
+	if token == "" || w.b.activation == 0 {
+		return
+	}
+	w.b.c.Send(w.b.activation, activationActivate, func(e *Encoder) { e.String(token).Uint(w.surface) })
+}
 
 // SetTitle implements platform.Window.
 func (w *window) SetTitle(title string) {

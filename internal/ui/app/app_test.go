@@ -12,6 +12,7 @@ import (
 
 	"viewer/internal/pdfa"
 	"viewer/internal/testpdf"
+	"viewer/internal/ui/instance"
 	"viewer/internal/ui/pageview"
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/text"
@@ -917,5 +918,39 @@ func TestWheelZoomUsesPointerPositionRelativeToTheContent(t *testing.T) {
 	got, gpt, ok := view.Layout().HitPage(at)
 	if !ok || got != page || gpt.H-pt.H > 1 || pt.H-gpt.H > 1 {
 		t.Errorf("under the pointer: page %d at %.1f, was page %d at %.1f", got, gpt.H, page, pt.H)
+	}
+}
+
+func TestLaterLaunchesOpenTabsAndRaiseTheWindow(t *testing.T) {
+	var plat platform.Fake
+	w, _ := plat.NewWindow(platform.WindowOptions{Size: platform.Size{W: winW, H: winH}})
+	fw := w.(*platform.FakeWindow)
+	dir := t.TempDir()
+	first := testpdf.Write(t, dir, "first.pdf", testpdf.BuildPages([][2]int{{200, 300}}))
+	second := testpdf.Write(t, dir, "second.pdf", testpdf.BuildPages([][2]int{{200, 300}}))
+	requests := make(chan instance.Request)
+	done := make(chan error, 1)
+	go func() { done <- Run(w, []string{first}, Options{Requests: requests}) }()
+
+	requests <- instance.Request{Paths: []string{second}, Token: "launcher-token"}
+	waitFor(t, "the window to be activated", func() bool { return len(fw.Activations()) == 1 })
+	if got := fw.Activations()[0]; got != "launcher-token" {
+		t.Errorf("activated with %q", got)
+	}
+	waitFor(t, "both tabs", func() bool {
+		return fw.Title() == "second.pdf — Viewer"
+	})
+	// A closed request channel is not ready for ever: the window still works.
+	close(requests)
+	if err := fw.Send(platform.CloseEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Run = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after the close event")
 	}
 }

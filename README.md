@@ -61,8 +61,11 @@ viewer a.pdf b.pdf              # each file opens in its own tab
 It needs a Wayland session (X11 is not supported yet) and, for the Open
 dialog, a desktop with xdg-desktop-portal. It has tabs, a toolbar, scrolling,
 zoom, page navigation and a PDF/A check, but not yet find, text selection,
-links or the PDF/A panel, and every launch is its own window rather than a tab
-in a running one. Use `make default` as usual to make it your PDF application.
+links or the PDF/A panel. Opening another PDF while it runs adds a tab to the
+running window (and asks the compositor to bring it forward). Drag a page to
+pan, drag the scrollbar thumbs or click beside them to jump, hold a key to
+repeat it, and Ctrl+wheel zooms around the pointer. Use `make default` as usual
+to make it your PDF application.
 
 | Shortcut              | Action                   |
 | --------------------- | ------------------------ |

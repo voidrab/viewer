@@ -50,6 +50,7 @@ type FakeWindow struct {
 	title       string
 	presented   []*image.RGBA
 	invalidated int
+	activations []string
 	closed      bool
 }
 
@@ -80,6 +81,20 @@ func (w *FakeWindow) SetTitle(title string) {
 	w.mu.Lock()
 	w.title = title
 	w.mu.Unlock()
+}
+
+// Activate implements Window by recording the token.
+func (w *FakeWindow) Activate(token string) {
+	w.mu.Lock()
+	w.activations = append(w.activations, token)
+	w.mu.Unlock()
+}
+
+// Activations returns the tokens the window was asked to activate with.
+func (w *FakeWindow) Activations() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.activations...)
 }
 
 // Close implements Window; it is idempotent.

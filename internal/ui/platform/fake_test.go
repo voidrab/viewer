@@ -80,3 +80,14 @@ func TestEventsImplementEvent(t *testing.T) {
 		e.isEvent()
 	}
 }
+
+func TestFakeWindowRecordsActivations(t *testing.T) {
+	var f Fake
+	win, _ := f.NewWindow(WindowOptions{})
+	w := win.(*FakeWindow)
+	w.Activate("a")
+	w.Activate("")
+	if got := w.Activations(); len(got) != 2 || got[0] != "a" || got[1] != "" {
+		t.Errorf("activations = %q", got)
+	}
+}

@@ -57,3 +57,34 @@ func TestNoDecorationRequestWithoutTheManager(t *testing.T) {
 	}
 	_ = win
 }
+
+func TestActivateAsksTheCompositorToRaiseTheWindow(t *testing.T) {
+	globals := append(append([]Global(nil), wmGlobals...), Global{Name: 10, Interface: "xdg_activation_v1", Version: 1})
+	be, f, _ := wmSetup(t, globals)
+	win, err := be.NewWindow(platform.WindowOptions{Size: platform.Size{W: 100, H: 100}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wait("commit")
+	win.Activate("") // nothing to cite: nothing is asked
+	win.Activate("token-1")
+	f.wait("activate")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.activations) != 1 || f.activations[0] != (activation{"token-1", f.surface}) {
+		t.Errorf("activations = %+v, want token-1 for surface %d", f.activations, f.surface)
+	}
+}
+
+func TestActivateDoesNothingWithoutTheProtocol(t *testing.T) {
+	be, f, _ := wmSetup(t, wmGlobals)
+	win, _ := be.NewWindow(platform.WindowOptions{Size: platform.Size{W: 100, H: 100}})
+	f.wait("commit")
+	win.Activate("token")
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.activations) != 0 {
+		t.Errorf("activation requested from a compositor without the protocol: %+v", f.activations)
+	}
+}

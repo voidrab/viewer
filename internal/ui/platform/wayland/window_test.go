@@ -43,6 +43,9 @@ type fakeWM struct {
 	decoration     uint32
 	decorationMode uint32
 
+	// activations are the xdg_activation_v1.activate requests received.
+	activations []activation
+
 	// afterBind, if set, runs after the compositor handles a bind.
 	afterBind func(s *server, iface string, id uint32)
 }
@@ -101,6 +104,11 @@ func (f *fakeWM) request(s *server, ev Event, d *Decoder) {
 			f.minSize = [2]int32{d.Int(), d.Int()}
 		case toplevelDestroy:
 			f.destroyed = append(f.destroyed, "toplevel")
+		}
+	case f.ids["xdg_activation_v1"]:
+		if ev.Opcode == activationActivate {
+			f.activations = append(f.activations, activation{d.String(), d.Uint()})
+			f.log <- "activate"
 		}
 	case f.ids["zxdg_decoration_manager_v1"]:
 		f.decoration = d.Uint()
@@ -494,4 +502,10 @@ func TestShutdownIsIdempotent(t *testing.T) {
 	w := win.(*window)
 	w.shutdown()
 	w.shutdown()
+}
+
+// activation is an xdg_activation_v1.activate request.
+type activation struct {
+	token   string
+	surface uint32
 }

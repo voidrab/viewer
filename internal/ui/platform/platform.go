@@ -138,6 +138,10 @@ type Window interface {
 	// Invalidate requests a FrameEvent.
 	Invalidate()
 	SetTitle(title string)
+	// Activate asks the compositor to bring the window to the front, citing
+	// token, the activation token of the user action behind the request. It
+	// does nothing without a token or where the compositor offers no way to ask.
+	Activate(token string)
 	// Close destroys the window and closes the Events channel.
 	Close()
 }

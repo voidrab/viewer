@@ -15,6 +15,7 @@ import (
 	"github.com/voidrab/gopdfrab"
 
 	"viewer/internal/pdfa"
+	"viewer/internal/ui/instance"
 	"viewer/internal/ui/pageview"
 	"viewer/internal/ui/paint"
 	"viewer/internal/ui/platform"
@@ -40,6 +41,9 @@ type Options struct {
 	// Now and AfterFunc default to the time package's.
 	Now       func() time.Time
 	AfterFunc func(d time.Duration, f func())
+	// Requests, if not nil, delivers requests from later launches of the
+	// program to open files here, which are opened in new tabs.
+	Requests <-chan instance.Request
 }
 
 // close releases the document's view and file.
@@ -149,13 +153,21 @@ func Run(win platform.Window, paths []string, opts Options) error {
 	defer a.closeAll()
 	defer win.Close()
 	a.pending = append(a.pending, paths...)
-	events := win.Events()
+	events, requests := win.Events(), opts.Requests
 	for {
 		select {
 		case ev, ok := <-events:
 			if !ok || a.Handle(ev) {
 				return nil
 			}
+		case req, ok := <-requests:
+			if !ok {
+				requests = nil // a closed channel would be ready for ever
+				break
+			}
+			a.Open(req.Paths...)
+			win.Activate(req.Token)
+			win.Invalidate()
 		case f := <-a.inbox:
 			f()
 			win.Invalidate()
