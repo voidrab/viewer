@@ -1,9 +1,15 @@
 # Viewer
 
 A fast, small and simple PDF viewer with built-in PDF/A validation and
-conversion. Pure Go: no cgo, no Node, no WebKit. It renders with
+conversion. Pure Go: no cgo or Node. It renders with
 [gopdfrab](https://github.com/voidrab/gopdfrab)'s rasterizer and talks to
 Wayland directly.
+
+## TODO
+
+- Support for X11, Windows and macOS
+
+## Features
 
 - Tabs, zoom (fit width/page, 50-300%), page field, text selection and copy,
   find, and links (highlighted, hand cursor on hover; external ones open with
@@ -21,7 +27,7 @@ Wayland directly.
 
 ## Requirements
 
-Go 1.24+, a Wayland session (no X11 yet) and, for the Open/Save dialogs,
+Go 1.24+, a Wayland session and, for the Open/Save dialogs,
 xdg-desktop-portal.
 
 ## Usage
