@@ -2,6 +2,10 @@
 
 BIN      ?= bin/viewer
 PREFIX   ?= /usr/local
+# The native (pure-Go, Wayland) viewer: where it is built, and the command
+# name it is installed under.
+NATIVE_BIN ?= bin/viewer-native
+NAME       ?= viewer
 DEV_PORT ?= 9245
 APP_ID   := com.voidrab.gopdfrab.Viewer
 
@@ -15,7 +19,9 @@ build dev test-go cover: export CGO_CFLAGS = $(shell go env CGO_CFLAGS) -Wno-dep
 
 GO_RELEASE_FLAGS := -tags production -trimpath -ldflags "-s -w"
 
-.PHONY: all build frontend dev test test-go test-frontend cover install uninstall default clean
+GO_NATIVE_FLAGS := -trimpath -ldflags "-s -w"
+
+.PHONY: all build build-native frontend dev test test-go test-frontend cover install install-native uninstall default clean
 
 all: test build
 
@@ -23,6 +29,11 @@ all: test build
 build: frontend
 	go build $(GO_RELEASE_FLAGS) -o $(BIN) .
 	@ls -lh $(BIN) | awk '{print "built " $$9 " (" $$5 ")"}'
+
+## build-native: the pure-Go viewer (no cgo, no webview, Wayland only) in bin/
+build-native:
+	CGO_ENABLED=0 go build $(GO_NATIVE_FLAGS) -o $(NATIVE_BIN) ./cmd/nativeview
+	@ls -lh $(NATIVE_BIN) | awk '{print "built " $$9 " (" $$5 ")"}'
 
 frontend: frontend/node_modules
 	cd frontend && npm run build
@@ -66,8 +77,22 @@ install:
 		gtk-update-icon-cache -q -t $(ICONS_DIR) 2>/dev/null || true; \
 	fi
 
+## install-native: install the native viewer as $(NAME), with the same desktop
+##          entry and icon (make build-native && sudo make install-native;
+##          PREFIX=~/.local for one user, NAME=viewer-native to keep another viewer)
+install-native:
+	@test -x $(NATIVE_BIN) || { echo "$(NATIVE_BIN) is missing: run 'make build-native' first, without sudo"; exit 1; }
+	install -Dm755 $(NATIVE_BIN) $(DESTDIR)$(PREFIX)/bin/$(NAME)
+	sed 's|^Exec=viewer %f|Exec=$(NAME) %f|' build/linux/$(APP_ID).desktop \
+		| install -Dm644 /dev/stdin $(APPS_DIR)/$(APP_ID).desktop
+	install -Dm644 build/appicon.png $(ICONS_DIR)/256x256/apps/$(APP_ID).png
+	@if [ -z "$(DESTDIR)" ]; then \
+		update-desktop-database -q $(APPS_DIR) 2>/dev/null || true; \
+		gtk-update-icon-cache -q -t $(ICONS_DIR) 2>/dev/null || true; \
+	fi
+
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/viewer $(APPS_DIR)/$(APP_ID).desktop \
+	rm -f $(DESTDIR)$(PREFIX)/bin/viewer $(DESTDIR)$(PREFIX)/bin/$(NAME) $(APPS_DIR)/$(APP_ID).desktop \
 		$(ICONS_DIR)/256x256/apps/$(APP_ID).png
 	@if [ -z "$(DESTDIR)" ]; then update-desktop-database -q $(APPS_DIR) 2>/dev/null || true; fi
 

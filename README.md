@@ -45,6 +45,25 @@ make dev ARGS=a.pdf # run with live frontend reload
 make test           # Go + frontend tests; fails below 100% coverage
 ```
 
+## Native build (work in progress)
+
+A second, pure-Go viewer is being built to replace the webview and pdf.js: no
+cgo, no Node, no WebKit. It renders with gopdfrab's own rasterizer and talks to
+Wayland directly.
+
+```sh
+make build-native               # bin/viewer-native, a static binary
+sudo make install-native        # as `viewer`, with the same desktop entry and icon
+make install-native PREFIX=~/.local NAME=viewer-native   # one user, beside the other viewer
+viewer a.pdf b.pdf              # each file opens in its own tab
+```
+
+It needs a Wayland session (X11 is not supported yet) and, for the Open
+dialog, a desktop with xdg-desktop-portal. It has tabs, a toolbar, scrolling,
+zoom, page navigation and a PDF/A check, but not yet find, text selection,
+links or the PDF/A panel, and every launch is its own window rather than a tab
+in a running one. Use `make default` as usual to make it your PDF application.
+
 | Shortcut              | Action                   |
 | --------------------- | ------------------------ |
 | Ctrl+O                | Open (into new tabs)     |
