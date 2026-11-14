@@ -10,7 +10,7 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// XKB modifier mask bits: the eight real modifiers have fixed positions.
+// The bits of the XKB modifier mask have fixed positions.
 const (
 	modShift = 1 << 0
 	modLock  = 1 << 1
@@ -47,7 +47,7 @@ func ParseKeymap(text string) (*Keymap, error) {
 		if i < 0 {
 			return ""
 		}
-		// A section ends at the first "};" at depth zero.
+		// The section ends at the brace that closes its first '{'.
 		depth := 0
 		for j := i; j < len(text); j++ {
 			switch text[j] {
@@ -172,7 +172,7 @@ var namedKeys = map[string]platform.Key{
 	"End": platform.KeyEnd, "KP_End": platform.KeyEnd,
 }
 
-// namedRunes are the keysym names of ASCII punctuation.
+// namedRunes maps keysym names of ASCII characters to the runes they type.
 var namedRunes = map[string]rune{
 	"space": ' ', "exclam": '!', "quotedbl": '"', "numbersign": '#', "dollar": '$', "percent": '%',
 	"ampersand": '&', "apostrophe": '\'', "quoteright": '\'', "parenleft": '(', "parenright": ')',
@@ -186,7 +186,7 @@ var namedRunes = map[string]rune{
 	"KP_5": '5', "KP_6": '6', "KP_7": '7', "KP_8": '8', "KP_9": '9',
 }
 
-// latin1 are the common accented-letter keysym names.
+// latin1 maps common keysym names of non-ASCII characters to their runes.
 var latin1 = map[string]rune{
 	"adiaeresis": 'ä', "Adiaeresis": 'Ä', "odiaeresis": 'ö', "Odiaeresis": 'Ö',
 	"udiaeresis": 'ü', "Udiaeresis": 'Ü', "ssharp": 'ß', "eacute": 'é', "Eacute": 'É',
