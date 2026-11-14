@@ -34,6 +34,11 @@ const (
 	xdgSurfaceAckConfigure = 4
 	xdgSurfaceConfigure    = 0
 
+	decorationDestroy     = 0
+	decorationGetToplevel = 1
+	decorationSetMode     = 1
+	decorationModeServer  = 2
+
 	toplevelDestroy     = 0
 	toplevelSetTitle    = 2
 	toplevelSetAppID    = 3
@@ -56,6 +61,9 @@ type Backend struct {
 	c *Client
 
 	compositor, shm, wmBase, seat uint32
+	// decoration is zxdg_decoration_manager_v1, or zero when the compositor
+	// does not offer it.
+	decoration uint32
 
 	in input
 
@@ -87,6 +95,9 @@ func Open(conn *Conn) (*Backend, error) {
 			return nil, err
 		}
 	}
+	// Server-side decoration is optional too: without it the window has no
+	// title bar of the compositor's making.
+	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
 	go b.run()
 	return b, nil
 }
@@ -149,6 +160,7 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 		c.Send(b.compositor, compositorCreateSurface, func(e *Encoder) { e.Uint(w.surface) }),
 		c.Send(b.wmBase, wmBaseGetXdgSurface, func(e *Encoder) { e.Uint(w.xdgSurface).Uint(w.surface) }),
 		c.Send(w.xdgSurface, xdgSurfaceGetToplevel, func(e *Encoder) { e.Uint(w.toplevel) }),
+		w.requestServerDecoration(),
 		c.Send(w.toplevel, toplevelSetTitle, func(e *Encoder) { e.String(opts.Title) }),
 		c.Send(w.toplevel, toplevelSetAppID, func(e *Encoder) { e.String(opts.AppID) }),
 		c.Send(w.toplevel, toplevelSetMinSize, func(e *Encoder) { e.Int(int32(opts.MinSize.W)).Int(int32(opts.MinSize.H)) }),
@@ -164,10 +176,25 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 	return w, nil
 }
 
+// requestServerDecoration asks the compositor to draw the window's title bar
+// and borders, when it offers to.
+func (w *window) requestServerDecoration() error {
+	if w.b.decoration == 0 {
+		return nil
+	}
+	c := w.b.c
+	w.decoration = c.NewID(nil)
+	return errors.Join(
+		c.Send(w.b.decoration, decorationGetToplevel, func(e *Encoder) { e.Uint(w.decoration).Uint(w.toplevel) }),
+		c.Send(w.decoration, decorationSetMode, func(e *Encoder) { e.Uint(decorationModeServer) }),
+	)
+}
+
 // window is a Wayland xdg toplevel.
 type window struct {
 	b                             *Backend
 	surface, xdgSurface, toplevel uint32
+	decoration                    uint32 // zero without server-side decoration
 	events                        chan platform.Event
 
 	mu         sync.Mutex
@@ -339,6 +366,9 @@ func (w *window) Close() {
 	}
 	w.dropStale()
 	w.mu.Unlock()
+	if w.decoration != 0 {
+		c.Send(w.decoration, decorationDestroy, nil)
+	}
 	c.Send(w.toplevel, toplevelDestroy, nil)
 	c.Send(w.xdgSurface, xdgSurfaceDestroy, nil)
 	c.Send(w.surface, surfaceDestroy, nil)

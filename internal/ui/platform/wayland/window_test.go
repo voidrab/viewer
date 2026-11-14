@@ -38,6 +38,11 @@ type fakeWM struct {
 	attached   uint32
 	destroyed  []string
 
+	// decoration is the object made by get_toplevel_decoration, and
+	// decorationMode the mode the client last asked for.
+	decoration     uint32
+	decorationMode uint32
+
 	// afterBind, if set, runs after the compositor handles a bind.
 	afterBind func(s *server, iface string, id uint32)
 }
@@ -96,6 +101,17 @@ func (f *fakeWM) request(s *server, ev Event, d *Decoder) {
 			f.minSize = [2]int32{d.Int(), d.Int()}
 		case toplevelDestroy:
 			f.destroyed = append(f.destroyed, "toplevel")
+		}
+	case f.ids["zxdg_decoration_manager_v1"]:
+		f.decoration = d.Uint()
+		f.log <- "get_toplevel_decoration"
+	case f.decoration:
+		switch ev.Opcode {
+		case decorationSetMode:
+			f.decorationMode = d.Uint()
+			f.log <- "set_mode"
+		case decorationDestroy:
+			f.destroyed = append(f.destroyed, "decoration")
 		}
 	case f.ids["wl_shm"]:
 		pool, fd, size := d.Uint(), d.FD(), int(d.Int())
