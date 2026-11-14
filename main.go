@@ -119,8 +119,10 @@ func (d *desktopWindows) New(name string, opening bool) {
 	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 		d.svc.WindowClosed(name)
 	})
-	// Lets a closed window be freed (see releaseWindowRef). The runtime is
-	// ready once the native window exists; a reload makes it ready again.
+	// Releases Wails's reference to the native window (see releaseWindowRef)
+	// so that the window can be freed after it closes. The runtime is ready
+	// once the native window exists, and again after each reload; the release
+	// runs only on the first of these events.
 	var release sync.Once
 	win.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		release.Do(func() {

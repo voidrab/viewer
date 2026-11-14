@@ -46,10 +46,10 @@ const (
 	// EventDrag tells every window (Targeted.Window is "") that a tab drag
 	// started or ended; it carries a DragState.
 	EventDrag = "tabs:drag"
-	// EventDragCancelled tells every window that a drag was cancelled,
-	// carrying whether the user cancelled it (bool), as with Escape, rather
-	// than dropping it where nothing took it. WebKitGTK sends the page no
-	// dragend for those.
+	// EventDragCancelled tells every window that a drag was cancelled. Its
+	// data is a bool that is true when the user cancelled the drag, as with
+	// Escape, and false when the drag ended where nothing took it. WebKitGTK
+	// sends the page no dragend for such drags.
 	EventDragCancelled = "tabs:drag-cancelled"
 	// EventMovedOut carries the IDs ([]int) of documents whose tabs were
 	// dragged into another window; the source window drops those tabs.
@@ -127,9 +127,10 @@ type drag struct {
 	items []DragItem
 }
 
-// DetachDelay is how long EndDrag waits before detaching tabs into a new
-// window, giving a window that took the drop time to claim it: its Drop
-// and the source's EndDrag can reach Go in either order.
+// DetachDelay is how long EndDrag waits before it moves the tabs of an
+// unclaimed drag into a new window. The delay gives a Drop that reaches Go
+// after EndDrag time to claim them, because the two calls can arrive in
+// either order.
 const DetachDelay = 300 * time.Millisecond
 
 // window is what the Service tracks per app window.
@@ -341,9 +342,9 @@ func (s *Service) drop(w *window, id int) {
 	delete(s.docs, id)
 }
 
-// StartDrag records that tabs of the calling window are being dragged, and
-// tells every window, so another can accept the drop. The drag's data
-// travels through here rather than through the webview's drag data, which
+// StartDrag records that tabs of the calling window are being dragged and
+// tells every window, so that another can accept the drop. The drag's data
+// is passed through Go rather than through the webview's drag data, which
 // need not cross windows. It returns the drag's token.
 func (s *Service) StartDrag(ctx context.Context, items []DragItem) int {
 	from := s.windowOf(ctx)
@@ -356,11 +357,11 @@ func (s *Service) StartDrag(ctx context.Context, items []DragItem) int {
 	return token
 }
 
-// EndDrag tells every window the drag with token ended. The drag stays
-// claimable by Drop: the target's drop and the source's drag end can reach
-// Go in either order. With detach, the source saw the drag end outside its
-// window: unless a window claims the tabs within DetachDelay, they move to
-// a new window.
+// EndDrag tells every window that the drag with token ended. The drag stays
+// claimable by Drop, because the target's drop and the source's drag end
+// can reach Go in either order. If detach is true, the drag ended outside
+// the source window, so unless a window claims its tabs within DetachDelay,
+// they move to a new window.
 func (s *Service) EndDrag(token int, detach bool) {
 	s.emit(EventDrag, Targeted{"", DragState{Token: token}})
 	if detach {
@@ -389,16 +390,17 @@ func (s *Service) detach(token int) {
 	s.windows.New(name, true)
 }
 
-// DragCancelled reports a drag the platform cancelled, for the window
-// whose drag it was; byUser tells an Escape from a drop nothing took.
+// DragCancelled tells every window that the platform cancelled a drag.
+// byUser is true for a cancel by the user, as with Escape, and false for a
+// drop that nothing took.
 func (s *Service) DragCancelled(byUser bool) {
 	s.emit(EventDragCancelled, Targeted{"", byUser})
 }
 
 // Drop hands the tabs of drag token to the calling window: their documents
 // move to it, and the source window is told to drop those tabs. It returns
-// nothing for a drag that is gone, already dropped, or from the caller
-// itself, which reorders its own tabs.
+// no tabs if drag token is not the current drag, or if the current drag came
+// from the calling window, which reorders its own tabs instead.
 func (s *Service) Drop(ctx context.Context, token int) []Moved {
 	to := s.windowOf(ctx)
 	s.mu.Lock()
@@ -419,8 +421,9 @@ func (s *Service) Drop(ctx context.Context, token int) []Moved {
 	return moved
 }
 
-// takeDragLocked returns drag token and forgets it, so it is taken once,
-// or returns nil for a drag that is gone or replaced. The caller holds s.mu.
+// takeDragLocked returns the drag with the given token and forgets it, so
+// that each drag is taken only once. It returns nil if that drag is gone or
+// has been replaced. The caller holds s.mu.
 func (s *Service) takeDragLocked(token int) *drag {
 	d := s.drag
 	if d == nil || d.token != token {

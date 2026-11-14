@@ -504,7 +504,8 @@ func TestDragMovesTabsBetweenWindows(t *testing.T) {
 		t.Fatalf("start event %+v; want a broadcast of the drag", ev)
 	}
 
-	// The source reorders its own tabs; Go leaves its drag alone.
+	// A drop in the source window reorders its tabs there, so Go returns none
+	// and keeps the drag.
 	if m := s.Drop(in("window-1"), token); len(m) != 0 {
 		t.Fatalf("Drop in the source window = %v", m)
 	}

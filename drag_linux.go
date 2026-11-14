@@ -9,7 +9,8 @@ void watchDragCancel(void);
 */
 import "C"
 
-// onDragCancel receives each GTK drag cancel.
+// onDragCancel is called for each drag that GTK cancels. It is set by
+// watchDragCancels.
 var onDragCancel func(byUser bool)
 
 // watchDragCancels calls f whenever GTK cancels a drag, which WebKitGTK does
