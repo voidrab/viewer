@@ -527,5 +527,6 @@ func (v *View) zoomBy(f float64) {
 	v.zoomAt(f, image.Pt(w/2, h/2))
 }
 
-// zoomAt zooms by the factor f, keeping what is under the viewport point at.
+// zoomAt zooms by the factor f, keeping the content under the viewport point
+// at in place.
 func (v *View) zoomAt(f float64, at image.Point) { v.lay.ZoomAt(v.lay.Scale()*f, at) }

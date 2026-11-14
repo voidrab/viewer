@@ -8,10 +8,11 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// Scrollbars are drawn over the pages: a thumb along the right edge, and along
-// the bottom when the page is wider than the view, thin at rest and wide under
-// the pointer. A press on a thumb drags it, a press on the track beside it
-// centres the thumb there and drags it; any other press drags the page.
+// barThin, barWide, barInset and minThumb size the scrollbars drawn over the
+// pages: a thumb along the right edge, and along the bottom when the page is
+// wider than the view. A thumb is thin at rest and wide under the pointer. A
+// press on a thumb drags it; a press on the track beside it centres the thumb
+// there and drags it; any other press drags the page.
 const (
 	barThin  = 6  // width of a thumb at rest
 	barWide  = 12 // width of a thumb, and of the strip that takes clicks
@@ -173,8 +174,8 @@ func (v *View) dragBar(p image.Point) {
 	v.lay.ScrollTo(scroll)
 }
 
-// drawBars paints the scrollbars over the view, whose top-left corner is at
-// origin of c.
+// drawBars paints the scrollbars over the view on c. origin is the position
+// on c of the view's top-left corner.
 func (v *View) drawBars(c *paint.Canvas, origin image.Point) {
 	for _, a := range []axis{vertical, horizontal} {
 		b, ok := v.bar(a)

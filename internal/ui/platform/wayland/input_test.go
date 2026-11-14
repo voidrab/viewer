@@ -301,8 +301,8 @@ func TestHeldKeysRepeatUntilReleased(t *testing.T) {
 			t.Fatalf("event %d = %#v, want %#v", i, ev, want)
 		}
 	}
-	// Pressing another key hands the repeat to it: after any repeat of q already
-	// on its way, only Return comes.
+	// Pressing another key moves the repeat to that key. Repeats of q already
+	// on their way may still arrive; after them only Return repeats.
 	press(28, 1)
 	enter := platform.KeyEvent{Key: platform.KeyEnter, Down: true}
 	for ev := next(t, win); ev != enter; ev = next(t, win) {

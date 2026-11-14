@@ -940,7 +940,7 @@ func TestLaterLaunchesOpenTabsAndRaiseTheWindow(t *testing.T) {
 	waitFor(t, "both tabs", func() bool {
 		return fw.Title() == "second.pdf — Viewer"
 	})
-	// A closed request channel is not ready for ever: the window still works.
+	// The window keeps working after the request channel is closed.
 	close(requests)
 	if err := fw.Send(platform.CloseEvent{}); err != nil {
 		t.Fatal(err)

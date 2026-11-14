@@ -40,7 +40,8 @@ const (
 	buttonPressed = 1
 )
 
-// Key repeat settings used until the compositor announces its own.
+// defaultRepeatRate and defaultRepeatDelay are the key repeat settings used
+// until the compositor announces its own.
 const (
 	defaultRepeatRate  = 25
 	defaultRepeatDelay = 600 * time.Millisecond

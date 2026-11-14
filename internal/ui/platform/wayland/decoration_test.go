@@ -66,7 +66,7 @@ func TestActivateAsksTheCompositorToRaiseTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.wait("commit")
-	win.Activate("") // nothing to cite: nothing is asked
+	win.Activate("") // an empty token asks the compositor for nothing
 	win.Activate("token-1")
 	f.wait("activate")
 	f.mu.Lock()

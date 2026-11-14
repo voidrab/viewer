@@ -199,7 +199,7 @@ func TestZoomAtIsClampedAndHandlesAnEmptyDocument(t *testing.T) {
 	if empty.Scale() != 2 || empty.Mode() != ZoomFixed {
 		t.Errorf("empty document: scale %v mode %v", empty.Scale(), empty.Mode())
 	}
-	// A point below the last page, or right of it, stays on the last page.
+	// A point past the last page, at the corner of the view, is handled.
 	l = sample()
 	l.ScrollTo(image.Pt(0, math.MaxInt32))
 	l.ZoomAt(1.5, image.Pt(219, 299))

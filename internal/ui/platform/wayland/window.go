@@ -103,7 +103,8 @@ func Open(conn *Conn) (*Backend, error) {
 	// Server-side decoration is optional. Without zxdg_decoration_manager_v1,
 	// windows do not request it and the compositor's default applies.
 	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
-	// Likewise xdg_activation_v1, which lets a window ask to be brought forward.
+	// xdg_activation_v1 lets a window ask to be brought forward. It is
+	// optional: without it, Activate does nothing.
 	b.activation, _, _ = b.c.Bind("xdg_activation_v1", 1, nil)
 	go b.run()
 	return b, nil
