@@ -19,13 +19,12 @@ type PoolOptions struct {
 	CacheBytes int
 }
 
-// A pool whose budget follows the viewports keeps viewportScreens times the
-// pixels of the largest viewport. Rendering ahead wants about six viewports'
-// worth, and a page counts whole once any of it is wanted, so this is the
-// least that keeps rendering ahead within half the budget, as want requires,
-// without holding on to pages long scrolled past. minBudget leaves room for
-// the previews of a small window, and maxBudget bounds a large screen, where
-// rendering ahead gives way to the parts in view.
+// viewportScreens, minBudget and maxBudget size the cache budget when it
+// follows the viewports. The budget is viewportScreens times the 4-byte
+// pixels of the largest viewport, clamped to the range from minBudget to
+// maxBudget. The factor keeps rendering ahead within half the budget, as want
+// requires. minBudget leaves room for the previews of a small window, and
+// maxBudget bounds the budget on a large screen.
 const (
 	viewportScreens = 16
 	minBudget       = 32 << 20
