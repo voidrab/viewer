@@ -135,8 +135,9 @@ func TestANewFindReplacesTheOldOne(t *testing.T) {
 	c := paint.New(124, 300)
 	ready(t, v, c, 0)
 	p := at(v, 0, 12, 16)
-	if c.Img.RGBAAt(p.X, p.Y) != paper {
-		t.Error("highlights remain after ClearFind")
+	// The page is the placeholder's paper until its render lands, then red.
+	if got := c.Img.RGBAAt(p.X, p.Y); got != paper && got != red {
+		t.Errorf("highlights remain after ClearFind: pixel %v", got)
 	}
 }
 

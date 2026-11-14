@@ -260,6 +260,9 @@ func TestTabsMoveBetweenWindows(t *testing.T) {
 	}
 	// The logo carries every tab of a window; dropped on another window's
 	// pages, they go after its tabs, and the window they left closes.
+	// Events and posted functions travel apart, so wait until the first drag
+	// has ended; otherwise it is taken for the beginning of the next.
+	waitFor(t, "the first drag to end", func() bool { return on(t, first, func() bool { return first.drag == nil }) })
 	fw.Send(platform.PointerEvent{Kind: platform.Press, Button: platform.Left, X: 18, Y: theme.ToolbarHeight / 2})
 	fw.Send(platform.PointerEvent{Kind: platform.Move, X: 40, Y: theme.ToolbarHeight / 2})
 	waitFor(t, "the drag to begin", func() bool { return on(t, first, func() bool { return first.drag != nil }) })

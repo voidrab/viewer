@@ -163,6 +163,10 @@ func TestSendFailsAgainstAnImpostor(t *testing.T) {
 	go func() {
 		c, _ := ln2.Accept()
 		if c != nil {
+			// Read the request first, so the client's write succeeds and
+			// it is the missing reply that fails it.
+			var req Request
+			json.NewDecoder(c).Decode(&req)
 			c.Close()
 		}
 	}()
