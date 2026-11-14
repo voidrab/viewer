@@ -50,8 +50,8 @@ func TestTypingAPageNumberGoesToThatPage(t *testing.T) {
 			t.Errorf("typed %s: page %d, want %d", tc.typed, got, tc.want)
 		}
 	}
-	// Escape leaves the field without going anywhere; so does Enter on an
-	// empty field.
+	// Escape leaves the field without going anywhere, and Enter on an empty
+	// field does the same.
 	f.clickButton(widget.ButtonPage)
 	f.typeKeys("7")
 	f.special(platform.KeyEscape, 0)
@@ -119,7 +119,7 @@ func TestThePageFieldBelongsToItsTab(t *testing.T) {
 	if f.a.toolbar.EditingPage || f.a.docs[0].view.Page() != 0 || f.a.docs[1].view.Page() != 0 {
 		t.Error("the page typed outlived its tab")
 	}
-	// So does closing the last tab.
+	// Closing the last tab ends the edit too.
 	f.clickButton(widget.ButtonPage)
 	f.key('w', platform.Ctrl)
 	f.key('w', platform.Ctrl)
@@ -200,8 +200,8 @@ func TestTheThemeSwitch(t *testing.T) {
 	var saved []bool
 	f.a.opts.SaveTheme = func(dark bool) { saved = append(saved, dark) }
 	f.open(f.pdf("a.pdf", 1))
-	// The window starts light, and the switch makes it dark, everywhere, and
-	// has the choice kept.
+	// The window starts light. The switch makes it dark everywhere and
+	// passes the choice to SaveTheme.
 	f.clickButton(widget.ButtonTheme)
 	dark := theme.Dark()
 	if !f.a.opts.Palette.Dark || f.a.toolbar.Palette != dark || f.a.tabs.Palette != dark || f.a.status.Palette != dark ||

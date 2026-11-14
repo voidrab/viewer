@@ -26,8 +26,8 @@ const (
 
 // Find field geometry, in pixels.
 const (
-	// FindWidth is the find field's width, 15em as in the webview build;
-	// FindMinWidth is the least a narrow toolbar shrinks it to.
+	// FindWidth is the preferred width of the find field; FindMinWidth is the
+	// narrowest it shrinks to in a narrow toolbar.
 	FindWidth    = 195
 	FindMinWidth = 90
 	findPad      = 8

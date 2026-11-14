@@ -404,8 +404,8 @@ func TestPanelItemRect(t *testing.T) {
 	if got, want := p.ItemRect(PanelAction{Kind: PanelVerify}, PanelWidth), find(t, p, target{kind: toVerify}).r; got != want {
 		t.Errorf("verify at %v, want %v", got, want)
 	}
-	// Choosing a profile asks nothing of the application, so has no rectangle,
-	// and neither has a control that is not shown.
+	// An action the panel shows no control for has no rectangle: no action at
+	// all, a cancel with nothing running, or a page with no link shown.
 	for _, act := range []PanelAction{{}, {Kind: PanelCancel}, {Kind: PanelPage, Page: 3}} {
 		if r := p.ItemRect(act, PanelWidth); !r.Empty() {
 			t.Errorf("%+v at %v", act, r)

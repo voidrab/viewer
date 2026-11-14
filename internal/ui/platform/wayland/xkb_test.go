@@ -97,8 +97,8 @@ func TestParseKeymapAndLookup(t *testing.T) {
 	}
 }
 
-// numericKeymap is cut from a keymap KWin sent, which gives keysyms as hex
-// values rather than names.
+// numericKeymap is a keymap that gives keysyms as hex values rather than
+// names.
 const numericKeymap = `xkb_keymap {
 xkb_keycodes "evdev_aliases(qwerty)" {
 	<ESC> = 9;

@@ -109,8 +109,8 @@ func TestMenuPointer(t *testing.T) {
 	if i, _ := m.HandlePointer(ptr(platform.Release, platform.Right, x, y)); i != -1 || !m.Open {
 		t.Errorf("right release: %d, open %v", i, m.Open)
 	}
-	// A press elsewhere closes it, and its release is taken too, but only
-	// that one.
+	// A press elsewhere closes the menu. The release of that press is taken,
+	// and no later release is.
 	if i, taken := m.HandlePointer(ptr(platform.Press, platform.Left, 5, 5)); !taken || i != -1 || m.Open {
 		t.Errorf("press outside: %d %v open %v", i, taken, m.Open)
 	}

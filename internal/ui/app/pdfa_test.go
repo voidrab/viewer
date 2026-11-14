@@ -292,7 +292,7 @@ func TestConvertDialogOutcomes(t *testing.T) {
 	earlier := &widget.PanelResult{Label: "PDF/A-1b", Report: &pdfa.Report{Valid: true}}
 	d.result = earlier
 
-	// Choosing nowhere keeps what the panel showed.
+	// Choosing nowhere leaves the earlier result in place.
 	f.a.opts.SaveFile = func(string) (string, error) { return "", nil }
 	f.a.convert()
 	f.drain()
@@ -354,10 +354,9 @@ func TestPanelMetaListsWhatIsKnown(t *testing.T) {
 	}
 }
 
-// writeFile replaces the file at path with content. It writes a new file and
-// renames it over the old one, as a careful writer does, so that a document
-// still mapped from the old file, with renders reading it, is not cut short
-// under them.
+// writeFile replaces the file at path with content by writing a new file and
+// renaming it over the old one. The rename leaves the old file intact for a
+// document still mapped from it.
 func writeFile(path, content string) error {
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {

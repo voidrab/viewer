@@ -473,9 +473,8 @@ func (v *View) ZoomIn()  { v.zoomBy(zoomStep) }
 func (v *View) ZoomOut() { v.zoomBy(1 / zoomStep) }
 
 // CSSScale is the layout scale of a zoom of 100%: 96 pixels per inch, as CSS
-// and pdf.js in the webview build count them, over PDF's 72 points per inch.
-// Zoom percentages are given in these units, so that a page shows at the
-// same size in both builds.
+// counts them, over PDF's 72 points per inch. Zoom percentages are given in
+// these units, so that a page shows at the same size in both builds.
 const CSSScale = 96.0 / 72
 
 // ZoomPreset is one of the zooms offered in the zoom menu: a fit mode, or a

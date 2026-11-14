@@ -12,8 +12,8 @@ import (
 )
 
 // Field is the editable text of a one-line input: the text, the caret, and
-// whether all of the text is selected, as it is when a field takes the focus,
-// so that typing replaces it.
+// whether all of the text is selected. While All is set, typing replaces the
+// text.
 type Field struct {
 	// Text is the content and Cursor the caret's place in it, between runes.
 	Text   []rune

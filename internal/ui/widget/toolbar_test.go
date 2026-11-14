@@ -115,7 +115,7 @@ func TestToolbarClicksFireOnRelease(t *testing.T) {
 	if a := tb.HandleEvent(ptr(platform.Release, platform.Left, 5, 5)); a != (Action{}) {
 		t.Errorf("release off the button fired %+v", a)
 	}
-	// Other mouse buttons, presses on empty space, and stray releases do nothing.
+	// Other mouse buttons, and a release on empty space, fire nothing.
 	tb.HandleEvent(ptr(platform.Press, platform.Right, x, y))
 	if a := tb.HandleEvent(ptr(platform.Release, platform.Right, x, y)); a != (Action{}) {
 		t.Errorf("right click fired %+v", a)

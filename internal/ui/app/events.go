@@ -234,8 +234,8 @@ func (a *App) choose(i int) {
 }
 
 // startPageEdit gives the page field the keys, with the page number in it
-// selected so that typing replaces it. A click in a field already being
-// edited, at at in toolbar coordinates, moves its caret instead.
+// selected so that typing replaces it. If the field is already being edited,
+// it instead moves the caret to the toolbar point at.
 func (a *App) startPageEdit(at image.Point) {
 	tb := a.toolbar
 	if tb.EditingPage {

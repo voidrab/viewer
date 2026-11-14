@@ -14,8 +14,8 @@ import (
 	"viewer/internal/ui/widget"
 )
 
-// humanSize formats a byte count for display as the webview build does, with
-// one decimal below 10: "512 B", "1.5 KB", "270 KB".
+// humanSize formats a byte count for display, with one decimal below 10:
+// "512 B", "1.5 KB", "270 KB".
 func humanSize(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -79,7 +79,7 @@ func (a *App) chrome() {
 		a.closeFind() // A search belongs to the tab it began in.
 	}
 	if a.toolbar.EditingPage && a.pageDoc != d {
-		a.endPageEdit(false) // So does a page number being typed.
+		a.endPageEdit(false) // A page number being typed is discarded too.
 	}
 	a.syncFind()
 	tb.On[widget.ButtonZoomMode] = a.menu.Open && a.menuKind == menuZoom
@@ -158,8 +158,8 @@ func (a *App) findRect() image.Rectangle {
 	return a.toolbar.ButtonRect(widget.ButtonFind).Add(a.origin(sectionToolbar))
 }
 
-// Empty-state geometry, in pixels: the logo, the lines under it, and the
-// button that opens a file.
+// hintLogo, hintGap and kbdPad set the size of the empty state's logo, the gap
+// below it and the padding of the keycaps, in pixels.
 const (
 	hintLogo = 48
 	hintGap  = 8
@@ -183,7 +183,7 @@ func (a *App) hintLayout(r image.Rectangle) (logo image.Rectangle, line1, line2 
 	return
 }
 
-// The empty state's text, as in the webview build.
+// hintTitle, hintKeys and hintButton are the text of the empty state.
 const (
 	hintTitle  = "no document open"
 	hintKeys   = " to open"

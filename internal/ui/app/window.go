@@ -8,9 +8,9 @@ import (
 	"viewer/internal/ui/widget"
 )
 
-// Window frame geometry, in pixels, for a window the compositor does not
-// decorate: the band along its edges that resizes it, and how far a corner
-// reaches along each edge.
+// frameBorder and frameCorner set the window frame's geometry, in pixels, for
+// a window the compositor does not decorate: the band along its edges that
+// resizes it, and how far a corner reaches along each edge.
 const (
 	frameBorder = 5
 	frameCorner = 16

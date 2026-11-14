@@ -12,10 +12,9 @@ import (
 	"github.com/godbus/dbus/v5"
 )
 
-// The desktop's colour scheme is read from the settings portal: the
-// org.freedesktop.appearance namespace's color-scheme key, which is 1 when the
-// user prefers dark, 2 when they prefer light, and 0 when they have no
-// preference.
+// colorSchemeKey, in the org.freedesktop.appearance namespace of the settings
+// portal, holds the desktop's colour scheme: 1 when the user prefers dark, 2
+// when they prefer light, and 0 when they have no preference.
 const (
 	settingsIface   = "org.freedesktop.portal.Settings"
 	appearance      = "org.freedesktop.appearance"
@@ -156,8 +155,9 @@ const schemeTimeout = 300 * time.Millisecond
 
 // watchScheme reads the desktop's colour scheme into t and then follows its
 // changes, sending the theme to show on out whenever the window should follow
-// one. It keeps a session bus connection open for as long as the program
-// runs; without a bus or a portal, the theme stays as it is.
+// one. It keeps the session bus connection open for as long as the program
+// runs. Without a session bus the theme is not followed; without a portal the
+// desktop's preference is unknown, and the theme is light unless chosen.
 func watchScheme(t *themes, out chan<- bool) {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {

@@ -23,7 +23,7 @@ var cursorShapes = map[platform.Cursor]uint32{
 
 // newCursorDevice makes the cursor shape device of the seat's pointer, when
 // the compositor offers wp_cursor_shape_manager_v1. Without it, the client
-// sets no cursor and the compositor shows what it likes.
+// sets no cursor and the compositor chooses the one it shows.
 func (b *Backend) newCursorDevice() {
 	if b.cursorShape == 0 {
 		return

@@ -207,7 +207,7 @@ func (b *builder) rule() {
 	b.y++
 }
 
-// The panel's button labels, which read like console commands.
+// The labels of the panel's buttons, in lower case.
 const (
 	verifyLabel  = "verify"
 	convertLabel = "convert…"
@@ -233,8 +233,8 @@ func (p *Panel) layout(w int) ([]item, int) {
 	}
 	b.y += 10
 
-	// One row, as in the webview build: the profile drop-down takes what the
-	// buttons leave.
+	// The profile drop-down and the buttons share one row: the drop-down
+	// takes what the buttons leave.
 	res := p.Result
 	busy := res != nil && res.Busy != ""
 	right := b.buttonWidth(verifyLabel) + b.buttonWidth(convertLabel)
@@ -501,7 +501,7 @@ func (p *Panel) drawItem(c *paint.Canvas, it item, r image.Rectangle) {
 			c.Fill(image.Rect(r.Min.X, r.Max.Y-1, r.Max.X, r.Max.Y), pal.Accent)
 		}
 	case stylePrimary, styleButton, styleSelect:
-		// Outlined, the primary button in the accent colour.
+		// A primary button is outlined and labelled in the accent colour.
 		fg, border := pal.Text, pal.Border
 		if it.style == stylePrimary {
 			fg, border = pal.Accent, pal.Accent
@@ -533,8 +533,8 @@ func (p *Panel) at(items []item, pt image.Point) target {
 }
 
 // HandlePointer applies a pointer event, given in the panel's own coordinates
-// for a panel of the given size, and returns what it asks for. Choosing a
-// profile and opening an issue are handled here and return PanelNone.
+// for a panel of the given size, and returns what it asks for. Opening an issue
+// is handled here and returns PanelNone.
 func (p *Panel) HandlePointer(ev platform.PointerEvent, size image.Point) PanelAction {
 	items, _ := p.layout(size.X)
 	pt := image.Pt(int(ev.X), int(ev.Y))

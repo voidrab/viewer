@@ -258,8 +258,8 @@ func TestFindBarPointer(t *testing.T) {
 			t.Errorf("clicking part %v = %v, %v, want %v", part, act, over, want)
 		}
 	}
-	// Pressing a button and releasing elsewhere does nothing, but the release
-	// still belongs to the field.
+	// A press on a button and a release elsewhere do nothing, but the field
+	// still takes the release.
 	x, y = centre(b.button(r, partNext))
 	b.HandlePointer(ev(platform.Press, platform.Left, x, y), r)
 	if act, over := b.HandlePointer(ev(platform.Release, platform.Left, 5, 150), r); act != FindNone || !over {

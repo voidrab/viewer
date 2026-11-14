@@ -96,7 +96,7 @@ func (s *StatusBar) Draw(c *paint.Canvas, r image.Rectangle) {
 		s.Face.Draw(c, x, y, info, p.Muted)
 		x += s.Face.Width(info) + statusGap
 	}
-	// A message reads like a console line: an accent mark, then the text.
+	// The message is drawn after an accent mark.
 	if s.Message != "" && limit-x > 0 {
 		const mark = "› "
 		s.Face.Draw(c, x, y, s.Face.Fit(mark, limit-x), p.Accent)

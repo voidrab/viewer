@@ -130,8 +130,8 @@ func Open(conn *Conn) (*Backend, error) {
 		}
 	}
 	// zxdg_decoration_manager_v1 is optional. With it, windows ask to draw
-	// their own title bar, which the compositor may refuse; without it, they
-	// draw their own, as the protocol's absence means.
+	// their own title bar, which the compositor may refuse. Without it,
+	// windows make no request and the compositor's default applies.
 	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
 	// xdg_activation_v1 lets a window ask to be brought forward. It is
 	// optional: without it, Activate does nothing.

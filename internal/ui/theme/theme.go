@@ -71,7 +71,7 @@ const (
 	TabBarHeight  = 32
 	StatusHeight  = 28
 	// PageGap is the space between pages and PageMargin the space around
-	// them, which pdf.js leaves too.
+	// them.
 	PageGap    = 10
 	PageMargin = 20
 	// Radius rounds the corners of buttons, fields and hover marks.

@@ -42,7 +42,8 @@ func TestThemesFollowTheDesktopUntilTheUserChooses(t *testing.T) {
 	if th.dark() {
 		t.Error("the light choice did not hold")
 	}
-	// Switching back to the desktop's theme forgets the choice, twice over.
+	// Saving the desktop's theme forgets the choice; saving it again changes
+	// nothing.
 	if err := th.save(true); err != nil {
 		t.Fatal(err)
 	}

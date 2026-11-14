@@ -19,10 +19,9 @@ func newStatus(t *testing.T) *StatusBar {
 	return NewStatusBar(palette, face)
 }
 
-// inkIn returns the rectangle of pixels in rect that match col: exactly, or
-// within inkTolerance in each channel, as the most covered pixels of thin
-// anti-aliased glyphs do. The background, the border and fully transparent
-// pixels are ignored.
+// inkIn returns the rectangle of pixels in rect that match col within
+// inkTolerance in each channel. The background, the border and fully
+// transparent pixels are ignored.
 func inkIn(c *paint.Canvas, rect image.Rectangle, col color.NRGBA) image.Rectangle {
 	var out image.Rectangle
 	for y := rect.Min.Y; y < rect.Max.Y; y++ {

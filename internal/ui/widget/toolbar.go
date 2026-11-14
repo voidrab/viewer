@@ -34,7 +34,7 @@ const (
 	buttonCount
 )
 
-// Toolbar geometry, in pixels, after the webview build's style sheet.
+// Toolbar geometry, in pixels.
 const (
 	toolPad    = 10 // left of the logo
 	logoSize   = 18
@@ -91,8 +91,8 @@ type Toolbar struct {
 	laid     bool
 	hover    ButtonID // -1 when none
 	press    ButtonID // -1 when none
-	// grab is where a left button went down on the bar's empty part, which
-	// starts a window move once the pointer moves, or nil.
+	// grab is where a left button went down on the bar's empty part, or nil.
+	// Moving the pointer beyond dragSlop from it starts a window move.
 	grab *image.Point
 }
 
@@ -187,8 +187,7 @@ func (t *Toolbar) shown(id ButtonID) bool {
 	return !t.rects[id].Empty() && !(t.NoDocument && docOnly[id])
 }
 
-// onButton reports whether p is on a control, enabled or not: the parts of the
-// bar that are not its empty space.
+// onButton reports whether p is on a shown control, enabled or not.
 func (t *Toolbar) onButton(p image.Point) bool {
 	for id := range buttonCount {
 		if t.shown(id) && p.In(t.rects[id]) {
@@ -209,13 +208,13 @@ func (t *Toolbar) hitTest(p image.Point) ButtonID {
 }
 
 // HandleEvent applies a pointer event given in the toolbar's own coordinates.
-// It returns an Action of kind ActionButton when the left button is released
-// over the control it was pressed on; for the page field, which takes the
-// keys once clicked, and the zoom drop-down, which opens its menu, already
-// when it is pressed. On the bar's empty part, which works as a title bar, a
-// left press returns ActionTitlePress, moving the pointer while it is held
-// returns ActionMove once, and a right press returns ActionMenu, each with At
-// set to the pointer. Other events return the zero Action.
+// A left release over the control it was pressed on returns ActionButton,
+// except for the page field and the zoom drop-down, which return it on the
+// press: the page field to take the keys, and the zoom drop-down to open its
+// menu. On the empty part of the bar, a left press returns ActionTitlePress,
+// the first move past dragSlop returns ActionMove, and a right press returns
+// ActionMenu; these carry At set to the pointer. Other events return the zero
+// Action.
 func (t *Toolbar) HandleEvent(ev platform.PointerEvent) Action {
 	if !t.laid {
 		t.Layout(t.width)
@@ -327,8 +326,8 @@ func (t *Toolbar) Draw(c *paint.Canvas, origin image.Point) {
 	}
 }
 
-// drawPage draws the page field into r: the page number, or while it is being
-// edited the text typed, with its caret, and a focus ring.
+// drawPage draws the page field into r. It shows the page number, or while the
+// field is being edited, the typed text with its caret inside a focus ring.
 func (t *Toolbar) drawPage(c *paint.Canvas, r image.Rectangle) {
 	p := t.Palette
 	text := r.Inset(4)

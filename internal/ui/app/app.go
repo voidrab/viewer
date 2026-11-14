@@ -509,8 +509,8 @@ func (a *App) setTheme(dark bool) {
 	a.win.Invalidate()
 }
 
-// toggleTheme switches between the light and the dark theme, and has the
-// choice kept.
+// toggleTheme switches between the light and the dark theme, and passes the
+// new choice to SaveTheme if it is set.
 func (a *App) toggleTheme() {
 	dark := !a.opts.Palette.Dark
 	a.setTheme(dark)
