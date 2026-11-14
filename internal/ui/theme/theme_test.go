@@ -29,7 +29,8 @@ func TestPalettes(t *testing.T) {
 			}
 		}
 	}
-	// Text must contrast with its background.
+	// Light text is darker than the chrome, and dark text is lighter, when
+	// their RGB channels are summed.
 	lum := func(c color.NRGBA) int { return int(c.R) + int(c.G) + int(c.B) }
 	if lum(light.Text) >= lum(light.Chrome) || lum(dark.Text) <= lum(dark.Chrome) {
 		t.Error("text does not contrast with the chrome")

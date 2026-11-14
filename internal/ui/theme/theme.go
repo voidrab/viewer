@@ -1,5 +1,5 @@
-// Package theme holds the viewer's colours and sizes, the same as the web UI
-// it replaces: a quiet, console-style chrome in light and dark.
+// Package theme defines the colours and sizes the viewer's interface is drawn
+// with, in a light and a dark palette.
 package theme
 
 import "image/color"

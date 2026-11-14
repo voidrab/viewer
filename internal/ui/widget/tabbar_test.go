@@ -54,7 +54,7 @@ func TestLayoutSizesTabsToTheirTitles(t *testing.T) {
 	if b.newTab.Min.X != b.tabs[2].Max.X || b.newTab.Dx() != newWidth || b.tabs[0].Dy() != theme.TabBarHeight || b.Height() != theme.TabBarHeight {
 		t.Errorf("new-tab button %v, tab height %d", b.newTab, b.tabs[0].Dy())
 	}
-	// A very short title still gets a usable tab.
+	// A short title is widened to tabMinWidth.
 	if w := newBar(t, 1000, "x").tabs[0].Dx(); w != tabMinWidth {
 		t.Errorf("short tab is %d wide, want the minimum %d", w, tabMinWidth)
 	}
@@ -85,7 +85,7 @@ func TestLayoutShrinksTabsToFit(t *testing.T) {
 			t.Errorf("crowded tab %d is %d wide", i, r.Dx())
 		}
 	}
-	// A bar of no width, or no tabs, lays out without trouble.
+	// Layout accepts a zero or negative width and a bar with no tabs.
 	empty := newBar(t, 0)
 	if len(empty.tabs) != 0 || empty.newTab.Dx() != newWidth {
 		t.Errorf("empty bar: %v %v", empty.tabs, empty.newTab)
@@ -143,7 +143,7 @@ func TestDraggingReordersTabs(t *testing.T) {
 		return b.HandleEvent(ptr(platform.Release, platform.Left, toX, y)), dragging
 	}
 	probe := newBar(t, 900, titles...)
-	right := probe.tabs[3].Max.X - 5 // into the last tab's right half: after it
+	right := probe.tabs[3].Max.X - 5 // right half of the last tab: after it
 	left := probe.tabs[0].Min.X + 2  // before the first tab
 
 	if a, d := drag(0, right); a != (Action{Kind: ActionReorder, Index: 0, To: 3}) || !d {
@@ -213,11 +213,12 @@ func TestDrawPaintsTheBar(t *testing.T) {
 	b.Active = 0
 	c := paint.New(400, 60)
 	b.Draw(c, image.Pt(0, 10))
-	// Active tab: the canvas colour, opening into the page over the border line.
+	// The active tab is filled with the canvas colour over the border line.
 	if got := pixel(c, 3, 10+theme.TabBarHeight-1); got != nrgba(palette.Canvas) {
 		t.Errorf("under the active tab = %v, want canvas", got)
 	}
-	// Inactive tab: the chrome, with the border line under it.
+	// An inactive tab is filled with the chrome colour, and the border line
+	// runs under it.
 	x := b.tabs[1].Min.X + 3
 	if got := pixel(c, x, 10+5); got != nrgba(palette.Chrome) {
 		t.Errorf("inactive tab = %v, want chrome", got)
@@ -233,7 +234,7 @@ func TestDrawPaintsTheBar(t *testing.T) {
 	if got := pixel(c, 3, 5); got.A != 0 {
 		t.Errorf("painted above the bar: %v", got)
 	}
-	// The titles and the + are inked.
+	// The tab titles and the + glyph are drawn.
 	hasInk := func(r image.Rectangle) bool {
 		for y := r.Min.Y; y < r.Max.Y; y++ {
 			for x := r.Min.X; x < r.Max.X; x++ {
@@ -253,7 +254,7 @@ func TestDrawPaintsTheBar(t *testing.T) {
 func TestDrawShowsHoverCloseAndDropMarker(t *testing.T) {
 	b := newBar(t, 600, "one.pdf", "two.pdf", "three.pdf")
 	b.Active = 2
-	// Hovering a close button washes it.
+	// A hovered close button is washed with the hover colour.
 	cr := closeRect(b.tabs[0])
 	b.HandleEvent(ptr(platform.Move, platform.None, cr.Min.X+2, cr.Min.Y+2))
 	c := paint.New(600, 40)
@@ -266,7 +267,7 @@ func TestDrawShowsHoverCloseAndDropMarker(t *testing.T) {
 	if got := pixel(c, other.Min.X+1, other.Min.Y+1); got != nrgba(palette.Chrome) {
 		t.Errorf("a close button shows on an unhovered tab: %v", got)
 	}
-	// Hovering +, and dragging with its drop marker in the accent colour.
+	// Hovering + and dragging a tab shows the drop marker in the accent colour.
 	b.HandleEvent(ptr(platform.Move, platform.None, b.newTab.Min.X+3, 10))
 	x, y := center(b, 0)
 	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
@@ -283,7 +284,7 @@ func TestDrawShowsHoverCloseAndDropMarker(t *testing.T) {
 	if got := pixel(c, b.newTab.Min.X, 12); got != nrgba(palette.Accent) {
 		t.Errorf("end drop marker = %v, want accent", got)
 	}
-	// The dragged tab is washed.
+	// The dragged tab is washed with the hover colour.
 	if got := pixel(c, b.tabs[0].Min.X+2, 4); got == nrgba(palette.Chrome) {
 		t.Errorf("dragged tab is not washed: %v", got)
 	}
@@ -294,7 +295,7 @@ func TestDrawLaysOutOnDemand(t *testing.T) {
 	b := NewTabBar(palette, face)
 	b.Titles = []string{"a"}
 	c := paint.New(200, 40)
-	b.Draw(c, image.Point{}) // never laid out: Draw does it
+	b.Draw(c, image.Point{}) // Draw lays out an unlaid bar before painting it
 	if pixel(c, 3, 3).A == 0 {
 		t.Error("an unlaid bar painted nothing")
 	}
