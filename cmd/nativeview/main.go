@@ -34,5 +34,5 @@ func run(paths []string) error {
 	if err != nil {
 		return err
 	}
-	return app.Run(win, paths, app.Options{})
+	return app.Run(win, paths, app.Options{PickFiles: pickFiles})
 }
