@@ -847,3 +847,75 @@ func TestRunReportsFailuresToCreateTheApp(t *testing.T) {
 		t.Error("the window was left open")
 	}
 }
+
+// content returns the content area, the page view's place in the window.
+func (f *fixture) content() image.Rectangle {
+	_, _, content, _ := f.a.layout()
+	return content
+}
+
+func TestDraggingThePageScrollsIt(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("a.pdf", 6))
+	c := f.content()
+	view := f.a.current().view
+	x, y := c.Min.X+c.Dx()/2, c.Min.Y+c.Dy()/2
+	f.pointer(platform.Move, platform.None, x, y)
+	f.pointer(platform.Press, platform.Left, x, y)
+	f.pointer(platform.Move, platform.None, x, y-60)
+	if got := view.Layout().Scroll().Y; got != 60 {
+		t.Fatalf("dragging up by 60 scrolled to %d", got)
+	}
+	// The drag goes on beyond the content area, into the toolbar.
+	f.pointer(platform.Move, platform.None, x, 2)
+	if got := view.Layout().Scroll().Y; got <= 60 {
+		t.Errorf("dragging out of the content area stopped the drag: scroll %d", got)
+	}
+	f.pointer(platform.Release, platform.Left, x, 2)
+	at := view.Layout().Scroll()
+	f.pointer(platform.Move, platform.None, x, y+100)
+	if view.Layout().Scroll() != at {
+		t.Error("the page followed the pointer after the button was released")
+	}
+}
+
+func TestPointerOverContentWithNoDocumentIsIgnored(t *testing.T) {
+	f := newFixture(t)
+	f.start()
+	c := f.content()
+	f.pointer(platform.Press, platform.Left, c.Min.X+10, c.Min.Y+10)
+	f.pointer(platform.Release, platform.Left, c.Min.X+10, c.Min.Y+10)
+}
+
+func TestScrollbarThumbDragsInTheWindow(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("a.pdf", 12))
+	c := f.content()
+	view := f.a.current().view
+	x := c.Max.X - 3 // over the vertical scrollbar
+	f.pointer(platform.Move, platform.None, x, c.Min.Y+4)
+	f.pointer(platform.Press, platform.Left, x, c.Min.Y+4)
+	f.pointer(platform.Move, platform.None, x, c.Max.Y)
+	if got, max := view.Layout().Scroll().Y, view.Layout().DocumentSize().Y-view.Layout().Viewport().Y; got != max {
+		t.Errorf("dragging the thumb to the bottom scrolled to %d of %d", got, max)
+	}
+	f.pointer(platform.Release, platform.Left, x, c.Max.Y)
+}
+
+func TestWheelZoomUsesPointerPositionRelativeToTheContent(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("a.pdf", 6))
+	c := f.content()
+	view := f.a.current().view
+	view.Layout().ScrollTo(image.Pt(0, 500))
+	at := image.Pt(c.Dx()/2, c.Dy()/3) // in content coordinates
+	page, pt, ok := view.Layout().HitPage(at)
+	if !ok {
+		t.Fatal("no page under the pointer")
+	}
+	f.a.Handle(platform.ScrollEvent{DY: -10, X: float64(c.Min.X + at.X), Y: float64(c.Min.Y + at.Y), Mods: platform.Ctrl})
+	got, gpt, ok := view.Layout().HitPage(at)
+	if !ok || got != page || gpt.H-pt.H > 1 || pt.H-gpt.H > 1 {
+		t.Errorf("under the pointer: page %d at %.1f, was page %d at %.1f", got, gpt.H, page, pt.H)
+	}
+}

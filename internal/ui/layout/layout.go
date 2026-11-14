@@ -91,6 +91,28 @@ func (l *Layout) SetZoom(scale float64) {
 	l.restore(anchor)
 }
 
+// ZoomAt sets a fixed scale, clamped to the limits, keeping the part of the
+// document under the viewport point at where it is, as far as scrolling allows.
+func (l *Layout) ZoomAt(scale float64, at image.Point) {
+	if len(l.pages) == 0 {
+		l.SetZoom(scale)
+		return
+	}
+	// Remember where the point lies on the page it is at or below, as fractions
+	// of that page's size, which survive a change of scale.
+	d := l.scroll.Add(at)
+	i := max(sort.Search(len(l.pages), func(i int) bool { return l.tops[i] > d.Y })-1, 0)
+	size, rect := l.pixelSize(i), l.PageRect(i)
+	fx := float64(d.X-rect.Min.X) / float64(size.X)
+	fy := float64(d.Y-l.tops[i]) / float64(size.Y)
+	l.mode = ZoomFixed
+	l.scale = clamp(scale, MinScale, MaxScale)
+	l.relayout()
+	size, rect = l.pixelSize(i), l.PageRect(i)
+	to := image.Pt(rect.Min.X+int(math.Round(fx*float64(size.X))), l.tops[i]+int(math.Round(fy*float64(size.Y))))
+	l.ScrollTo(to.Sub(at))
+}
+
 // SetMode selects fit-width or fit-page zoom (or keeps the scale for
 // ZoomFixed), anchored at the view's top.
 func (l *Layout) SetMode(mode ZoomMode) {

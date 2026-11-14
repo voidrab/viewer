@@ -69,15 +69,19 @@ func (a *App) pointer(ev platform.PointerEvent) {
 	a.win.Invalidate()
 }
 
-// deliver passes ev, in section coordinates, to the toolbar or the tab bar
-// and carries out the action it returns. The content and status sections take
-// no pointer events.
+// deliver passes ev, in section coordinates, to the toolbar, the tab bar or
+// the page view and carries out what it asks for. The status section takes no
+// pointer events.
 func (a *App) deliver(s section, ev platform.PointerEvent) {
 	switch s {
 	case sectionToolbar:
 		a.toolbarAction(a.toolbar.HandleEvent(ev))
 	case sectionTabs:
 		a.tabAction(a.tabs.HandleEvent(ev))
+	case sectionContent:
+		if d := a.current(); d != nil {
+			d.view.HandlePointer(ev)
+		}
 	}
 }
 

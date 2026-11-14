@@ -159,3 +159,48 @@ func TestSinglePageGap(t *testing.T) {
 		t.Errorf("DocumentSize = %v", got)
 	}
 }
+
+func TestZoomAtKeepsThePointUnderTheCursor(t *testing.T) {
+	// Zooming in always leaves room to scroll, so the point can stay put.
+	for _, at := range []image.Point{{110, 150}, {70, 20}, {100, 290}, {150, 10}} {
+		for _, scale := range []float64{1.5, 2, 3.5} {
+			l := sample()
+			l.SetZoom(1)
+			l.ScrollTo(image.Pt(0, 150))
+			page, pt, ok := l.HitPage(at)
+			if !ok {
+				t.Fatalf("no page at %v (scroll %v)", at, l.Scroll())
+			}
+			l.ZoomAt(scale, at)
+			if l.Mode() != ZoomFixed || l.Scale() != scale {
+				t.Fatalf("mode %v scale %v after ZoomAt(%v)", l.Mode(), l.Scale(), scale)
+			}
+			got, gpt, ok := l.HitPage(at)
+			if !ok || got != page || math.Abs(gpt.W-pt.W) > 1/scale+0.01 || math.Abs(gpt.H-pt.H) > 1/scale+0.01 {
+				t.Errorf("at %v, scale %v: the point under the cursor is page %d (%.1f, %.1f), was page %d (%.1f, %.1f)",
+					at, scale, got, gpt.W, gpt.H, page, pt.W, pt.H)
+			}
+		}
+	}
+}
+
+func TestZoomAtIsClampedAndHandlesAnEmptyDocument(t *testing.T) {
+	l := sample()
+	l.ZoomAt(1e9, image.Pt(10, 10))
+	if l.Scale() != MaxScale {
+		t.Errorf("scale %v, want the maximum %v", l.Scale(), MaxScale)
+	}
+	l.ZoomAt(0, image.Pt(10, 10))
+	if l.Scale() != MinScale {
+		t.Errorf("scale %v, want the minimum %v", l.Scale(), MinScale)
+	}
+	empty := New(nil, image.Pt(100, 100), 10, 10)
+	empty.ZoomAt(2, image.Pt(5, 5))
+	if empty.Scale() != 2 || empty.Mode() != ZoomFixed {
+		t.Errorf("empty document: scale %v mode %v", empty.Scale(), empty.Mode())
+	}
+	// A point below the last page, or right of it, stays on the last page.
+	l = sample()
+	l.ScrollTo(image.Pt(0, math.MaxInt32))
+	l.ZoomAt(1.5, image.Pt(219, 299))
+}

@@ -198,6 +198,8 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 	case platform.PointerEvent:
 		a.pointer(ev)
 	case platform.ScrollEvent:
+		o := a.origin(sectionContent)
+		ev.X, ev.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
 		if d := a.current(); d != nil && d.view.HandleEvent(ev) {
 			a.win.Invalidate()
 		}

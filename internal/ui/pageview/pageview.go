@@ -34,6 +34,9 @@ type Options struct {
 	CacheBytes, Workers int
 	// ScrollSpeed multiplies wheel scroll distances; zero means 5.
 	ScrollSpeed float64
+	// Scrollbar is the colour of the scrollbars drawn over the pages, whose
+	// opacity the view sets; zero means a mid gray.
+	Scrollbar color.NRGBA
 }
 
 func (o *Options) fill() {
@@ -48,6 +51,9 @@ func (o *Options) fill() {
 	}
 	if o.ScrollSpeed == 0 {
 		o.ScrollSpeed = 5
+	}
+	if o.Scrollbar == (color.NRGBA{}) {
+		o.Scrollbar = color.NRGBA{0x9a, 0x9a, 0xa0, 0xff}
 	}
 }
 
@@ -83,6 +89,7 @@ type View struct {
 	opts       Options
 	invalidate func()
 	lay        *layout.Layout
+	ptr        pointerState
 
 	// Rapid zooming is not rendered until it pauses; see deferring.
 	now       func() time.Time
@@ -217,6 +224,7 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	defer c.PopClip()
 	c.Fill(rect, v.opts.Background)
 	v.want(c, rect)
+	v.drawBars(c, rect.Min)
 }
 
 // pixelSize returns the size of page i rendered at dpi, which is what the
@@ -455,7 +463,7 @@ func (v *View) HandleEvent(ev platform.Event) bool {
 		return true
 	case platform.ScrollEvent:
 		if ev.Mods&platform.Ctrl != 0 {
-			v.zoomBy(math.Pow(zoomStep, -ev.DY/10))
+			v.zoomAt(math.Pow(zoomStep, -ev.DY/10), image.Pt(int(ev.X), int(ev.Y)))
 			return true
 		}
 		v.lay.ScrollBy(image.Pt(int(ev.DX*v.opts.ScrollSpeed), int(ev.DY*v.opts.ScrollSpeed)))
@@ -513,4 +521,11 @@ func (v *View) viewport() (w, h int) {
 	return vp.X, vp.Y
 }
 
-func (v *View) zoomBy(f float64) { v.lay.SetZoom(v.lay.Scale() * f) }
+// zoomBy zooms by the factor f around the middle of the view.
+func (v *View) zoomBy(f float64) {
+	w, h := v.viewport()
+	v.zoomAt(f, image.Pt(w/2, h/2))
+}
+
+// zoomAt zooms by the factor f, keeping what is under the viewport point at.
+func (v *View) zoomAt(f float64, at image.Point) { v.lay.ZoomAt(v.lay.Scale()*f, at) }
