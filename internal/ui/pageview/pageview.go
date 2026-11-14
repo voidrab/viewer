@@ -24,9 +24,9 @@ type Options struct {
 	Gap, Margin int
 	// Background is painted behind the pages.
 	Background color.NRGBA
-	// Pool renders the view's pages and caches their bitmaps; views of
-	// several documents should share one. When nil the view makes a pool of its
-	// own from CacheBytes and Workers, and closes it with itself.
+	// Pool renders the view's pages and caches their bitmaps. Views of
+	// several documents should share one. If Pool is nil, the view creates
+	// its own pool from CacheBytes and Workers and closes it with itself.
 	Pool *Pool
 	// CacheBytes bounds the bitmap memory, and Workers the renders in flight,
 	// of a pool the view makes for itself.
@@ -153,9 +153,10 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 }
 
 // want asks the pool for the visible pages at the current zoom, dropping
-// requests for pages scrolled away and for zoom levels left behind. With a
-// canvas it also draws what it has of each page: its bitmap, or a stretched
-// earlier one while the right one renders, or blank paper.
+// requests for pages scrolled away and for zoom levels other than the current
+// one. With a canvas it also draws what it has of each page: its bitmap, or a
+// stretched earlier bitmap while the one at the current zoom renders, or blank
+// paper.
 func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 	first, last := v.lay.Visible()
 	dpi := dpiFor(v.lay.Scale())

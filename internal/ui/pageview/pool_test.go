@@ -84,7 +84,8 @@ func waitIdle(t *testing.T, pool *Pool) {
 		defer pool.mu.Unlock()
 		return len(pool.jobs) == 0
 	})
-	// A render may still be running when nothing waits; let it land.
+	// A render may still be running after the queue empties; the sleep lets it
+	// finish.
 	time.Sleep(30 * time.Millisecond)
 }
 

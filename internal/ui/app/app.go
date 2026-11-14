@@ -283,7 +283,8 @@ func (a *App) load(path string) (*document, error) {
 	if info, err := a.opts.Inspect(path); err == nil {
 		d.claimed = info.Claimed
 	}
-	// Start on the first pages now, so that the tab is ready when it is shown.
+	// The first pages are rendered in the background, so that the tab is ready
+	// when it is shown.
 	view.Prefetch()
 	return d, nil
 }

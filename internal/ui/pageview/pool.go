@@ -212,8 +212,8 @@ func (p *Pool) cancelWhere(v *View, keep func(key) bool) {
 	}
 }
 
-// setActive says whether v is the view being looked at. The jobs of a view
-// that is not wait behind those of the one that is.
+// setActive says whether v is the view being looked at. Jobs of a view that is
+// not active wait behind those of the active view.
 func (p *Pool) setActive(v *View, active bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -274,7 +274,7 @@ func (p *Pool) work() {
 		p.mu.Lock()
 		j.v.running = false
 		// Only a render that is still wanted may keep its result: a job that
-		// was cancelled has been taken out of inflight.
+		// was cancelled has been removed from the view's inflight map.
 		wanted := j.v.inflight[j.k] == j && err == nil && !p.closed
 		if j.v.inflight[j.k] == j {
 			delete(j.v.inflight, j.k)
