@@ -171,26 +171,37 @@ type piece struct {
 	img *image.RGBA
 }
 
-// standIns returns the bitmaps of page at the newest resolution other than dpi,
-// to show in place of parts at dpi that are not rendered yet. It marks them
-// recently used, so they are not evicted while they stand in.
+// standIns returns the bitmaps of page to show in place of parts at dpi that
+// are not rendered yet, in the order to draw them: the preview, which covers
+// the whole page, then the newest other resolution, which covers what has been
+// looked at. It marks them recently used, so they are not evicted while they
+// stand in.
 func (p *Pool) standIns(v *View, page, dpi int) []piece {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	newest := (*entry)(nil)
-	for _, e := range p.byPage[viewPage{v.id, page}] {
-		if e.key.k.dpi != dpi && (newest == nil || e.seq > newest.seq) {
+	list := p.byPage[viewPage{v.id, page}]
+	var newest *entry
+	for _, e := range list {
+		if d := e.key.k.dpi; d != dpi && d != previewDPI && (newest == nil || e.seq > newest.seq) {
 			newest = e
 		}
 	}
-	if newest == nil {
-		return nil
-	}
 	var out []piece
-	for _, e := range p.byPage[viewPage{v.id, page}] {
-		if e.key.k.dpi == newest.key.k.dpi {
-			p.lru.MoveToFront(e.elem)
-			out = append(out, piece{e.key.k, e.img})
+	for _, level := range []int{previewDPI, -1} {
+		if level == -1 {
+			if newest == nil {
+				break
+			}
+			level = newest.key.k.dpi
+		}
+		if level == dpi {
+			continue
+		}
+		for _, e := range list {
+			if e.key.k.dpi == level {
+				p.lru.MoveToFront(e.elem)
+				out = append(out, piece{e.key.k, e.img})
+			}
 		}
 	}
 	return out

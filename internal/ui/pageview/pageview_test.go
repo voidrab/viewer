@@ -46,8 +46,18 @@ func newView(t *testing.T, doc Document, vp image.Point, opts Options) (*View, c
 	if err != nil {
 		t.Fatal(err)
 	}
+	v.now = (&autoClock{}).now
 	t.Cleanup(v.Close)
 	return v, inv
+}
+
+// autoClock is a clock that moves a second on at every reading, so that
+// changes of zoom made by a test are never rapid.
+type autoClock struct{ t time.Time }
+
+func (c *autoClock) now() time.Time {
+	c.t = c.t.Add(time.Second)
+	return c.t
 }
 
 // inflightCount returns how many renders v has asked for and not received.

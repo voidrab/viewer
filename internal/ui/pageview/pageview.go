@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"time"
 
 	"github.com/voidrab/gopdfrab"
 
@@ -83,6 +84,14 @@ type View struct {
 	invalidate func()
 	lay        *layout.Layout
 
+	// Rapid zooming is not rendered until it pauses; see deferring.
+	now       func() time.Time
+	after     func(d time.Duration, f func()) stopper
+	dpi       int       // the dpi last drawn at
+	changedAt time.Time // when it last changed
+	quietAt   time.Time // the time before which renders at a new dpi wait
+	timer     stopper
+
 	pool     *Pool
 	ownsPool bool
 	// The rest is the pool's: it is guarded by the pool's lock.
@@ -100,7 +109,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	if err != nil {
 		return nil, err
 	}
-	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool}
+	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool, now: time.Now, after: afterFunc}
 	sizes := make([]layout.Size, n)
 	for i := range n {
 		p, err := doc.Page(i)
@@ -126,6 +135,9 @@ func (v *View) Layout() *layout.Layout { return v.lay }
 // Close drops the view's pending renders and cached bitmaps, and returns once
 // none of its renders is running. The document stays open.
 func (v *View) Close() {
+	if v.timer != nil {
+		v.timer.Stop()
+	}
 	v.pool.detach(v)
 	if v.ownsPool {
 		v.pool.Close()
@@ -144,6 +156,43 @@ func (v *View) Prefetch() { v.want(nil, image.Rectangle{}) }
 // dpiFor returns the whole dpi, at least 1, that a page is rendered at for
 // scale. Cached bitmaps are keyed by this value.
 func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
+
+// Rapid zooming, as the mouse wheel makes it, goes through many resolutions,
+// each of which would be rendered and thrown away by the next step. A change of
+// zoom less than rapidWithin after the one before it is therefore not rendered
+// until the zoom has been still for settleDelay; the stretched bitmaps already
+// there are shown meanwhile. A single step renders at once.
+const (
+	rapidWithin = 250 * time.Millisecond
+	settleDelay = 80 * time.Millisecond
+)
+
+// stopper is what View needs of a timer.
+type stopper interface{ Stop() bool }
+
+func afterFunc(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) }
+
+// deferring reports whether renders at dpi should wait for the zoom to settle,
+// and if so arranges for the view to be invalidated when they may start.
+func (v *View) deferring(dpi int) bool {
+	now := v.now()
+	if dpi != v.dpi {
+		rapid := v.dpi != 0 && now.Sub(v.changedAt) < rapidWithin
+		v.dpi, v.changedAt = dpi, now
+		v.quietAt = time.Time{}
+		if rapid {
+			v.quietAt = now.Add(settleDelay)
+		}
+	}
+	if !now.Before(v.quietAt) {
+		return false
+	}
+	if v.timer != nil {
+		v.timer.Stop()
+	}
+	v.timer = v.after(v.quietAt.Sub(now), v.invalidate)
+	return true
+}
 
 // wholePage, tileSize and previewDPI set how pages are split into parts. A
 // page of up to wholePage pixels is rendered as one part; a larger one is split
@@ -214,6 +263,9 @@ func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 		// Rendering ahead would push the parts in view out of the cache, and
 		// they would be rendered over and over.
 		plan = v.plan(dpi, view, false)
+	}
+	if v.deferring(dpi) {
+		plan.wanted = nil
 	}
 	keep := make(map[key]bool, len(plan.wanted)+len(plan.pages))
 	for _, w := range plan.wanted {

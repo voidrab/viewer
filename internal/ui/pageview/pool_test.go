@@ -95,6 +95,7 @@ func sharedView(t *testing.T, pool *Pool, pages int, tr *tracker) (*View, chan s
 		t.Fatal(err)
 	}
 	v.render = tr.render(v)
+	v.now = (&autoClock{}).now
 	t.Cleanup(v.Close)
 	return v, inv
 }
@@ -113,6 +114,7 @@ func bigView(t *testing.T, pool *Pool, vp image.Point, tr *tracker) *View {
 		t.Fatal(err)
 	}
 	v.render = tr.render(v)
+	v.now = (&autoClock{}).now
 	v.lay.SetZoom(2) // 2000x2000 pixels: more than wholePage
 	t.Cleanup(v.Close)
 	return v
@@ -699,5 +701,139 @@ func TestPruneKeepsWhatStillStandsIn(t *testing.T) {
 	// Other pages are not touched.
 	if !pool.hasPage(v, 1) {
 		t.Error("pruning one page dropped another")
+	}
+}
+
+// manualClock is a clock the test moves, with timers that fire when it says.
+type manualClock struct {
+	t      time.Time
+	timers []*fakeTimer
+}
+
+type fakeTimer struct {
+	d       time.Duration
+	f       func()
+	stopped bool
+}
+
+func (t *fakeTimer) Stop() bool { t.stopped = true; return true }
+
+func (c *manualClock) now() time.Time { return c.t }
+
+func (c *manualClock) after(d time.Duration, f func()) stopper {
+	t := &fakeTimer{d: d, f: f}
+	c.timers = append(c.timers, t)
+	return t
+}
+
+func (c *manualClock) last() *fakeTimer { return c.timers[len(c.timers)-1] }
+
+func TestRapidZoomWaitsUntilItSettles(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	tr := newTracker(nil)
+	v, inv := sharedView(t, pool, 1, tr)
+	clk := &manualClock{t: time.Unix(1000, 0)}
+	v.now, v.after = clk.now, clk.after
+	c := paint.New(124, 400)
+	dpis := func() map[int]bool {
+		out := map[int]bool{}
+		for _, k := range tr.startedParts() {
+			out[k.dpi] = true
+		}
+		return out
+	}
+
+	v.Draw(c)
+	waitIdle(t, pool)
+	first := dpiFor(v.lay.Scale())
+
+	// A single step, long after the last, renders at once.
+	clk.t = clk.t.Add(time.Second)
+	v.ZoomIn()
+	v.Draw(c)
+	waitIdle(t, pool)
+	second := dpiFor(v.lay.Scale())
+	if !dpis()[second] || len(clk.timers) != 0 {
+		t.Fatalf("a single zoom step was not rendered at once: %v, %d timers", dpis(), len(clk.timers))
+	}
+
+	// Steps in quick succession wait, showing what there is, until quiet.
+	clk.t = clk.t.Add(50 * time.Millisecond)
+	v.ZoomIn()
+	v.Draw(c)
+	third := dpiFor(v.lay.Scale())
+	if len(clk.timers) != 1 || clk.last().d != settleDelay {
+		t.Fatalf("timers after a rapid step: %d, wait %v", len(clk.timers), clk.last().d)
+	}
+	clk.t = clk.t.Add(30 * time.Millisecond)
+	v.ZoomIn()
+	v.Draw(c)
+	fourth := dpiFor(v.lay.Scale())
+	clk.t = clk.t.Add(10 * time.Millisecond)
+	v.Draw(c) // still waiting, with the remaining time
+	if !clk.timers[0].stopped || !clk.timers[1].stopped || clk.last().d != settleDelay-10*time.Millisecond {
+		t.Errorf("timers not replaced as the wait went on: %+v", clk.timers)
+	}
+	waitIdle(t, pool)
+	if dpis()[third] || dpis()[fourth] || inflightCount(v) != 0 {
+		t.Fatalf("renders were started while zooming: %v", dpis())
+	}
+
+	// The timer invalidates the view; once the wait is over the next draw
+	// renders the zoom the user stopped at, and only that.
+	clk.last().f()
+	waitInv(t, inv)
+	clk.t = clk.t.Add(settleDelay)
+	v.Draw(c)
+	waitIdle(t, pool)
+	if !dpis()[fourth] || dpis()[third] {
+		t.Errorf("after the wait: rendered %v, want %d and not %d", dpis(), fourth, third)
+	}
+	_ = first
+	// Closing the view cancels a pending timer.
+	clk.t = clk.t.Add(time.Second)
+	v.ZoomIn()
+	clk.t = clk.t.Add(time.Millisecond)
+	v.ZoomIn()
+	v.Draw(c)
+	pending := clk.last()
+	v.Close()
+	if !pending.stopped {
+		t.Error("Close left the settle timer running")
+	}
+}
+
+func TestStandInsDrawThePreviewUnderTheNewestResolution(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	v, _ := sharedView(t, pool, 1, newTracker(nil))
+	img := func(n int) *image.RGBA { return image.NewRGBA(image.Rect(0, 0, n, n)) }
+	preview, old, newer := img(1), img(2), img(3)
+	pool.mu.Lock()
+	pool.store(v, testKey(0, 72), old)
+	pool.store(v, testKey(0, 144), newer)
+	pool.store(v, testKey(0, previewDPI), preview)
+	pool.mu.Unlock()
+	got := pool.standIns(v, 0, 288)
+	if len(got) != 2 || got[0].img != preview || got[1].img != newer {
+		t.Errorf("stand-ins at 288 dpi = %v, want the preview then the 144 dpi bitmap", got)
+	}
+	// At the preview's own resolution it does not stand in for itself.
+	if got := pool.standIns(v, 0, previewDPI); len(got) != 1 || got[0].img != newer {
+		t.Errorf("stand-ins at the preview's dpi = %v, want only the newest other", got)
+	}
+}
+
+func TestDefaultTimerFiresAndStops(t *testing.T) {
+	fired := make(chan struct{}, 1)
+	afterFunc(time.Millisecond, func() { fired <- struct{}{} })
+	select {
+	case <-fired:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the timer did not fire")
+	}
+	if tm := afterFunc(time.Hour, func() {}); !tm.Stop() {
+		t.Error("a pending timer could not be stopped")
 	}
 }
