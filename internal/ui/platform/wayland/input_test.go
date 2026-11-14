@@ -9,8 +9,9 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// seatSetup opens a configured 100x100 window on a compositor with a
-// wl_seat offering both a pointer and a keyboard.
+// seatSetup holds a configured 100x100 window and the seat objects of a
+// compositor whose wl_seat advertises the capabilities passed to
+// newSeatSetup.
 type seatSetup struct {
 	f        *fakeWM
 	srv      *server
@@ -130,7 +131,8 @@ func TestPointerEvents(t *testing.T) {
 	s.send(p, 9, nil) // an event this client does not use
 	s.send(p, pointerEnter, func(e *Encoder) { e.Uint(1).Uint(9999).Fixed(0).Fixed(0) })
 	s.send(p, pointerMotion, func(e *Encoder) { e.Uint(0).Fixed(2).Fixed(2) })
-	// A real enter after the junk must be the next event: nothing leaked.
+	// The enter below must be the next event, which shows that the junk
+	// events above produced none.
 	s.send(p, pointerEnter, func(e *Encoder) { e.Uint(1).Uint(ss.surface).Fixed(7).Fixed(8) })
 	if ev := next(t, win); ev != (platform.PointerEvent{Kind: platform.Enter, X: 7, Y: 8}) {
 		t.Errorf("event after junk = %#v", ev)
@@ -172,7 +174,7 @@ func TestKeyboardEvents(t *testing.T) {
 	if ev := next(t, win); ev != (platform.FocusEvent{}) {
 		t.Errorf("leave = %#v", ev)
 	}
-	// Enter for an unknown surface, then leave: no window, no events.
+	// An enter for an unknown surface, followed by a leave, produces no events.
 	s.send(k, keyboardEnter, func(e *Encoder) { e.Uint(1).Uint(9999).Array(nil) })
 	s.send(k, keyboardLeave, func(e *Encoder) { e.Uint(1).Uint(9999) })
 	s.send(k, keyboardEnter, func(e *Encoder) { e.Uint(1).Uint(ss.surface).Array(nil) })

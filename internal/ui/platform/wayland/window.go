@@ -81,7 +81,7 @@ func Open(conn *Conn) (*Backend, error) {
 	if b.wmBase, _, err = b.c.Bind("xdg_wm_base", 1, b.onWmBase); err != nil {
 		return nil, errors.Join(ErrNoGlobal, err)
 	}
-	// Input is optional: without a seat the windows just show pictures.
+	// The seat is optional: without one, windows receive no input events.
 	if b.seat, _, err = b.c.Bind("wl_seat", 5, b.onSeat); err == nil {
 		if err := b.c.Roundtrip(); err != nil {
 			return nil, err

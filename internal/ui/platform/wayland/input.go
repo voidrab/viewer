@@ -171,7 +171,7 @@ func readKeymap(fd, size int) *Keymap {
 	}
 	f := os.NewFile(uintptr(fd), "keymap")
 	defer f.Close()
-	// The descriptor's offset is the compositor's business: read from zero.
+	// Read from offset zero, ignoring the descriptor's file offset.
 	text, err := io.ReadAll(io.NewSectionReader(f, 0, int64(size)))
 	if err != nil {
 		return nil
