@@ -1,9 +1,6 @@
 # build output
 /bin/
-/frontend/dist/*
-!/frontend/dist/.gitkeep
-
-# dependencies and test artefacts
-/frontend/node_modules/
-/frontend/coverage/
 /coverage.out
+
+# leftovers of the removed webview frontend
+/frontend/
