@@ -223,6 +223,13 @@ describe('opening documents', () => {
     expect(app.active.doc.name).toBe('a.pdf');
   });
 
+  it('shows the tab bar for a single open document', async () => {
+    await startWith('/docs/a.pdf');
+    expect($('tabs').hidden).toBe(false);
+    expect(tabTitles()).toEqual(['a.pdf']);
+    expect($('tab-new').hidden).toBe(false);
+  });
+
   it('opens several files as tabs, showing the first', async () => {
     await startWith('/docs/a.pdf', '/docs/b.pdf', '/docs/c.pdf');
     expect(tabTitles()).toEqual(['a.pdf', 'b.pdf', 'c.pdf']);
@@ -326,7 +333,8 @@ describe('tabs', () => {
     expect(view.close).toHaveBeenCalledWith(b.handle);
     expect(app.active).toBe(a);
     expect(view.show).toHaveBeenLastCalledWith(a.handle, expect.anything());
-    expect($('tabs').hidden).toBe(true);
+    expect($('tabs').hidden).toBe(false); // a single open document keeps its tab
+    expect(tabTitles()).toEqual(['a.pdf']);
   });
 
   it('closes the window with its last tab', async () => {

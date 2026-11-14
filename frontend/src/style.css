@@ -8,9 +8,9 @@
   --canvas: #e2e2e5;
   --raised: #ffffff;
   --border: #dadadf;
-  --text: #2a2b2f;
-  --muted: #7b7d86;
-  --faint: #a8aab2;
+  --text: #1f2024;
+  --muted: #55575f;
+  --faint: #85878f;
   --hover: rgb(0 0 0 / 0.06);
   --active: rgb(0 0 0 / 0.1);
   --accent: #3b72d9;
@@ -29,9 +29,9 @@
     --canvas: #121315;
     --raised: #24252a;
     --border: #2c2d32;
-    --text: #cdd0d6;
-    --muted: #80838d;
-    --faint: #55585f;
+    --text: #e2e4e9;
+    --muted: #a6a9b2;
+    --faint: #767981;
     --hover: rgb(255 255 255 / 0.06);
     --active: rgb(255 255 255 / 0.1);
     --accent: #74ade8;
@@ -54,7 +54,7 @@ body {
   overflow: hidden;
   background: var(--chrome);
   color: var(--text);
-  font: 12px/1.5 var(--mono);
+  font: 13px/1.5 var(--mono);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -305,13 +305,13 @@ button.link:hover {
   display: none;
 }
 
-/* ----- tabs: shown once a window holds two or more ----- */
+/* ----- tabs: shown once a document is open or a second tab exists ----- */
 
 #tabs {
   display: flex;
   flex: none;
   align-items: stretch;
-  height: 30px;
+  height: 32px;
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
@@ -385,7 +385,7 @@ main {
   overflow: auto;
 }
 main:has(#panel:not([hidden])) #container {
-  right: 320px;
+  right: 340px;
 }
 .no-doc #container {
   display: none;
@@ -473,7 +473,7 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 3px;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .file-drop-target-active :is(.empty, #container) {
@@ -486,7 +486,7 @@ kbd {
 #panel {
   position: absolute;
   inset: 0 0 0 auto;
-  width: 320px;
+  width: 340px;
   overflow: auto;
   padding: 10px 14px 14px;
   background: var(--chrome);
@@ -502,7 +502,7 @@ kbd {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 11px;
+  font-size: 12px;
 }
 #doc-name {
   margin: 0;
@@ -602,11 +602,11 @@ kbd {
   flex: none;
   align-items: center;
   gap: 14px;
-  height: 24px;
+  height: 28px;
   padding: 0 12px;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12.5px;
   white-space: nowrap;
   overflow: hidden;
 }

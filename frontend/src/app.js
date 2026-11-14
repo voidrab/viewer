@@ -209,7 +209,8 @@ export function createApp({ document, api, loadView }) {
   }
 
   function renderTabs() {
-    ui.tabs.hidden = tabs.length < 2;
+    // A lone empty tab needs no bar; a single open document gets its tab.
+    ui.tabs.hidden = tabs.length < 2 && !tabs[0]?.doc && !tabs[0]?.loading;
     ui.tabList.replaceChildren(
       ...tabs.map((tab) =>
         el(
