@@ -72,7 +72,7 @@ func TestFilesDroppedOnTheWindowOpen(t *testing.T) {
 	if got := f.names(); !slices.Equal(got, []string{"a.pdf", "B.PDF"}) || f.a.dropTint {
 		t.Errorf("after the drop: %v, tint %v", got, f.a.dropTint)
 	}
-	// A drop of nothing a PDF says so.
+	// A drop with no PDFs among the files shows a status line warning.
 	f.dropAt(false, c.Min.X+50, c.Min.Y+50, f.dir+"/notes.txt")
 	if f.a.messageKind != widget.MessageWarn || !strings.Contains(f.a.message, "Only PDF") {
 		t.Errorf("message %q", f.a.message)
@@ -94,7 +94,8 @@ func TestATabDraggedBackOntoItsBarMoves(t *testing.T) {
 	if f.a.tabs.Lifted != 0 || f.a.capture != sectionNone {
 		t.Errorf("lifted %d, capture %d", f.a.tabs.Lifted, f.a.capture)
 	}
-	// Over its own pages it would not drop; over the bar it marks the gap.
+	// A tab dragged over its own pages is not a drop. Over the bar it marks
+	// the gap.
 	c := f.content()
 	f.dragAt(platform.DragEnter, true, c.Min.X+50, c.Min.Y+50)
 	if f.a.dropTint || f.a.tabs.DropGap != -1 {
@@ -113,7 +114,8 @@ func TestATabDraggedBackOntoItsBarMoves(t *testing.T) {
 	if f.a.drag != nil || f.a.tabs.Lifted != -1 {
 		t.Error("the drag did not end")
 	}
-	// Dropped to the left of where it was, and dropped on its own pages.
+	// A tab dropped left of where it was moves there. Dropped on its own
+	// pages, it stays.
 	f.dragOut(2)
 	x, y = f.barPoint(0)
 	f.dropAt(true, x, y)
@@ -126,8 +128,8 @@ func TestATabDraggedBackOntoItsBarMoves(t *testing.T) {
 	if got := f.names(); !slices.Equal(got, []string{"a.pdf", "b.pdf", "c.pdf"}) {
 		t.Errorf("after the drop on its pages: %v", got)
 	}
-	// A drop of the program's own once its drag is over, and the end of no
-	// drag, do nothing.
+	// Once the drag has ended, a drop of the window's own tabs does
+	// nothing, and a drag of nothing marks no gap.
 	f.dropAt(true, x, y)
 	f.dragAt(platform.DragEnter, true, x, y)
 	f.a.Handle(platform.DragEndEvent{Outside: true})
@@ -150,7 +152,8 @@ func TestDraggingEveryTab(t *testing.T) {
 	if icon := f.win.DragIcon(); icon.Rect.Dx() != f.a.face.Width("2 tabs")+2*dragPad {
 		t.Errorf("icon %v", icon.Rect)
 	}
-	// It drops nowhere in its own window, and dropped outside it stays.
+	// A window's logo drag marks no gap on its own tab bar, and a drag that
+	// ends outside every window leaves its tabs in place.
 	x, y := f.barPoint(0)
 	f.dragAt(platform.DragMove, true, x, y)
 	if f.a.tabs.DropGap != -1 {
@@ -160,8 +163,8 @@ func TestDraggingEveryTab(t *testing.T) {
 	if got := f.names(); len(got) != 2 || f.a.s.currentDrag() != nil {
 		t.Errorf("after the drag: %v", got)
 	}
-	// The empty part of the tab bar carries them too; a lone tab is counted
-	// so.
+	// The empty part of the tab bar also carries every tab. With one tab
+	// left, the icon reads "1 tab".
 	f.a.closeTab(1)
 	f.a.Handle(platform.FrameEvent{})
 	_, tabs, _, _ := f.a.layout()
@@ -208,8 +211,8 @@ func TestATabDraggedOutsideWithoutMoreWindowsStays(t *testing.T) {
 	if got := f.names(); len(got) != 2 {
 		t.Errorf("after a cancel: %v", got)
 	}
-	// Away from every window the tab would open in a new one, which this
-	// program cannot open, so it comes back.
+	// A tab dragged away from every window opens in a new window. Where no
+	// window can be opened, the tab comes back and a warning is shown.
 	f.dragOut(0)
 	f.a.Handle(platform.DragEndEvent{Outside: true})
 	if got := f.names(); !slices.Equal(got, []string{"b.pdf", "a.pdf"}) {
@@ -242,7 +245,7 @@ func TestTakingOutATabEndsWhatWorksOnIt(t *testing.T) {
 	}
 	f.a.verify()
 	ctx := <-started
-	// So does the search in it and the page number being typed.
+	// The search in it and the page number being typed end as well.
 	f.key('f', platform.Ctrl)
 	f.a.startPageEdit(image.Point{})
 	out := f.a.takeOut([]*document{text})
@@ -252,7 +255,7 @@ func TestTakingOutATabEndsWhatWorksOnIt(t *testing.T) {
 	if f.a.findBar.Open || f.a.toolbar.EditingPage || f.a.current().name != "other.pdf" {
 		t.Errorf("find open %v, editing %v", f.a.findBar.Open, f.a.toolbar.EditingPage)
 	}
-	f.drain() // the check's end
+	f.drain() // runs the check's last step, which ends the job
 	if f.a.job != nil {
 		t.Error("the check did not end")
 	}

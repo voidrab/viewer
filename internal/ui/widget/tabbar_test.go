@@ -342,13 +342,13 @@ func TestDraggingATabOffTheBarDragsItOut(t *testing.T) {
 	b := newBar(t, 600, "one.pdf", "two.pdf")
 	x, y := center(b, 1)
 	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
-	// Along the bar, and a little above or below it, the tab reorders.
+	// Within detachReach above or below the bar, the tab still reorders.
 	b.HandleEvent(ptr(platform.Move, platform.None, x-30, -detachReach))
 	b.HandleEvent(ptr(platform.Move, platform.None, x-30, theme.TabBarHeight+detachReach-1))
 	if !b.Dragging() {
 		t.Fatal("the tab is not being dragged along the bar")
 	}
-	// Further off, it leaves the bar, which ends the press.
+	// Beyond detachReach, the tab leaves the bar, which ends the press.
 	at := image.Pt(x-30, theme.TabBarHeight+detachReach)
 	if a := b.HandleEvent(ptr(platform.Move, platform.None, at.X, at.Y)); a != (Action{Kind: ActionDragOut, Index: 1, At: at}) {
 		t.Errorf("drag off the bar = %+v", a)
@@ -359,7 +359,7 @@ func TestDraggingATabOffTheBarDragsItOut(t *testing.T) {
 	if a := b.HandleEvent(ptr(platform.Release, platform.Left, at.X, at.Y)); a != (Action{}) {
 		t.Errorf("the release after = %+v", a)
 	}
-	// Upwards too.
+	// Above the bar, beyond detachReach, the tab also leaves it.
 	b.HandleEvent(ptr(platform.Press, platform.Left, x, y))
 	if a := b.HandleEvent(ptr(platform.Move, platform.None, x, -detachReach-1)); a.Kind != ActionDragOut || a.Index != 1 {
 		t.Errorf("drag above the bar = %+v", a)
@@ -438,7 +438,7 @@ func TestDraggingALongTheBarDoesNotMarkTheGapsBesideTheTab(t *testing.T) {
 	if got := pixel(c, b.tabs[1].Min.X, 12); got == nrgba(palette.Accent) {
 		t.Error("the gap after the dragged tab is marked")
 	}
-	// Dropped there, it stays.
+	// A release over that gap returns no action: the tab stays where it is.
 	if a := b.HandleEvent(ptr(platform.Release, platform.Left, b.tabs[1].Min.X+2, y)); a != (Action{}) {
 		t.Errorf("drop = %+v", a)
 	}

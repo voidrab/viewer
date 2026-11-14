@@ -146,8 +146,9 @@ func (w *FakeWindow) Minimize() { w.record("minimize") }
 func (w *FakeWindow) ShowMenu(x, y int) { w.record(fmt.Sprintf("menu %d %d", x, y)) }
 
 // StartDrag implements Window by recording the call as "drag x y", with the
-// hotspot, and keeping the icon. It begins no drag when NoDrag is set; the test
-// ends one that began by sending a DragEndEvent.
+// hotspot, and keeping icon for DragIcon. When NoDrag is set it returns false
+// without recording the call. A test ends a drag that began by sending a
+// DragEndEvent.
 func (w *FakeWindow) StartDrag(icon *image.RGBA, hotspot image.Point) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

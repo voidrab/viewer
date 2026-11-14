@@ -196,7 +196,7 @@ type App struct {
 	done    chan struct{} // closed when the event loop has ended
 
 	drag     *tabDrag // the drag of this window's tabs under way, or nil
-	dropTint bool     // a drop on the content area is wanted: tint it
+	dropTint bool     // whether a drop on the content area is wanted
 }
 
 // New returns an App for win, the only window of its own session.

@@ -92,8 +92,8 @@ type Toolbar struct {
 	hover    ButtonID // -1 when none
 	press    ButtonID // -1 when none
 	// grab is where a left button went down on the bar's empty part, or nil.
-	// Moving the pointer beyond dragSlop from it starts a window move, or,
-	// from the logo with a document open, a drag of every tab.
+	// Moving the pointer beyond dragSlop from it starts a window move or, when
+	// the press was on the logo and a document is open, a drag of every tab.
 	grab *image.Point
 }
 

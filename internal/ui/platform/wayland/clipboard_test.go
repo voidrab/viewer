@@ -31,8 +31,8 @@ type clipSetup struct {
 	destroyed []uint32 // sources and offers the client destroyed
 	received  []receiveRequest
 	log       chan string
-	// extra, if set, sees each request first, and handles it by returning
-	// true. It runs with mu held.
+	// extra, if set, is called with each event first, and reports true when it
+	// has handled the event. It is called with mu held.
 	extra func(ev Event, d *Decoder) bool
 }
 

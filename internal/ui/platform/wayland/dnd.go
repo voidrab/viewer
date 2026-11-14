@@ -43,10 +43,10 @@ const uriListMime = "text/uri-list"
 // those of another copy of the program, whose windows cannot take them.
 var ownMime = fmt.Sprintf("application/x-viewer-drag;pid=%d", os.Getpid())
 
-// leaveGrace is how soon after the drag left a window a cancel still counts
-// as ending over that window. Compositors tell the window under a cancelled
-// drag that it left, some before the cancel and some after, so a cancel that
-// follows a leave this closely ended where the leave happened.
+// leaveGrace is how soon after a drag left a window a cancel still counts as
+// ending over that window. Compositors report the leave of a cancelled drag
+// either before or after the cancel, so a cancel this soon after a leave is
+// taken to end over that window.
 const leaveGrace = 100 * time.Millisecond
 
 // now and hostname are replaced by tests.
@@ -105,8 +105,8 @@ func (b *Backend) startDrag(w *window, icon *image.RGBA, hotspot image.Point) bo
 	if surface == 0 {
 		return true
 	}
-	// The icon's top-left corner starts at the pointer; attaching it offset by
-	// the hotspot puts the hotspot there instead.
+	// Without an offset, the icon's top-left corner would sit at the pointer.
+	// Attaching the buffer at minus the hotspot puts the hotspot there instead.
 	size := platform.Size{W: icon.Rect.Dx(), H: icon.Rect.Dy()}
 	if g.iconBuf = b.newBuffer(size, func() {}); g.iconBuf != nil {
 		copyARGB(g.iconBuf.mem.data, g.iconBuf.stride, icon)
@@ -120,8 +120,8 @@ func (b *Backend) startDrag(w *window, icon *image.RGBA, hotspot image.Point) bo
 }
 
 // onDragSource handles the events of src, the source of a drag the program
-// began: its end, dropped or cancelled. Nothing takes its data, so a request
-// for it gets none.
+// began: a send request, which is answered with no data, and the end of the
+// drag, dropped or cancelled.
 func (b *Backend) onDragSource(src uint32, opcode uint16, d *Decoder) {
 	switch opcode {
 	case sourceSend:

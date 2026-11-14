@@ -162,9 +162,10 @@ func (b *TabBar) GapAt(x int) int {
 }
 
 // HandleEvent applies a pointer event, in the bar's own coordinates, and
-// returns what it asks for. A tab dragged along the bar reorders the tabs; one
-// dragged off it, above or below, and the bar's empty part dragged anywhere,
-// return ActionDragOut, which ends the press.
+// returns what it asks for. A tab dragged along the bar reorders the tabs. A
+// tab dragged more than detachReach above or below the bar, and a press on the
+// bar's empty part that moves past dragSlop, return ActionDragOut, which ends
+// the press.
 func (b *TabBar) HandleEvent(ev platform.PointerEvent) Action {
 	p := image.Pt(int(ev.X), int(ev.Y))
 	switch ev.Kind {

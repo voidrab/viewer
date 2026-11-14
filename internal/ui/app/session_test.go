@@ -84,8 +84,8 @@ func on[T any](t *testing.T, a *App, f func() T) T {
 	return <-got
 }
 
-// onPoint draws a, so that its widgets are laid out, then returns the point
-// at gives, both on a's event loop.
+// onPoint draws a so that its widgets are laid out, then returns the point
+// that at returns, both on a's event loop.
 func onPoint(t *testing.T, a *App, at func() (int, int)) (int, int) {
 	t.Helper()
 	p := on(t, a, func() [2]int {
@@ -315,7 +315,7 @@ func TestShowingAsksEveryWindow(t *testing.T) {
 	if m.s.target() != first {
 		t.Error("a closed window took the focus")
 	}
-	m.s.apps = append(m.s.apps, second) // give it back for the cleanup
+	m.s.apps = append(m.s.apps, second) // so that the cleanup closes it
 }
 
 func TestTheThemeSwitchesEveryWindow(t *testing.T) {

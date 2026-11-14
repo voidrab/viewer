@@ -72,7 +72,8 @@ func (a *App) dragIcon(i int, at image.Point) (*image.RGBA, image.Point) {
 }
 
 // dropGap returns where tabs dropped at p would go: the gap in the tab bar
-// under p, or after the last tab elsewhere, and whether the drop is wanted.
+// under p, or after the last tab elsewhere, and reports whether the drop is
+// wanted.
 // The window takes files anywhere, the tabs of another window anywhere, and
 // one of its own tabs only on its tab bar.
 func (a *App) dropGap(p image.Point, own bool) (gap int, onBar, ok bool) {
@@ -145,7 +146,8 @@ func boolInt(b bool) int {
 	return 0
 }
 
-// dropFiles opens the PDFs among paths, telling of the files that are not.
+// dropFiles opens the PDFs among paths. When there are none, the status line
+// says so.
 func (a *App) dropFiles(paths []string) {
 	var pdfs []string
 	for _, p := range paths {
@@ -160,9 +162,9 @@ func (a *App) dropFiles(paths []string) {
 	a.Open(pdfs...)
 }
 
-// dragEnded ends the drag of this window's tabs. A tab dropped away from
-// every window, rather than cancelled over one, opens in a new window; a
-// whole window dropped there stays as it is.
+// dragEnded ends the drag of this window's tabs. A drag of tabs that ends
+// outside every window without a drop opens them in a new window, unless the
+// whole window was dragged, which leaves it as it is.
 func (a *App) dragEnded(ev platform.DragEndEvent) {
 	d := a.drag
 	a.drag, a.tabs.Lifted = nil, -1

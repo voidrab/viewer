@@ -133,8 +133,8 @@ func sameLines(t *testing.T, got []string, want ...string) {
 	}
 }
 
-// override sets *v to x until the test and its cleanups end, before the
-// backend that reads it starts.
+// override sets *v to x until the test ends, restoring the old value in a
+// cleanup. Call it before the backend that reads *v starts.
 func override[T any](t *testing.T, v *T, x T) {
 	old := *v
 	*v = x
@@ -377,9 +377,9 @@ func TestACancelledDragTellsWhetherItEndedOutside(t *testing.T) {
 	wantEvent(t, ds.win, platform.DragEvent{Kind: platform.DragEnter, X: 1, Y: 1, Own: true})
 	end(platform.DragEndEvent{})
 
-	// Nor is it just after the drag left a window, as the leave that the end
-	// of a drag brings comes first on some compositors; but it is once the
-	// drag has been away a while.
+	// A cancel just after the drag left a window is not outside either, as some
+	// compositors send that leave along with the cancel. It is outside once the
+	// drag has been away for at least leaveGrace.
 	for _, wait := range []int64{0, int64(leaveGrace/time.Second) + 1} {
 		again()
 		ds.offer(offer, ownMime)
