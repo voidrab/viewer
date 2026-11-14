@@ -91,10 +91,12 @@ type PointerEvent struct {
 	Mods   Modifiers
 }
 
-// ScrollEvent reports wheel or touchpad scrolling. A positive DY moves
+// ScrollEvent reports wheel or touchpad scrolling at (X, Y), where the pointer
+// is, in device pixels from the window's top-left corner. A positive DY moves
 // content up.
 type ScrollEvent struct {
 	DX, DY float64
+	X, Y   float64
 	Mods   Modifiers
 }
 

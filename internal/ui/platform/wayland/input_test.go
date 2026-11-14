@@ -3,6 +3,7 @@ package wayland
 import (
 	"os"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -115,10 +116,10 @@ func TestPointerEvents(t *testing.T) {
 	}
 	s.send(p, pointerAxis, func(e *Encoder) { e.Uint(0).Uint(axisVertical).Fixed(10) })
 	s.send(p, pointerAxis, func(e *Encoder) { e.Uint(0).Uint(1).Fixed(-3) })
-	if ev := next(t, win); ev != (platform.ScrollEvent{DY: 10}) {
+	if ev := next(t, win); ev != (platform.ScrollEvent{DY: 10, X: 30, Y: 40.25}) {
 		t.Errorf("vertical scroll = %#v", ev)
 	}
-	if ev := next(t, win); ev != (platform.ScrollEvent{DX: -3}) {
+	if ev := next(t, win); ev != (platform.ScrollEvent{DX: -3, X: 30, Y: 40.25}) {
 		t.Errorf("horizontal scroll = %#v", ev)
 	}
 	s.send(p, pointerLeave, func(e *Encoder) { e.Uint(1).Uint(ss.surface) })
@@ -243,4 +244,125 @@ func TestOpenFailsWhenTheSeatRoundtripDies(t *testing.T) {
 	if _, err := Open(a); err == nil {
 		t.Error("Open succeeded although the compositor hung up")
 	}
+}
+
+// focusedKeyboard returns a seat whose keyboard has the sample keymap and
+// focus, announcing the key repeat settings given (milliseconds).
+func focusedKeyboard(t *testing.T, rate, delay int32) (*seatSetup, uint32) {
+	t.Helper()
+	ss := newSeatSetup(t, seatCapKeyboard)
+	k := <-ss.keyboard
+	fd := keymapFD(t, sampleKeymap)
+	ss.srv.send(k, keyboardKeymap, func(e *Encoder) { e.Uint(1).FD(fd).Uint(uint32(len(sampleKeymap))) })
+	unix.Close(fd)
+	ss.srv.send(k, keyboardRepeat, func(e *Encoder) { e.Int(rate).Int(delay) })
+	ss.srv.send(k, keyboardEnter, func(e *Encoder) { e.Uint(1).Uint(ss.surface).Array(nil) })
+	if ev := next(t, ss.win); ev != (platform.FocusEvent{Focused: true}) {
+		t.Fatalf("enter = %#v", ev)
+	}
+	return ss, k
+}
+
+// quiet reports whether win delivers no event for d.
+func quiet(win platform.Window, d time.Duration) bool {
+	select {
+	case <-win.Events():
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+// drain discards events until none arrives for a while, or the window closes.
+func drain(win platform.Window) {
+	for {
+		select {
+		case _, ok := <-win.Events():
+			if !ok {
+				return
+			}
+		case <-time.After(40 * time.Millisecond):
+			return
+		}
+	}
+}
+
+func TestHeldKeysRepeatUntilReleased(t *testing.T) {
+	ss, k := focusedKeyboard(t, 200, 20)
+	s, win := ss.srv, ss.win
+	press := func(code, state uint32) {
+		s.send(k, keyboardKey, func(e *Encoder) { e.Uint(1).Uint(0).Uint(code).Uint(state) })
+	}
+
+	press(16, 1)
+	want := platform.KeyEvent{Rune: 'q', Down: true}
+	for i := 0; i < 4; i++ { // the press and then repeats of it
+		if ev := next(t, win); ev != want {
+			t.Fatalf("event %d = %#v, want %#v", i, ev, want)
+		}
+	}
+	// Pressing another key hands the repeat to it: after any repeat of q already
+	// on its way, only Return comes.
+	press(28, 1)
+	enter := platform.KeyEvent{Key: platform.KeyEnter, Down: true}
+	for ev := next(t, win); ev != enter; ev = next(t, win) {
+		if ev != want {
+			t.Fatalf("event %#v while the repeat changed hands", ev)
+		}
+	}
+	// Releasing a key that is not repeating changes nothing; releasing the
+	// repeating one stops it.
+	press(16, 0)
+	released := platform.KeyEvent{Rune: 'q'}
+	for ev := next(t, win); ev != enter; ev = next(t, win) {
+		if ev != released {
+			t.Fatalf("after releasing q: %#v", ev)
+		}
+	}
+	if ev := next(t, win); ev != enter {
+		t.Errorf("Return stopped repeating when q was released: %#v", ev)
+	}
+	press(28, 0)
+	drain(win)
+	if !quiet(win, 80*time.Millisecond) {
+		t.Error("a released key kept repeating")
+	}
+	// A key with no symbol is not repeated.
+	press(3, 1)
+	if ev := next(t, win); ev != (platform.KeyEvent{Down: true}) {
+		t.Errorf("symbol-less key = %#v", ev)
+	}
+	if !quiet(win, 80*time.Millisecond) {
+		t.Error("a key with no symbol repeated")
+	}
+}
+
+func TestKeyRepeatStopsWhenFocusIsLost(t *testing.T) {
+	ss, k := focusedKeyboard(t, 200, 20)
+	s, win := ss.srv, ss.win
+	s.send(k, keyboardKey, func(e *Encoder) { e.Uint(1).Uint(0).Uint(16).Uint(1) })
+	next(t, win)
+	next(t, win) // repeating
+	s.send(k, keyboardLeave, func(e *Encoder) { e.Uint(1).Uint(ss.surface) })
+	drain(win)
+	if !quiet(win, 80*time.Millisecond) {
+		t.Error("a key kept repeating after the window lost focus")
+	}
+}
+
+func TestKeyRepeatCanBeSwitchedOff(t *testing.T) {
+	ss, k := focusedKeyboard(t, 0, 20)
+	ss.srv.send(k, keyboardKey, func(e *Encoder) { e.Uint(1).Uint(0).Uint(16).Uint(1) })
+	next(t, ss.win)
+	if !quiet(ss.win, 100*time.Millisecond) {
+		t.Error("a key repeated although the compositor turned repeating off")
+	}
+}
+
+func TestKeyRepeatEndsWithTheConnection(t *testing.T) {
+	ss, k := focusedKeyboard(t, 200, 20)
+	ss.srv.send(k, keyboardKey, func(e *Encoder) { e.Uint(1).Uint(0).Uint(16).Uint(1) })
+	next(t, ss.win)
+	ss.srv.conn.Close() // the compositor goes away while a key is held
+	drain(ss.win)
 }

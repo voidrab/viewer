@@ -76,6 +76,7 @@ type Backend struct {
 // xdg_wm_base, and begins dispatching events. Close ends it.
 func Open(conn *Conn) (*Backend, error) {
 	b := &Backend{c: NewClient(conn), windows: map[*window]struct{}{}, done: make(chan struct{})}
+	b.in.repeatRate, b.in.repeatDelay = defaultRepeatRate, defaultRepeatDelay
 	if err := b.c.LoadGlobals(); err != nil {
 		return nil, err
 	}
@@ -129,6 +130,7 @@ func (b *Backend) run() {
 	defer close(b.done)
 	for b.c.Dispatch() == nil {
 	}
+	b.in.stopRepeat()
 	b.mu.Lock()
 	ws := make([]*window, 0, len(b.windows))
 	for w := range b.windows {

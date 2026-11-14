@@ -3,6 +3,8 @@ package wayland
 import (
 	"io"
 	"os"
+	"sync"
+	"time"
 
 	"viewer/internal/ui/platform"
 )
@@ -27,6 +29,7 @@ const (
 	keyboardLeave     = 2
 	keyboardKey       = 3
 	keyboardModifiers = 4
+	keyboardRepeat    = 5
 
 	axisVertical = 0
 
@@ -35,6 +38,12 @@ const (
 	btnMiddle = 0x112
 
 	buttonPressed = 1
+)
+
+// Key repeat settings used until the compositor announces its own.
+const (
+	defaultRepeatRate  = 25
+	defaultRepeatDelay = 600 * time.Millisecond
 )
 
 // input is the seat state shared by all windows. It is touched only by the
@@ -46,6 +55,54 @@ type input struct {
 	px, py            float64
 	keymap            *Keymap
 	mods, group       uint32
+
+	// The compositor does not repeat keys; the client does, at the rate and
+	// after the delay it announces. Without an announcement these defaults, the
+	// ones most toolkits use, apply. A rate of zero turns repeating off.
+	repeatRate  int32
+	repeatDelay time.Duration
+	repeating   *keyRepeat // the key being repeated, if any
+}
+
+// keyRepeat is a held key being repeated until stop is closed.
+type keyRepeat struct {
+	code uint32
+	stop chan struct{}
+	once sync.Once
+}
+
+func (k *keyRepeat) end() { k.once.Do(func() { close(k.stop) }) }
+
+// startRepeat repeats the press ev of the key with the given code in w.
+func (in *input) startRepeat(w *window, code uint32, ev platform.KeyEvent) {
+	in.stopRepeat()
+	if in.repeatRate <= 0 {
+		return
+	}
+	k := &keyRepeat{code: code, stop: make(chan struct{})}
+	in.repeating = k
+	delay, interval := in.repeatDelay, time.Second/time.Duration(in.repeatRate)
+	go func() {
+		t := time.NewTimer(delay)
+		defer t.Stop()
+		for {
+			select {
+			case <-k.stop:
+				return
+			case <-t.C:
+				w.emit(ev)
+				t.Reset(interval)
+			}
+		}
+	}()
+}
+
+// stopRepeat ends the repeat in progress.
+func (in *input) stopRepeat() {
+	if in.repeating != nil {
+		in.repeating.end()
+		in.repeating = nil
+	}
 }
 
 // onSeat creates the pointer and keyboard objects the seat offers.
@@ -102,7 +159,7 @@ func (b *Backend) onPointer(opcode uint16, d *Decoder) {
 		if in.pointerWin == nil {
 			return
 		}
-		ev := platform.ScrollEvent{Mods: modMask(in.mods)}
+		ev := platform.ScrollEvent{X: in.px, Y: in.py, Mods: modMask(in.mods)}
 		if axis == axisVertical {
 			ev.DY = value
 		} else {
@@ -146,6 +203,7 @@ func (b *Backend) onKeyboard(opcode uint16, d *Decoder) {
 			in.keyboardWin.emit(platform.FocusEvent{Focused: true})
 		}
 	case keyboardLeave:
+		in.stopRepeat()
 		if in.keyboardWin != nil {
 			in.keyboardWin.emit(platform.FocusEvent{})
 		}
@@ -156,7 +214,17 @@ func (b *Backend) onKeyboard(opcode uint16, d *Decoder) {
 			return
 		}
 		key, r := in.keymap.Lookup(code, in.mods, in.group)
-		in.keyboardWin.emit(platform.KeyEvent{Key: key, Rune: r, Down: state == buttonPressed, Mods: modMask(in.mods)})
+		ev := platform.KeyEvent{Key: key, Rune: r, Down: state == buttonPressed, Mods: modMask(in.mods)}
+		in.keyboardWin.emit(ev)
+		switch {
+		case ev.Down && (key != platform.KeyNone || r != 0): // modifiers do not repeat
+			in.startRepeat(in.keyboardWin, code, ev)
+		case !ev.Down && in.repeating != nil && in.repeating.code == code:
+			in.stopRepeat()
+		}
+	case keyboardRepeat:
+		rate, delay := d.Int(), d.Int()
+		in.repeatRate, in.repeatDelay = rate, time.Duration(delay)*time.Millisecond
 	case keyboardModifiers:
 		_, depressed, latched, locked, group := d.Uint(), d.Uint(), d.Uint(), d.Uint(), d.Uint()
 		in.mods, in.group = depressed|latched|locked, group
