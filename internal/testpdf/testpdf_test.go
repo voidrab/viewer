@@ -2,6 +2,7 @@ package testpdf
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,5 +83,31 @@ func TestBuildPagesIsReadable(t *testing.T) {
 		if w, h := p.Size(); w != want[0] || h != want[1] {
 			t.Errorf("page %d is %vx%v, want %v", i, w, h, want)
 		}
+	}
+}
+
+func TestBuildTextHasTheText(t *testing.T) {
+	doc, err := gopdfrab.OpenBytes(BuildText([]string{"hello", "second page"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer doc.Close()
+	if n, _ := doc.Pages(); n != 2 {
+		t.Fatalf("%d pages, want 2", n)
+	}
+	p, _ := doc.Page(1)
+	glyphs, err := p.Glyphs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []rune
+	for _, g := range glyphs {
+		got = append(got, g.Rune)
+	}
+	if string(got) != "second page" {
+		t.Errorf("text %q, want %q", string(got), "second page")
+	}
+	if w := glyphs[1].Box.X0 - glyphs[0].Box.X0; w < 8.99 || w > 9.01 {
+		t.Errorf("a character is %v points wide, want 9", w)
 	}
 }

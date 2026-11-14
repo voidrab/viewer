@@ -64,6 +64,13 @@ func (a *App) chrome() {
 		a.status.Right = append(a.status.Right, tb.ZoomText, tb.PageText)
 		a.setTitle(d.name + " — Viewer")
 	}
+	if a.findOpen && a.findDoc != d {
+		a.closeFind() // the tab changed: the search belongs to the one it began in
+	}
+	if a.findOpen {
+		a.findBar.Current, a.findBar.Total, a.findBar.Searching = d.view.FindStatus()
+	}
+	tb.On[widget.ButtonFind] = a.findOpen
 	tb.Layout(a.size.W)
 	a.tabs.Layout(a.size.W)
 
@@ -94,6 +101,9 @@ func (a *App) draw() {
 	if d := a.current(); d != nil {
 		a.tabs.Draw(c, tabs.Min)
 		d.view.DrawIn(c, content)
+		if a.findOpen {
+			a.findBar.Draw(c, content)
+		}
 	} else {
 		a.hint(content)
 	}

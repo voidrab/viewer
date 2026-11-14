@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -370,16 +371,12 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 		t.Errorf("Open without a dialog: kind %d message %q", f.a.messageKind, f.a.message)
 	}
 	f.clickButton(widget.ButtonFind)
-	if f.a.message != "Find is not available yet" {
-		t.Errorf("Find message %q", f.a.message)
+	if !f.a.findOpen {
+		t.Error("the Find button did not open the find bar")
 	}
 	f.key('n', platform.Ctrl)
 	if f.a.message != "Several windows are not available yet" {
 		t.Errorf("Ctrl+N message %q", f.a.message)
-	}
-	f.key('f', platform.Ctrl)
-	if f.a.message != "Find is not available yet" {
-		t.Errorf("Ctrl+F message %q", f.a.message)
 	}
 }
 
@@ -952,5 +949,273 @@ func TestLaterLaunchesOpenTabsAndRaiseTheWindow(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not return after the close event")
+	}
+}
+
+// pump hands the app the window's queued events until done reports one.
+func (f *fixture) pump(done func(platform.Event) bool) {
+	f.t.Helper()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case ev := <-f.win.Events():
+			f.a.Handle(ev)
+			if done(ev) {
+				return
+			}
+		case <-timeout:
+			f.t.Fatal("the awaited window event never came")
+		}
+	}
+}
+
+// textFixture opens a document whose two pages read "alpha beta" and "beta
+// gamma", waits for the first page's text, and returns the fixture.
+func textFixture(t *testing.T) *fixture {
+	t.Helper()
+	f := newFixture(t)
+	path := testpdf.Write(t, f.dir, "text.pdf", testpdf.BuildText([]string{"alpha beta", "beta gamma"}))
+	f.open(path)
+	return f
+}
+
+// settled waits until the active view's search has finished and returns its
+// status.
+func settled(t *testing.T, f *fixture) (current, total int) {
+	t.Helper()
+	view := f.a.current().view
+	var searching bool
+	waitFor(t, "the search to finish", func() bool {
+		current, total, searching = view.FindStatus()
+		return !searching
+	})
+	return current, total
+}
+
+func TestCtrlFOpensTheFindBarAndSearches(t *testing.T) {
+	f := textFixture(t)
+	if f.a.findOpen {
+		t.Fatal("the find bar starts open")
+	}
+	f.key('f', platform.Ctrl)
+	if !f.a.findOpen || f.a.findDoc != f.a.current() {
+		t.Fatal("Ctrl+F did not open the find bar")
+	}
+	for _, r := range "beta" {
+		f.key(r, 0)
+	}
+	if string(f.a.findBar.Text) != "beta" {
+		t.Fatalf("typed %q", string(f.a.findBar.Text))
+	}
+	if cur, total := settled(t, f); cur != 1 || total != 2 {
+		t.Fatalf("match %d of %d, want 1 of 2", cur, total)
+	}
+	f.a.Handle(platform.FrameEvent{}) // the bar shows the count
+	if f.a.findBar.Current != 1 || f.a.findBar.Total != 2 {
+		t.Errorf("bar shows %d of %d", f.a.findBar.Current, f.a.findBar.Total)
+	}
+	f.special(platform.KeyEnter, 0)
+	if cur, _, _ := f.a.current().view.FindStatus(); cur != 2 {
+		t.Errorf("Enter went to match %d, want 2", cur)
+	}
+	f.special(platform.KeyEnter, platform.Shift)
+	if cur, _, _ := f.a.current().view.FindStatus(); cur != 1 {
+		t.Errorf("Shift+Enter went to match %d, want 1", cur)
+	}
+	f.special(platform.KeyBackspace, 0)
+	if cur, total := settled(t, f); total != 2 || cur < 1 { // "bet" still matches twice
+		t.Errorf("after backspace: %d of %d", cur, total)
+	}
+	// Escape closes the bar and clears the search.
+	f.special(platform.KeyEscape, 0)
+	if f.a.findOpen {
+		t.Error("Escape left the find bar open")
+	}
+	if _, total, _ := f.a.current().view.FindStatus(); total != 0 {
+		t.Errorf("%d matches remain after closing", total)
+	}
+}
+
+func TestFindButtonTogglesTheBar(t *testing.T) {
+	f := textFixture(t)
+	f.clickButton(widget.ButtonFind)
+	if !f.a.findOpen {
+		t.Fatal("the Find button did not open the bar")
+	}
+	f.a.Handle(platform.FrameEvent{})
+	if !f.a.toolbar.On[widget.ButtonFind] {
+		t.Error("the Find button does not show that the bar is open")
+	}
+	f.clickButton(widget.ButtonFind)
+	if f.a.findOpen {
+		t.Error("the Find button did not close the bar")
+	}
+	// Opening twice changes nothing, and with no document there is nothing to search.
+	f.key('f', platform.Ctrl)
+	f.a.findBar.SetText("kept")
+	f.key('f', platform.Ctrl)
+	if string(f.a.findBar.Text) != "kept" {
+		t.Errorf("opening the bar again reset its text to %q", string(f.a.findBar.Text))
+	}
+	empty := newFixture(t)
+	empty.start()
+	empty.key('f', platform.Ctrl)
+	if empty.a.findOpen {
+		t.Error("the find bar opened with no document")
+	}
+}
+
+func TestFindStartsFromTheSelectedText(t *testing.T) {
+	f := textFixture(t)
+	view := f.a.current().view
+	c := f.content()
+	waitFor(t, "the page's text", func() bool {
+		f.a.Handle(platform.FrameEvent{})
+		return view.Layout().Pages() > 0 && selectWord(f, view, c)
+	})
+	f.key('f', platform.Ctrl)
+	if got := string(f.a.findBar.Text); got != "alpha" {
+		t.Fatalf("the bar starts with %q, want the selected word", got)
+	}
+	if _, total := settled(t, f); total != 1 {
+		t.Errorf("%d matches of the selected word, want 1", total)
+	}
+}
+
+// selectWord double-clicks the first word of the first page, reporting whether
+// anything came to be selected.
+func selectWord(f *fixture, view interface{ HasSelection() bool }, c image.Rectangle) bool {
+	f.a.current().view.ClearSelection()
+	// The page is centred; "alpha" starts 20 points from its left and 100 from
+	// its bottom (82 from its top in a 200 point page), at the page's scale.
+	vr := f.a.current().view.Layout().ViewRect(0)
+	scale := float64(vr.Dx()) / 200
+	p := image.Pt(c.Min.X+vr.Min.X+int(30*scale), c.Min.Y+vr.Min.Y+int(90*scale))
+	for range 2 {
+		f.pointer(platform.Press, platform.Left, p.X, p.Y)
+		f.pointer(platform.Release, platform.Left, p.X, p.Y)
+	}
+	return view.HasSelection()
+}
+
+func TestCopyTakesTheSelectionToTheClipboard(t *testing.T) {
+	f := textFixture(t)
+	f.key('c', platform.Ctrl)
+	if f.a.message != "Nothing is selected" || f.win.Clipboard() != "" {
+		t.Errorf("copying nothing: message %q, clipboard %q", f.a.message, f.win.Clipboard())
+	}
+	view := f.a.current().view
+	waitFor(t, "a selection", func() bool {
+		f.a.Handle(platform.FrameEvent{})
+		return selectWord(f, view, f.content())
+	})
+	f.key('c', platform.Ctrl)
+	if f.win.Clipboard() != "alpha" || f.a.messageKind != widget.MessageOK {
+		t.Errorf("clipboard %q, message %q", f.win.Clipboard(), f.a.message)
+	}
+	// With no document, Ctrl+C does nothing.
+	empty := newFixture(t)
+	empty.start()
+	empty.key('c', platform.Ctrl)
+	if empty.win.Clipboard() != "" {
+		t.Error("copy with no document set the clipboard")
+	}
+}
+
+func TestPasteGoesIntoTheFindBar(t *testing.T) {
+	f := textFixture(t)
+	f.key('v', platform.Ctrl) // no bar: nothing is asked
+	f.win.SetClipboard("gamma")
+	f.key('f', platform.Ctrl)
+	f.key('v', platform.Ctrl)
+	f.pump(func(ev platform.Event) bool { _, ok := ev.(platform.PasteEvent); return ok })
+	if string(f.a.findBar.Text) != "gamma" {
+		t.Fatalf("pasted %q", string(f.a.findBar.Text))
+	}
+	if _, total := settled(t, f); total != 1 {
+		t.Errorf("%d matches of the pasted text, want 1", total)
+	}
+	// A paste with the bar closed is ignored.
+	f.special(platform.KeyEscape, 0)
+	f.a.Handle(platform.PasteEvent{Text: "ignored"})
+	if string(f.a.findBar.Text) == "gammaignored" {
+		t.Error("a paste with the bar closed changed its text")
+	}
+}
+
+func TestFindBarTakesKeysAndPointerButNotNavigation(t *testing.T) {
+	f := textFixture(t)
+	f.key('f', platform.Ctrl)
+	view := f.a.current().view
+	// Keys that move through the document still do.
+	f.special(platform.KeyPageDown, 0)
+	if view.Layout().Scroll().Y == 0 {
+		t.Error("PageDown with the bar open did not scroll")
+	}
+	// Other keys, such as the arrows that move the caret, do not reach the view.
+	before := view.Layout().Scroll()
+	f.special(platform.KeyLeft, 0)
+	f.special(platform.KeyHome, 0)
+	if view.Layout().Scroll() != before {
+		t.Error("a caret key scrolled the document")
+	}
+	// A click on the bar's close button closes it, and does not reach the page.
+	c := f.content()
+	r := f.a.findBar.Rect(image.Rect(0, 0, c.Dx(), c.Dy())).Add(c.Min)
+	x, y := r.Max.X-15, (r.Min.Y+r.Max.Y)/2
+	f.click(x, y)
+	if f.a.findOpen {
+		t.Error("clicking the close button left the bar open")
+	}
+	// A click beside the bar is for the page.
+	f.key('f', platform.Ctrl)
+	f.pointer(platform.Press, platform.Left, c.Min.X+5, c.Min.Y+c.Dy()/2)
+	f.pointer(platform.Move, platform.None, c.Min.X+5, c.Min.Y+c.Dy()/2-30)
+	f.pointer(platform.Release, platform.Left, c.Min.X+5, c.Min.Y+c.Dy()/2-30)
+	if view.Layout().Scroll().Y == before.Y {
+		t.Error("dragging beside the bar did not pan the page")
+	}
+}
+
+func TestSwitchingTabsClosesTheFindBar(t *testing.T) {
+	f := textFixture(t)
+	f.open(f.pdf("other.pdf", 1))
+	f.a.selectTab(0)
+	f.key('f', platform.Ctrl)
+	f.a.selectTab(1)
+	f.a.Handle(platform.FrameEvent{})
+	if f.a.findOpen {
+		t.Error("the find bar stayed open on another tab")
+	}
+}
+
+func TestFirstLineOfASelection(t *testing.T) {
+	long := strings.Repeat("é", 150)
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"one line", "one line"},
+		{"  padded \nsecond", "padded"},
+		{long, strings.Repeat("é", 100)},
+	} {
+		if got := firstLine(tc.in); got != tc.want {
+			t.Errorf("firstLine(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestFindActionsWithoutADocumentAreIgnored(t *testing.T) {
+	f := newFixture(t)
+	f.start()
+	f.a.findAction(widget.FindEdited)
+	f.a.findAction(widget.FindNext)
+	f.a.closeFind()
+}
+
+func TestSelectAllSeedsTheFindBarWithItsFirstLine(t *testing.T) {
+	f := textFixture(t)
+	f.key('a', platform.Ctrl)
+	f.key('f', platform.Ctrl)
+	if got := string(f.a.findBar.Text); got != "alpha beta" {
+		t.Errorf("the bar starts with %q, want the first line of the selection", got)
 	}
 }

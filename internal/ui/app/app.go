@@ -41,6 +41,9 @@ type Options struct {
 	// Now and AfterFunc default to the time package's.
 	Now       func() time.Time
 	AfterFunc func(d time.Duration, f func())
+	// OpenURI opens the address of a link the user follows; nil means links
+	// to addresses do nothing.
+	OpenURI func(uri string)
 	// Requests, if not nil, delivers requests from later launches of the
 	// program to open files here, which are opened in new tabs.
 	Requests <-chan instance.Request
@@ -106,6 +109,10 @@ type App struct {
 	messageKind  widget.MessageKind
 	messageUntil time.Time
 
+	findBar  *widget.FindBar
+	findOpen bool      // the find bar is showing
+	findDoc  *document // the document it searches
+
 	picking bool        // a file dialog is open
 	inbox   chan func() // work finished off the event loop, run on it
 }
@@ -139,6 +146,7 @@ func New(win platform.Window, opts Options) (*App, error) {
 	a.toolbar = widget.NewToolbar(opts.Palette, face)
 	a.tabs = widget.NewTabBar(opts.Palette, face)
 	a.status = widget.NewStatusBar(opts.Palette, small)
+	a.findBar = widget.NewFindBar(opts.Palette, face)
 	return a, nil
 }
 
@@ -217,6 +225,11 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		}
 	case platform.KeyEvent:
 		return a.key(ev)
+	case platform.PasteEvent:
+		if a.findOpen {
+			a.findAction(a.findBar.Paste(ev.Text))
+			a.win.Invalidate()
+		}
 	}
 	return false
 }
@@ -288,7 +301,7 @@ func (a *App) load(path string) (*document, error) {
 	// Once the document is added the tab bar is shown, so the view is sized
 	// for the layout with it.
 	_, _, content, _ := a.layoutFor(true)
-	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{Pool: a.pool}, a.win.Invalidate)
+	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{Pool: a.pool, OpenURI: a.opts.OpenURI, Selection: a.opts.Palette.Selection}, a.win.Invalidate)
 	if err != nil {
 		doc.Close()
 		return nil, err

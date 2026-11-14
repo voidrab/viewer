@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"image"
+	"strings"
 
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/widget"
@@ -79,9 +81,19 @@ func (a *App) deliver(s section, ev platform.PointerEvent) {
 	case sectionTabs:
 		a.tabAction(a.tabs.HandleEvent(ev))
 	case sectionContent:
-		if d := a.current(); d != nil {
-			d.view.HandlePointer(ev)
+		d := a.current()
+		if d == nil {
+			return
 		}
+		if a.findOpen {
+			_, _, content, _ := a.layout()
+			act, over := a.findBar.HandlePointer(ev, image.Rect(0, 0, content.Dx(), content.Dy()))
+			a.findAction(act)
+			if over {
+				return
+			}
+		}
+		d.view.HandlePointer(ev)
 	}
 }
 
@@ -112,7 +124,11 @@ func (a *App) toolbarAction(act widget.Action) {
 		a.pick()
 		return
 	case widget.ButtonFind:
-		a.say(widget.MessageWarn, findUnavailable)
+		if a.findOpen {
+			a.closeFind()
+		} else {
+			a.openFind()
+		}
 		return
 	case widget.ButtonPDFA:
 		a.verify()
@@ -144,10 +160,6 @@ func (a *App) selectTab(i int) {
 	}
 }
 
-// findUnavailable is the warning shown when find is requested, which the app
-// does not yet support.
-const findUnavailable = "Find is not available yet"
-
 // key handles shortcuts, passing everything else to the active view. It
 // reports whether the shortcut asks to quit.
 func (a *App) key(ev platform.KeyEvent) (quit bool) {
@@ -157,10 +169,92 @@ func (a *App) key(ev platform.KeyEvent) (quit bool) {
 	if ev.Mods&platform.Ctrl != 0 && a.shortcut(ev) {
 		return ev.Rune == 'q'
 	}
+	if a.findOpen && ev.Mods&platform.Ctrl == 0 {
+		a.findAction(a.findBar.HandleKey(ev))
+		a.win.Invalidate()
+		// The keys that move through the document still do, with the bar open.
+		switch ev.Key {
+		case platform.KeyUp, platform.KeyDown, platform.KeyPageUp, platform.KeyPageDown:
+		default:
+			return false
+		}
+	}
 	if d := a.current(); d != nil && d.view.HandleEvent(ev) {
 		a.win.Invalidate()
 	}
 	return false
+}
+
+// openFind shows the find bar for the active document, starting from the text
+// selected in it.
+func (a *App) openFind() {
+	d := a.current()
+	if d == nil {
+		return
+	}
+	if a.findOpen && a.findDoc == d {
+		return
+	}
+	a.findOpen, a.findDoc = true, d
+	a.findBar.SetText("")
+	if sel := firstLine(d.view.SelectedText()); sel != "" {
+		a.findBar.SetText(sel)
+		d.view.Find(sel)
+	}
+	a.win.Invalidate()
+}
+
+// firstLine returns the first line of s, cut to a length a search can take.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if r := []rune(s); len(r) > 100 {
+		s = string(r[:100])
+	}
+	return strings.TrimSpace(s)
+}
+
+// closeFind hides the find bar and removes the highlights of its search.
+func (a *App) closeFind() {
+	if a.findDoc != nil {
+		a.findDoc.view.ClearFind()
+	}
+	a.findOpen, a.findDoc = false, nil
+	a.win.Invalidate()
+}
+
+// findAction carries out what the find bar asked for.
+func (a *App) findAction(act widget.FindAction) {
+	if a.findDoc == nil {
+		return
+	}
+	v := a.findDoc.view
+	switch act {
+	case widget.FindEdited:
+		v.Find(string(a.findBar.Text))
+	case widget.FindNext:
+		v.FindNext()
+	case widget.FindPrev:
+		v.FindPrev()
+	case widget.FindClose:
+		a.closeFind()
+	}
+}
+
+// copySelection puts the selected text on the clipboard.
+func (a *App) copySelection() {
+	d := a.current()
+	if d == nil {
+		return
+	}
+	text := d.view.SelectedText()
+	if text == "" {
+		a.say(widget.MessageInfo, "Nothing is selected")
+		return
+	}
+	a.win.SetClipboard(text)
+	a.say(widget.MessageOK, fmt.Sprintf("Copied %d characters", len([]rune(text))))
 }
 
 // shortcut runs the action of the Ctrl shortcut ev and reports whether ev is
@@ -175,7 +269,13 @@ func (a *App) shortcut(ev platform.KeyEvent) bool {
 	case ev.Rune == 'n':
 		a.say(widget.MessageWarn, "Several windows are not available yet")
 	case ev.Rune == 'f':
-		a.say(widget.MessageWarn, findUnavailable)
+		a.openFind()
+	case ev.Rune == 'c':
+		a.copySelection()
+	case ev.Rune == 'v':
+		if a.findOpen {
+			a.win.RequestPaste()
+		}
 	case ev.Rune >= '1' && ev.Rune <= '9':
 		if i := int(ev.Rune - '1'); i < len(a.docs) {
 			a.selectTab(i)
