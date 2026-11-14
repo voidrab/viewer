@@ -6,6 +6,8 @@ import (
 	"image"
 	"runtime"
 	"sync"
+
+	"viewer/internal/ui/layout"
 )
 
 // PoolOptions tunes a Pool. The zero value is usable.
@@ -138,6 +140,17 @@ func (p *Pool) has(v *View, k key) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.cache[cacheKey{v.id, k.page, k.dpi}] != nil
+}
+
+// tooBig reports whether the bitmaps of pages [lo, hi) of lay, at its scale,
+// would take more than half the budget, leaving the rest to other views.
+func (p *Pool) tooBig(lay *layout.Layout, lo, hi int) bool {
+	need := 0
+	for i := lo; i < hi; i++ {
+		r := lay.ViewRect(i)
+		need += 4 * r.Dx() * r.Dy()
+	}
+	return need > p.budget/2
 }
 
 // lookup returns the bitmap of page k of v and marks it recently used.

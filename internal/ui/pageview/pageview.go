@@ -161,8 +161,13 @@ func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 	first, last := v.lay.Visible()
 	dpi := dpiFor(v.lay.Scale())
 	// One page beyond each edge is rendered ahead, so that scrolling finds it
-	// ready instead of blank. The pool ranks it behind the visible pages.
+	// ready instead of blank. The pool ranks it behind the visible pages. At
+	// a zoom where those pages would not fit the pool's budget they would
+	// push each other out, and be rendered over and over, so it is skipped.
 	lo, hi := max(first-1, 0), min(last+1, v.lay.Pages())
+	if v.pool.tooBig(v.lay, lo, hi) {
+		lo, hi = first, last
+	}
 	v.pool.cancelStale(v, func(k key) bool { return k.dpi == dpi && k.page >= lo && k.page < hi })
 	mid := v.lay.Current()
 	for i := lo; i < hi; i++ {

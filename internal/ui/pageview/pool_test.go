@@ -433,3 +433,22 @@ func TestPagesBesideTheViewAreRenderedAhead(t *testing.T) {
 		t.Errorf("pages further away were rendered: %v", got)
 	}
 }
+
+func TestNoReadAheadWhenPagesWouldNotFitTheBudget(t *testing.T) {
+	// A budget of two small pages holds the visible ones but not the pages
+	// beside them as well, which would evict each other without end.
+	pool := NewPool(PoolOptions{Workers: 1, CacheBytes: 2 * 124 * 400 * 4})
+	t.Cleanup(pool.Close)
+	tr := newTracker(nil)
+	v, _ := sharedView(t, pool, 12, tr)
+	c := paint.New(124, 400)
+	v.GoToPage(5)
+	v.Draw(c)
+	first, last := v.lay.Visible()
+	waitIdle(t, pool)
+	for _, k := range tr.started() {
+		if k.page < first || k.page >= last {
+			t.Errorf("page %d outside the view [%d,%d) was rendered", k.page, first, last)
+		}
+	}
+}
