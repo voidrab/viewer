@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// three pages: two letter-ish, one wide.
+// sample returns a layout of three pages: two portrait pages and one wide page.
 func sample() *Layout {
 	return New([]Size{{100, 200}, {100, 200}, {200, 100}}, image.Pt(220, 300), 10, 10)
 }

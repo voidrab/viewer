@@ -141,7 +141,8 @@ func (l *Layout) Current() int {
 	return clampInt(i, 0, len(l.pages)-1)
 }
 
-// GoTo scrolls so page i's top edge is at the top of the view.
+// GoTo scrolls so that page i's top edge lies gap pixels below the top of the
+// view, clamped to the document.
 func (l *Layout) GoTo(i int) {
 	if len(l.pages) == 0 {
 		return
@@ -235,8 +236,9 @@ func (l *Layout) relayout() {
 	l.ScrollTo(l.scroll)
 }
 
-// fit clamps a computed fit scale to the limits, treating NaN or a
-// non-positive viewport as the minimum.
+// fit clamps a fit scale to the range [MinScale, MaxScale]. A NaN, or a value
+// below MinScale such as the one a non-positive viewport yields, becomes
+// MinScale.
 func fit(s float64) float64 {
 	if math.IsNaN(s) || s < MinScale {
 		return MinScale
