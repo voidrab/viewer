@@ -268,6 +268,7 @@ func TestResizeRetiresOldBuffers(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 4, 2))
 	win.Present(img)
 	f.wait("create_buffer")
+	f.wait("commit")
 	f.mu.Lock()
 	buf := f.attached
 	f.mu.Unlock()

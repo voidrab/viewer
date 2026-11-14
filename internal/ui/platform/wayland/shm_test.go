@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"os"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestShmMemMapsSharedMemory(t *testing.T) {
@@ -13,13 +15,12 @@ func TestShmMemMapsSharedMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.data[0], m.data[8191] = 1, 2
-	// A second mapping of the same descriptor sees the writes.
-	f := os.NewFile(uintptr(m.fd), "shm")
+	// Reading through the descriptor sees what the mapping wrote.
 	buf := make([]byte, 1)
-	if _, err := f.ReadAt(buf, 8191); err != nil || buf[0] != 2 {
+	if _, err := unix.Pread(m.fd, buf, 8191); err != nil || buf[0] != 2 {
 		t.Errorf("shared read = %v, %v", buf, err)
 	}
-	m.free() // closes the descriptor that f wraps
+	m.free()
 	if m.data != nil || m.fd != -1 {
 		t.Errorf("free left %v %d", m.data, m.fd)
 	}
