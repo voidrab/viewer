@@ -11,7 +11,7 @@ const pdfjs = vi.hoisted(() => ({
 }));
 const runtime = vi.hoisted(() => {
   const doc = { id: 1, name: 'a.pdf', path: '/a.pdf', size: 1, url: '/doc/1/a.pdf', info: {} };
-  const results = { Profiles: [], InitialFiles: [], Open: doc };
+  const results = { Profiles: [], InitialFiles: [], InitialTabs: [], Open: doc };
   return {
     Call: { ByName: vi.fn(async (name) => results[name.split('.').pop()]) },
     Events: { On: vi.fn() },

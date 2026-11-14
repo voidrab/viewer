@@ -43,6 +43,17 @@ const (
 	EventShow = "document:show"
 	// EventError carries a message for the user.
 	EventError = "document:error"
+	// EventDrag tells every window (Targeted.Window is "") that a tab drag
+	// started or ended; it carries a DragState.
+	EventDrag = "tabs:drag"
+	// EventDragCancelled tells every window that a drag was cancelled,
+	// carrying whether the user cancelled it (bool), as with Escape, rather
+	// than dropping it where nothing took it. WebKitGTK sends the page no
+	// dragend for those.
+	EventDragCancelled = "tabs:drag-cancelled"
+	// EventMovedOut carries the IDs ([]int) of documents whose tabs were
+	// dragged into another window; the source window drops those tabs.
+	EventMovedOut = "tabs:moved-out"
 )
 
 // ErrNoDocument is returned for a document ID that is not open.
@@ -90,11 +101,43 @@ type Document struct {
 	Note string `json:"note,omitempty"`
 }
 
+// DragItem is one tab in a drag: the document it shows, and the frontend's
+// view state (scroll position, zoom, page count), passed through untouched.
+type DragItem struct {
+	ID    int `json:"id"`
+	State any `json:"state"`
+}
+
+// Moved is a tab handed to the window it was dropped on.
+type Moved struct {
+	Doc   *Document `json:"doc"`
+	State any       `json:"state"`
+}
+
+// DragState announces a tab drag by its token. Active is false once it ends.
+type DragState struct {
+	Token  int  `json:"token"`
+	Active bool `json:"active"`
+}
+
+// drag is a tab drag the Service holds until a window takes it.
+type drag struct {
+	token int
+	from  string
+	items []DragItem
+}
+
+// DetachDelay is how long EndDrag waits before detaching tabs into a new
+// window, giving a window that took the drop time to claim it: its Drop
+// and the source's EndDrag can reach Go in either order.
+const DetachDelay = 300 * time.Millisecond
+
 // window is what the Service tracks per app window.
 type window struct {
 	docs    map[int]bool // IDs of the documents its tabs show
 	ready   bool         // its frontend has started and takes events
 	pending []string     // files to open once it is ready
+	tabs    []Moved      // tabs dragged out of another window, to show once ready
 }
 
 // Service is bound to the frontend. Its exported methods are callable from
@@ -111,6 +154,10 @@ type Service struct {
 	active     string // the window launched files go to
 	lastDoc    int
 	lastWindow int
+	drag       *drag // the latest tab drag, until dropped or replaced
+	lastDrag   int
+	// after runs f once d has passed; tests replace it to run f at once.
+	after func(d time.Duration, f func())
 }
 
 // New returns a Service. Call Launch to open the first window.
@@ -122,6 +169,7 @@ func New(dialogs Dialogs, windows Windows, emit Emitter, windowOf WindowOf) *Ser
 		windowOf: windowOf,
 		docs:     map[int]*Document{},
 		wins:     map[string]*window{},
+		after:    func(d time.Duration, f func()) { time.AfterFunc(d, f) },
 	}
 }
 
@@ -188,12 +236,20 @@ func (s *Service) NewWindow() { s.openWindow(nil) }
 
 func (s *Service) openWindow(files []string) {
 	s.mu.Lock()
-	s.lastWindow++
-	name := fmt.Sprintf("window-%d", s.lastWindow)
+	name := s.newWindowLocked()
 	s.win(name).pending = files
-	s.active = name // until another window takes focus
 	s.mu.Unlock()
 	s.windows.New(name, len(files) > 0)
+}
+
+// newWindowLocked names a new window and makes it the active one. The
+// caller holds s.mu and creates the window once it has released it.
+func (s *Service) newWindowLocked() string {
+	s.lastWindow++
+	name := fmt.Sprintf("window-%d", s.lastWindow)
+	s.win(name)
+	s.active = name // until another window takes focus
+	return name
 }
 
 // find returns the name of the window that shows path or has it pending to
@@ -225,6 +281,20 @@ func (s *Service) InitialFiles(ctx context.Context) []string {
 	files := append([]string{}, w.pending...)
 	w.pending = nil
 	return files
+}
+
+// InitialTabs returns the tabs dragged out of another window to start the
+// calling window. Each tab is returned at most once.
+func (s *Service) InitialTabs(ctx context.Context) []Moved {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := s.win(s.windowOf(ctx))
+	tabs := w.tabs
+	w.tabs = nil
+	if tabs == nil {
+		tabs = []Moved{} // JSON [], not null
+	}
+	return tabs
 }
 
 // WindowFocused records the window launched files should go to.
@@ -269,6 +339,131 @@ func (s *Service) drop(w *window, id int) {
 		}
 	}
 	delete(s.docs, id)
+}
+
+// StartDrag records that tabs of the calling window are being dragged, and
+// tells every window, so another can accept the drop. The drag's data
+// travels through here rather than through the webview's drag data, which
+// need not cross windows. It returns the drag's token.
+func (s *Service) StartDrag(ctx context.Context, items []DragItem) int {
+	from := s.windowOf(ctx)
+	s.mu.Lock()
+	s.lastDrag++
+	s.drag = &drag{token: s.lastDrag, from: from, items: items}
+	token := s.lastDrag
+	s.mu.Unlock()
+	s.emit(EventDrag, Targeted{"", DragState{Token: token, Active: true}})
+	return token
+}
+
+// EndDrag tells every window the drag with token ended. The drag stays
+// claimable by Drop: the target's drop and the source's drag end can reach
+// Go in either order. With detach, the source saw the drag end outside its
+// window: unless a window claims the tabs within DetachDelay, they move to
+// a new window.
+func (s *Service) EndDrag(token int, detach bool) {
+	s.emit(EventDrag, Targeted{"", DragState{Token: token}})
+	if detach {
+		s.after(DetachDelay, func() { s.detach(token) })
+	}
+}
+
+// detach moves the tabs of drag token, if no window took them, to a new
+// window.
+func (s *Service) detach(token int) {
+	s.mu.Lock()
+	d := s.takeDragLocked(token)
+	var moved []Moved
+	if d != nil {
+		moved = s.claimLocked(d)
+	}
+	if len(moved) == 0 { // taken by a window, or all closed while dragged
+		s.mu.Unlock()
+		return
+	}
+	name := s.newWindowLocked()
+	s.adoptLocked(name, moved)
+	s.wins[name].tabs = moved
+	s.mu.Unlock()
+	s.emit(EventMovedOut, Targeted{d.from, docIDs(moved)})
+	s.windows.New(name, true)
+}
+
+// DragCancelled reports a drag the platform cancelled, for the window
+// whose drag it was; byUser tells an Escape from a drop nothing took.
+func (s *Service) DragCancelled(byUser bool) {
+	s.emit(EventDragCancelled, Targeted{"", byUser})
+}
+
+// Drop hands the tabs of drag token to the calling window: their documents
+// move to it, and the source window is told to drop those tabs. It returns
+// nothing for a drag that is gone, already dropped, or from the caller
+// itself, which reorders its own tabs.
+func (s *Service) Drop(ctx context.Context, token int) []Moved {
+	to := s.windowOf(ctx)
+	s.mu.Lock()
+	if s.drag != nil && s.drag.from == to {
+		s.mu.Unlock()
+		return nil
+	}
+	moved := []Moved{}
+	d := s.takeDragLocked(token)
+	if d != nil {
+		moved = s.claimLocked(d)
+		s.adoptLocked(to, moved)
+	}
+	s.mu.Unlock()
+	if len(moved) > 0 {
+		s.emit(EventMovedOut, Targeted{d.from, docIDs(moved)})
+	}
+	return moved
+}
+
+// takeDragLocked returns drag token and forgets it, so it is taken once,
+// or returns nil for a drag that is gone or replaced. The caller holds s.mu.
+func (s *Service) takeDragLocked(token int) *drag {
+	d := s.drag
+	if d == nil || d.token != token {
+		return nil
+	}
+	s.drag = nil
+	return d
+}
+
+// claimLocked takes the documents of drag d from its source window,
+// leaving out any closed since the drag started, and returns them as tabs.
+// The caller holds s.mu, and gives the documents to a window with
+// adoptLocked.
+func (s *Service) claimLocked(d *drag) []Moved {
+	src := s.wins[d.from]
+	moved := []Moved{}
+	for _, it := range d.items {
+		doc := s.docs[it.ID]
+		if src == nil || !src.docs[it.ID] || doc == nil {
+			continue
+		}
+		delete(src.docs, it.ID)
+		moved = append(moved, Moved{Doc: doc, State: it.State})
+	}
+	return moved
+}
+
+// adoptLocked records that window name's tabs show the moved documents.
+// The caller holds s.mu.
+func (s *Service) adoptLocked(name string, moved []Moved) {
+	w := s.win(name)
+	for _, m := range moved {
+		w.docs[m.Doc.ID] = true
+	}
+}
+
+// docIDs returns the IDs of the moved documents.
+func docIDs(moved []Moved) []int {
+	ids := make([]int, len(moved))
+	for i, m := range moved {
+		ids[i] = m.Doc.ID
+	}
+	return ids
 }
 
 // Profiles lists the verification profiles, the default first.

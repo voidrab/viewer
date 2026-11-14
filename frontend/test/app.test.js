@@ -835,3 +835,237 @@ describe('links', () => {
     expect(api.openURL).not.toHaveBeenCalled();
   });
 });
+
+describe('dragging tabs', () => {
+  /** Fires a drag event; dataTransfer is a plain fake, as happy-dom has none. */
+  function drag(type, target, { types = ['application/x-viewer-tabs'], clientX = -1, dropEffect = '' } = {}) {
+    const e = new Event(type, { bubbles: true, cancelable: true });
+    e.dataTransfer = { types, setData: vi.fn(), effectAllowed: '', dropEffect };
+    e.clientX = clientX;
+    target.dispatchEvent(e);
+    return e;
+  }
+  const main = () => document.querySelector('main');
+
+  it('reorders tabs within the window', async () => {
+    await startWith('/docs/a.pdf', '/docs/b.pdf', '/docs/c.pdf');
+    drag('dragstart', tabEls()[2]);
+    const over = drag('dragover', tabEls()[0]);
+    expect(over.defaultPrevented).toBe(true);
+    expect(tabEls()[0].classList.contains('drop-before')).toBe(true);
+    expect(document.body.classList.contains('tab-drop-strip')).toBe(true);
+    const dragged = tabEls()[2];
+    drag('drop', tabEls()[0]);
+    expect(tabTitles()).toEqual(['c.pdf', 'a.pdf', 'b.pdf']);
+    expect(tabEls()[0]).toBe(dragged); // moved, not rebuilt, so the drag goes on
+    drag('dragend', dragged);
+    await flush();
+    expect(document.body.classList.contains('tab-drop-strip')).toBe(false);
+    expect(api.endDrag).toHaveBeenCalledWith(1, false);
+  });
+
+  it('hands a dragged tab, with its position, to Go', async () => {
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    const [a, b] = app.tabs;
+    drag('dragstart', tabEls()[0]);
+    drag('dragstart', tabEls()[1]); // a second drag replaces the first
+    expect(api.startDrag).toHaveBeenLastCalledWith([{ id: b.doc.id, state: { view: null, pages: 3 } }]);
+    drag('dragend', tabEls()[1]);
+    drag('dragstart', tabEls()[0]);
+    expect(api.startDrag).toHaveBeenLastCalledWith([
+      { id: a.doc.id, state: { view: { scale: '1.5', top: 40, left: 0 }, pages: 3 } },
+    ]);
+  });
+
+  it('does not drop a tab off its own bar, or a window on itself', async () => {
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    drag('dragstart', tabEls()[0]);
+    expect(drag('dragover', main()).defaultPrevented).toBe(false);
+    drag('dragend', tabEls()[0]);
+    drag('dragstart', $('tabs'));
+    expect(api.startDrag).toHaveBeenLastCalledWith(app.tabs.map((t) => expect.objectContaining({ id: t.doc.id })));
+    expect(drag('dragover', tabEls()[0]).defaultPrevented).toBe(false);
+    expect(document.body.classList.contains('tab-drop-strip')).toBe(false);
+  });
+
+  it('marks a drop past the last tab, and clears marks once the pointer leaves', async () => {
+    vi.useFakeTimers();
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    drag('dragstart', tabEls()[0]);
+    drag('dragover', $('tab-new'), { clientX: 10 });
+    expect(tabEls()[1].classList.contains('drop-after')).toBe(true);
+    drag('dragleave', $('tab-new'));
+    drag('dragover', $('tab-new'), { clientX: 10 }); // still inside: the marks stay
+    vi.advanceTimersByTime(100);
+    expect(tabEls()[1].classList.contains('drop-after')).toBe(true);
+    drag('dragleave', $('tab-new'));
+    vi.advanceTimersByTime(100);
+    expect(tabEls()[1].classList.contains('drop-after')).toBe(false);
+    drag('drop', main()); // nowhere to land
+    drag('dragend', tabEls()[0]);
+    expect(tabTitles()).toEqual(['a.pdf', 'b.pdf']);
+  });
+
+  it('has nothing to drag from an empty window', async () => {
+    await start();
+    expect(drag('dragstart', $('tabs')).defaultPrevented).toBe(true);
+    expect(api.startDrag).not.toHaveBeenCalled();
+  });
+
+  it('detaches a tab dropped outside every window into a new one', async () => {
+    vi.useFakeTimers();
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    drag('dragstart', tabEls()[1]);
+    drag('dragleave', tabEls()[1]);
+    vi.advanceTimersByTime(100); // no dragover followed: the pointer left
+    drag('dragend', tabEls()[1], { dropEffect: 'none' });
+    await vi.runAllTimersAsync();
+    expect(api.endDrag).toHaveBeenCalledExactlyOnceWith(1, true);
+  });
+
+  it('detaches a tab another app took, and a window\'s only tab', async () => {
+    vi.useFakeTimers();
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    // Dropped on the desktop or another app, which accepted it.
+    drag('dragstart', tabEls()[1]);
+    drag('dragleave', main());
+    vi.advanceTimersByTime(100);
+    drag('dragend', tabEls()[1], { dropEffect: 'copy' });
+    // A window's only tab: Go moves it to a new window and this one closes.
+    key({ key: 'w', ctrlKey: true });
+    drag('dragstart', tabEls()[0]);
+    drag('dragleave', main());
+    vi.advanceTimersByTime(100);
+    drag('dragend', tabEls()[0], { dropEffect: 'none' });
+    await vi.runAllTimersAsync();
+    expect(api.endDrag.mock.calls).toEqual([
+      [1, true],
+      [1, true],
+    ]);
+  });
+
+  it('does not detach a drag ending inside the window, or a whole window', async () => {
+    vi.useFakeTimers();
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    drag('dragstart', tabEls()[1]);
+    drag('dragend', tabEls()[1], { dropEffect: 'none' });
+    drag('dragstart', document.querySelector('.logo'));
+    expect(api.startDrag).toHaveBeenLastCalledWith(app.tabs.map((t) => expect.objectContaining({ id: t.doc.id })));
+    drag('dragleave', main());
+    vi.advanceTimersByTime(100);
+    drag('dragend', document.querySelector('.logo'), { dropEffect: 'none' });
+    await vi.runAllTimersAsync();
+    expect(api.endDrag.mock.calls).toEqual([
+      [1, false],
+      [1, false],
+    ]);
+  });
+
+  it('detaches a tab dropped on nothing, as Go reports for WebKitGTK', async () => {
+    vi.useFakeTimers();
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    api.handlers.dragCancelled(false); // no drag of ours: ignored
+    drag('dragstart', tabEls()[1]);
+    drag('dragleave', main());
+    vi.advanceTimersByTime(100);
+    api.handlers.dragCancelled(false);
+    expect(tabEls()[1].classList.contains('dragging')).toBe(false);
+    // Escape outside the window cancels without detaching.
+    drag('dragstart', tabEls()[1]);
+    drag('dragleave', main());
+    vi.advanceTimersByTime(100);
+    api.handlers.dragCancelled(true);
+    await vi.runAllTimersAsync();
+    expect(api.endDrag.mock.calls).toEqual([
+      [1, true],
+      [1, false],
+    ]);
+  });
+
+  it('starts a window with the tabs dragged out of another', async () => {
+    const moved = makeDoc({ name: 'x.pdf' });
+    await start({ initialTabs: vi.fn(async () => [{ doc: moved, state: { view: null, pages: 2 } }]) });
+    await flush();
+    expect(tabTitles()).toEqual(['x.pdf']);
+    expect(app.active.doc).toBe(moved);
+  });
+
+  it('leaves selected text and other drags alone', async () => {
+    await startWith('/docs/a.pdf');
+    api.handlers.drag({ token: 5, from: 'window-2', count: 1, active: true });
+    expect(drag('dragover', main(), { types: ['text/plain'] }).defaultPrevented).toBe(false);
+  });
+
+  it('leaves file drags to the file drop', async () => {
+    await startWith('/docs/a.pdf');
+    api.handlers.drag({ token: 5, from: 'window-2', count: 1, active: true });
+    expect(drag('dragover', main(), { types: ['Files'] }).defaultPrevented).toBe(false);
+    expect(drag('dragover', main()).defaultPrevented).toBe(true);
+    expect(document.body.classList.contains('tab-drop-main')).toBe(true);
+  });
+
+  it('takes tabs dropped from another window', async () => {
+    const moved = makeDoc({ name: 'x.pdf' });
+    await startWith('/docs/a.pdf');
+    api.drop.mockResolvedValueOnce([{ doc: moved, state: { view: { scale: '2', top: 9, left: 0 }, pages: 4 } }]);
+    api.handlers.drag({ token: 5, from: 'window-2', count: 1, active: true });
+    drag('dragover', main());
+    drag('drop', main());
+    await flush();
+    await flush();
+    expect(api.drop).toHaveBeenCalledWith(5);
+    expect(tabTitles()).toEqual(['a.pdf', 'x.pdf']);
+    expect(app.active.doc).toBe(moved);
+    expect(api.focus).toHaveBeenCalledOnce();
+    expect(view.open).toHaveBeenLastCalledWith(moved.url);
+    expect(view.show).toHaveBeenLastCalledWith(expect.anything(), { scale: '2', top: 9, left: 0 });
+    expect($('status-file').textContent).toContain('4 pages');
+  });
+
+  it('fills an empty window with dropped tabs, loading pdf.js for them', async () => {
+    await start();
+    api.drop.mockResolvedValueOnce([{ doc: makeDoc({ name: 'x.pdf' }), state: null }]);
+    api.handlers.drag({ token: 5, from: 'window-2', count: 1, active: true });
+    drag('dragover', main());
+    drag('drop', main());
+    await flush();
+    await flush();
+    expect(loadView).toHaveBeenCalledOnce();
+    expect(tabTitles()).toEqual(['x.pdf']);
+  });
+
+  it('ignores a drop once the drag has ended or was not taken', async () => {
+    await startWith('/docs/a.pdf');
+    api.handlers.drag({ token: 5, from: 'window-2', count: 1, active: true });
+    api.handlers.drag({ token: 4, from: 'window-2' }); // an older drag's end
+    api.handlers.drag({ token: 5, from: 'window-2' });
+    expect(drag('dragover', main()).defaultPrevented).toBe(false);
+    api.handlers.drag({ token: 6, from: 'window-2', count: 1, active: true });
+    drag('dragover', main());
+    drag('drop', main());
+    await flush();
+    expect(tabTitles()).toEqual(['a.pdf']);
+  });
+
+  it('drops tabs that moved to another window, closing it when none are left', async () => {
+    await startWith('/docs/a.pdf', '/docs/b.pdf');
+    const [a, b] = app.tabs;
+    api.handlers.movedOut([999]);
+    api.handlers.movedOut([a.doc.id]);
+    expect(tabTitles()).toEqual(['b.pdf']);
+    expect(app.active).toBe(b);
+    expect(view.close).toHaveBeenCalledWith(a.handle);
+    expect(api.release).not.toHaveBeenCalled(); // the document lives on in the other window
+    api.handlers.movedOut([b.doc.id]);
+    expect(api.close).toHaveBeenCalledOnce();
+  });
+
+  it('closes a window merged into another, empty tabs and all', async () => {
+    await startWith('/docs/a.pdf');
+    key({ key: 't', ctrlKey: true });
+    drag('dragstart', $('tabs'));
+    drag('dragend', $('tabs'));
+    api.handlers.movedOut([app.tabs[0].doc.id]);
+    expect(api.close).toHaveBeenCalledOnce();
+  });
+});

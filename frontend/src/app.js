@@ -6,6 +6,12 @@
 // same happens to the active tab while the window is hidden. Beyond the
 // KEEP_OPEN most recently used, background tabs close their pdf.js document
 // too, keeping only their place, and reopen it when switched back to.
+//
+// Tabs can be dragged: within the tab bar to reorder them, or onto another
+// window to move them there, or out of every window to open them in a new
+// one; dragging the app icon or the empty part of the tab bar moves all of
+// a window's tabs, merging it into the other. A tab's document moves with
+// it on the Go side, so nothing is read again.
 
 import { errorMessage } from './api.js';
 import { ZOOM_PRESETS } from './document.js';
@@ -59,6 +65,7 @@ export function createApp({ document, api, loadView }) {
     statusFile: $('status-file'),
     statusZoom: $('status-zoom'),
     toolbar: document.querySelector('.toolbar'),
+    logo: document.querySelector('.logo'),
     winMin: $('win-min'),
     winMax: $('win-max'),
     winClose: $('win-close'),
@@ -118,8 +125,8 @@ export function createApp({ document, api, loadView }) {
   let lastKey = 0;
   let lastUse = 0;
 
-  function newTab() {
-    const tab = {
+  function makeTab() {
+    return {
       key: ++lastKey,
       doc: null,
       handle: null,
@@ -130,9 +137,18 @@ export function createApp({ document, api, loadView }) {
       result: null,
       used: 0,
     };
+  }
+
+  function newTab() {
+    const tab = makeTab();
     tabs.push(tab);
     return tab;
   }
+
+  const tabByKey = (key) => tabs.find((t) => t.key === Number(key));
+  /** The tab shows a document, rather than being empty or still loading one. */
+  const hasDoc = (t) => Boolean(t.doc) && !t.loading;
+  const isEmpty = (t) => !t.doc && !t.loading;
 
   /** Puts the active tab's document in the viewer, unless it is there. */
   function showActive() {
@@ -155,9 +171,10 @@ export function createApp({ document, api, loadView }) {
     Object.assign(tab, { loading: true, label: tab.doc.name });
     present();
     try {
-      const handle = await view.open(tab.doc.url);
+      const v = await getView(); // a tab moved in from another window may be the first
+      const handle = await v.open(tab.doc.url);
       if (tabs.includes(tab)) tab.handle = handle;
-      else view.close(handle);
+      else v.close(handle);
     } catch (err) {
       toast(`Could not reopen ${tab.doc.name}: ${errorMessage(err)}`);
     }
@@ -187,46 +204,72 @@ export function createApp({ document, api, loadView }) {
     present();
   }
 
-  function closeTab(tab) {
+  /** Takes tab out of the window, closing its pdf.js document. */
+  function removeTab(tab) {
     const i = tabs.indexOf(tab);
     tabs.splice(i, 1);
     if (tab.handle) {
       if (shown === tab) shown = null;
       view.close(tab.handle);
     }
-    if (tab.doc) api.release(tab.doc.id);
+    return i;
+  }
+
+  /** After tabs were removed: closes the window, or shows the next tab. */
+  function afterRemoval(wasActive, i) {
     if (!tabs.length) {
       api.close(); // the window's last tab
-    } else if (tab === active) {
+    } else if (wasActive) {
       activate(tabs[Math.min(i, tabs.length - 1)]);
     } else {
       renderTabs();
     }
   }
 
+  function closeTab(tab) {
+    const i = removeTab(tab);
+    if (tab.doc) api.release(tab.doc.id);
+    afterRemoval(tab === active, i);
+  }
+
   function step(delta) {
     activate(tabs[(tabs.indexOf(active) + delta + tabs.length) % tabs.length]);
   }
 
+  const tabNodes = new Map(); // tab key → its element in the tab bar
+
+  /**
+   * Updates the tab bar in place: each tab keeps its element, so a render
+   * during a drag does not remove the element being dragged, which would
+   * end the drag.
+   */
   function renderTabs() {
     // A lone empty tab needs no bar; a single open document gets its tab.
-    ui.tabs.hidden = tabs.length < 2 && !tabs[0]?.doc && !tabs[0]?.loading;
-    ui.tabList.replaceChildren(
-      ...tabs.map((tab) =>
-        el(
+    ui.tabs.hidden = tabs.length < 2 && tabs.every(isEmpty);
+    const keys = new Set(tabs.map((t) => t.key));
+    for (const [key, node] of tabNodes) {
+      if (keys.has(key)) continue;
+      node.remove();
+      tabNodes.delete(key);
+    }
+    tabs.forEach((tab, i) => {
+      let node = tabNodes.get(tab.key);
+      if (!node) {
+        node = el(
           'div',
-          {
-            className: tab === active ? 'tab active' : 'tab',
-            role: 'tab',
-            title: tab.doc?.path ?? '',
-            'data-tab': tab.key,
-            'aria-selected': String(tab === active),
-          },
-          el('span', { className: 'tab-title' }, tab.doc?.name ?? (tab.loading ? `${tab.label}…` : 'new tab')),
+          { className: 'tab', role: 'tab', draggable: true, 'data-tab': tab.key },
+          el('span', { className: 'tab-title' }),
           el('button', { type: 'button', className: 'tab-close', title: 'Close tab (Ctrl+W)', 'data-close': tab.key }, '×'),
-        ),
-      ),
-    );
+        );
+        tabNodes.set(tab.key, node);
+      }
+      node.classList.toggle('active', tab === active);
+      node.title = tab.doc?.path ?? '';
+      node.setAttribute('aria-selected', String(tab === active));
+      node.firstChild.textContent = tab.doc?.name ?? (tab.loading ? `${tab.label}…` : 'new tab');
+      const at = ui.tabList.children[i];
+      if (at !== node) ui.tabList.insertBefore(node, at ?? null);
+    });
   }
 
   /** Shows the active tab's state in the toolbar, status line and panel. */
@@ -261,7 +304,7 @@ export function createApp({ document, api, loadView }) {
   /** Opens each file in a tab: the first in the active tab if it is empty. */
   async function openFiles(paths) {
     const jobs = paths.map((path, i) => {
-      const reuse = i === 0 && !active.doc && !active.loading;
+      const reuse = i === 0 && isEmpty(active);
       const tab = reuse ? active : newTab();
       Object.assign(tab, { loading: true, label: baseName(path) });
       return [tab, path];
@@ -387,6 +430,206 @@ export function createApp({ document, api, loadView }) {
     ui.pdfa.setAttribute('aria-pressed', String(open));
   }
 
+  // ----- dragging tabs -----
+
+  const DRAG_TYPE = 'application/x-viewer-tabs';
+  const LEAVE_MS = 80;
+  // Drags of anything else: files from the file manager, selected text, links.
+  const OTHER_DRAGS = ['Files', 'text/plain', 'text/uri-list', 'text/html'];
+  let dragging = null; // this window's drag: { tabs, whole, token, outside }
+  let incoming = null; // another window's drag, as Go announced it
+  let dropAt = null; // where a drop would land: { index, strip }
+  let leaveTimer = 0;
+
+  /** The drag carries tabs, from this window or another. */
+  const tabDrag = (e) =>
+    Boolean(dragging || incoming) && !OTHER_DRAGS.some((t) => e.dataTransfer?.types.includes(t));
+
+  function startDrag(e) {
+    // From a tab: that tab. From the icon or the bar's empty part: the whole
+    // window, which needs a document to carry.
+    const tabEl = e.target.closest?.('.tab');
+    const moving = tabEl ? [tabByKey(tabEl.dataset.tab)] : [...tabs];
+    const items = moving
+      .filter(hasDoc)
+      .map((t) => ({ id: t.doc.id, state: { view: t === shown ? view.state() : t.state, pages: t.pages } }));
+    if (!tabEl && !items.length) {
+      e.preventDefault();
+      return;
+    }
+    finishDrag(); // one that never ended
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(DRAG_TYPE, ''); // the drag needs data to start; Go carries the tabs
+    const token = items.length ? api.startDrag(items) : Promise.resolve(0);
+    dragging = { tabs: moving, whole: !tabEl, token, outside: false };
+    ui.body.classList.add('tab-drag');
+    // Mark after the browser has taken its drag image, as VS Code does.
+    requestAnimationFrame(() => {
+      if (!dragging) return;
+      for (const t of moving) tabNodes.get(t.key)?.classList.add('dragging');
+      if (!tabEl) ui.body.classList.add('dragging-window');
+    });
+  }
+
+  /**
+   * Ends this window's drag. A tab dropped outside this window opens in a
+   * new one, unless another viewer window took it: Go knows, and waits
+   * briefly for that window's drop, which can reach it last. Whether
+   * something accepted the drop says nothing here, as other apps and the
+   * desktop accept any drop. A drag cancelled with Escape stays put, and so
+   * does a whole window dropped outside, which would just reopen as is.
+   */
+  function finishDrag(byUser = false) {
+    const d = dragging;
+    if (!d) return;
+    dragging = null;
+    clearTimeout(leaveTimer);
+    ui.body.classList.remove('dragging-window', 'tab-drag');
+    for (const node of tabNodes.values()) node.classList.remove('dragging');
+    clearDropMarks();
+    renderTabs();
+    const detach = !byUser && d.outside && !d.whole;
+    d.token.then((token) => token && api.endDrag(token, detach));
+  }
+
+  ui.tabs.addEventListener('dragstart', startDrag);
+  ui.logo.addEventListener('dragstart', startDrag);
+  document.addEventListener('dragend', () => finishDrag(), { signal });
+  // WebKitGTK fires no dragend for a drag GTK cancels, such as one dropped
+  // outside every window; Go watches GTK for those.
+  api.onDragCancelled(finishDrag);
+
+  /** Where a drop at clientX lands in the tab bar: before the first tab whose middle is past it. */
+  function indexAt(x) {
+    const els = [...ui.tabList.children];
+    const i = els.findIndex((t) => {
+      const r = t.getBoundingClientRect();
+      return x < r.left + r.width / 2;
+    });
+    return i < 0 ? els.length : i;
+  }
+
+  function clearDropMarks() {
+    dropAt = null;
+    // Wails's native file-drop hook marks the window for tab drags too, and
+    // never unmarks it after one is dropped.
+    ui.body.classList.remove('tab-drop-strip', 'tab-drop-main', 'file-drop-target-active');
+    for (const t of ui.tabList.querySelectorAll('.drop-before, .drop-after')) t.classList.remove('drop-before', 'drop-after');
+  }
+
+  /** Shows where a drop would land: a bar between tabs, or a tint on the document area. */
+  function markDrop(e) {
+    const onStrip = !ui.tabs.hidden && ui.tabs.contains(e.target);
+    if (dragging?.whole || (dragging && !onStrip)) {
+      // A window dropped on itself, or a tab dropped off its own bar: nothing to do.
+      if (dropAt) clearDropMarks();
+      return false;
+    }
+    const index = onStrip ? indexAt(e.clientX) : tabs.length;
+    if (dropAt?.index === index && dropAt.strip === onStrip) return true;
+    clearDropMarks();
+    dropAt = { index, strip: onStrip };
+    ui.body.classList.add(onStrip ? 'tab-drop-strip' : 'tab-drop-main');
+    if (onStrip) {
+      const els = ui.tabList.children;
+      if (index < els.length) els[index].classList.add('drop-before');
+      else els[els.length - 1]?.classList.add('drop-after');
+    }
+    return true;
+  }
+
+  document.addEventListener(
+    'dragover',
+    (e) => {
+      if (!tabDrag(e)) return;
+      clearTimeout(leaveTimer);
+      if (dragging) dragging.outside = false;
+      if (!markDrop(e)) {
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    },
+    { signal },
+  );
+  // dragleave fires for every element the pointer crosses, and spuriously on
+  // WebKitGTK; the pointer has left the window only if no dragover follows.
+  document.addEventListener(
+    'dragleave',
+    (e) => {
+      if (!tabDrag(e)) return;
+      clearTimeout(leaveTimer);
+      leaveTimer = setTimeout(() => {
+        clearDropMarks();
+        if (dragging) dragging.outside = true;
+      }, LEAVE_MS);
+    },
+    { signal },
+  );
+  document.addEventListener(
+    'drop',
+    async (e) => {
+      if (!tabDrag(e)) return;
+      e.preventDefault();
+      const at = dropAt;
+      clearDropMarks();
+      if (!at) return;
+      if (dragging) {
+        moveTab(dragging.tabs[0], at.index);
+        return;
+      }
+      const { token } = incoming;
+      incoming = null;
+      ui.body.classList.remove('tab-drag');
+      receive(await api.drop(token), at.index);
+    },
+    { signal },
+  );
+
+  /** Moves tab to index within this window. */
+  function moveTab(tab, index) {
+    const from = tabs.indexOf(tab);
+    tabs.splice(from, 1);
+    tabs.splice(from < index ? index - 1 : index, 0, tab);
+    renderTabs();
+  }
+
+  /** Adds the tabs Go handed over from another window at index, showing the first. */
+  function receive(moved, index) {
+    if (!moved?.length) return;
+    const lone = tabs.length === 1 && isEmpty(tabs[0]) ? tabs[0] : null;
+    const added = moved.map(({ doc, state }) =>
+      Object.assign(makeTab(), { doc, state: state?.view ?? null, pages: state?.pages ?? 0 }),
+    );
+    tabs.splice(Math.min(index, tabs.length), 0, ...added);
+    if (lone) removeTab(lone); // the drop fills the window's empty start tab
+    api.focus();
+    activate(added[0]);
+  }
+
+  api.onDrag((d) => {
+    if (dragging && d.active) return; // this window's own drag
+    if (d.active) incoming = d;
+    else if (incoming?.token === d.token) {
+      incoming = null;
+      clearDropMarks();
+    }
+    ui.body.classList.toggle('tab-drag', Boolean(dragging || incoming));
+  });
+
+  // Tabs dragged into another window: Go has moved their documents there.
+  // A window left with only empty tabs has moved out entirely, and closes.
+  api.onMovedOut((ids) => {
+    const gone = tabs.filter((t) => ids.includes(t.doc?.id));
+    if (!gone.length) return;
+    const wasActive = gone.includes(active);
+    let i = 0;
+    for (const tab of gone) i = removeTab(tab);
+    if (tabs.every(isEmpty)) tabs.length = 0;
+    afterRemoval(wasActive, i);
+  });
+
   // ----- wiring -----
 
   ui.open.addEventListener('click', pickFiles);
@@ -395,15 +638,14 @@ export function createApp({ document, api, loadView }) {
   ui.tabList.addEventListener('click', (e) => {
     const target = e.target.closest('[data-close],[data-tab]');
     if (!target) return;
-    const key = Number(target.dataset.close ?? target.dataset.tab);
-    const tab = tabs.find((t) => t.key === key);
+    const tab = tabByKey(target.dataset.close ?? target.dataset.tab);
     if (target.dataset.close) closeTab(tab);
     else activate(tab);
   });
   // Middle-click closes a tab, as in browsers.
   ui.tabList.addEventListener('auxclick', (e) => {
     const target = e.target.closest('[data-tab]');
-    if (e.button === 1 && target) closeTab(tabs.find((t) => t.key === Number(target.dataset.tab)));
+    if (e.button === 1 && target) closeTab(tabByKey(target.dataset.tab));
   });
   ui.prev.addEventListener('click', () => view.previous());
   ui.next.addEventListener('click', () => view.next());
@@ -537,10 +779,12 @@ export function createApp({ document, api, loadView }) {
 
   async function start() {
     try {
-      const [profiles, files] = await Promise.all([api.profiles(), api.initialFiles()]);
+      const [profiles, files, moved] = await Promise.all([api.profiles(), api.initialFiles(), api.initialTabs()]);
       ui.profile.replaceChildren(...profiles.map((p) => el('option', { value: p.name }, p.label)));
+      // A window opened for tabs dragged out of another shows those.
+      if (moved.length) receive(moved, 0);
       if (files.length) await openFiles(files);
-      else present();
+      else if (!moved.length) present();
     } catch (err) {
       present();
       fail(err);

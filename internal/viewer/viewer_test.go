@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/voidrab/gopdfrab"
 
@@ -81,6 +82,7 @@ type fixture struct {
 func newService() fixture {
 	f := fixture{dialogs: &fakeDialogs{}, windows: &fakeWindows{}, events: &recorder{}}
 	f.Service = New(f.dialogs, f.windows, f.events.emit, windowOf)
+	f.after = func(_ time.Duration, fn func()) { fn() } // no waiting in tests
 	return f
 }
 
@@ -486,5 +488,128 @@ func TestServeHTTPUnreadable(t *testing.T) {
 	}
 	if res := get(s.Service, doc.URL, nil); res.StatusCode != http.StatusGone {
 		t.Errorf("deleted file: status %d; want 410", res.StatusCode)
+	}
+}
+
+func TestDragMovesTabsBetweenWindows(t *testing.T) {
+	s := newService()
+	docA, _ := s.Open(in("window-1"), testpdf.Sample(t, "a.pdf"))
+	docB, _ := s.Open(in("window-1"), testpdf.Sample(t, "b.pdf"))
+	s.InitialFiles(in("window-2"))
+
+	state := map[string]any{"pages": 1.0}
+	token := s.StartDrag(in("window-1"), []DragItem{{ID: docA.ID, State: state}, {ID: docB.ID}})
+	if ev := s.events.events[0]; ev.name != EventDrag || ev.data.Window != "" ||
+		ev.data.Data != (DragState{Token: token, Active: true}) {
+		t.Fatalf("start event %+v; want a broadcast of the drag", ev)
+	}
+
+	// The source reorders its own tabs; Go leaves its drag alone.
+	if m := s.Drop(in("window-1"), token); len(m) != 0 {
+		t.Fatalf("Drop in the source window = %v", m)
+	}
+	// The drag's end may reach Go before the target's drop.
+	s.EndDrag(token, false)
+	if ev := s.events.events[1]; ev.name != EventDrag || ev.data.Data.(DragState).Active {
+		t.Fatalf("end event %+v", ev)
+	}
+	// A document closed since the drag started is left out.
+	s.Release(in("window-1"), docB.ID)
+
+	moved := s.Drop(in("window-2"), token)
+	if len(moved) != 1 || moved[0].Doc != docA || moved[0].State == nil {
+		t.Fatalf("Drop = %+v; want a.pdf with its state", moved)
+	}
+	if ev := s.events.events[2]; ev.name != EventMovedOut || ev.data.Window != "window-1" ||
+		!slices.Equal(ev.data.Data.([]int), []int{docA.ID}) {
+		t.Fatalf("moved-out event %+v", ev)
+	}
+	if m := s.Drop(in("window-3"), token); len(m) != 0 {
+		t.Fatalf("a drag was dropped twice: %v", m)
+	}
+
+	// The document now belongs to window-2: closing window-1 keeps it.
+	s.WindowClosed("window-1")
+	if s.doc(docA.ID) == nil {
+		t.Fatal("a moved document was released with its old window")
+	}
+	s.WindowClosed("window-2")
+	if s.doc(docA.ID) != nil {
+		t.Fatal("a moved document outlived its new window")
+	}
+}
+
+func TestDropOfAStaleDrag(t *testing.T) {
+	s := newService()
+	old := s.StartDrag(in("window-1"), nil)
+	s.StartDrag(in("window-1"), nil)
+	if m := s.Drop(in("window-2"), old); len(m) != 0 {
+		t.Fatalf("Drop of a replaced drag = %v", m)
+	}
+}
+
+func TestDragOutOfAllWindowsDetachesTabs(t *testing.T) {
+	s := newService()
+	s.Launch(nil, "/")
+	a, _ := s.Open(in("window-1"), testpdf.Sample(t, "a.pdf"))
+	token := s.StartDrag(in("window-1"), []DragItem{{ID: a.ID, State: "here"}})
+	s.EndDrag(token, true)
+
+	if !slices.Equal(s.windows.created, []string{"window-1", "window-2+"}) {
+		t.Fatalf("created %v; want a new window for the tab", s.windows.created)
+	}
+	last := s.events.events[len(s.events.events)-1]
+	if last.name != EventMovedOut || last.data.Window != "window-1" || !slices.Equal(last.data.Data.([]int), []int{a.ID}) {
+		t.Fatalf("event %+v; want the source told its tab moved out", last)
+	}
+	tabs := s.InitialTabs(in("window-2"))
+	if len(tabs) != 1 || tabs[0].Doc != a || tabs[0].State != "here" {
+		t.Fatalf("InitialTabs = %+v", tabs)
+	}
+	if again := s.InitialTabs(in("window-2")); len(again) != 0 {
+		t.Fatalf("InitialTabs returned %v twice", again)
+	}
+	s.WindowClosed("window-1")
+	if s.doc(a.ID) == nil {
+		t.Fatal("the detached document was released with its old window")
+	}
+}
+
+func TestDetachLeavesClaimedAndEmptyDrags(t *testing.T) {
+	s := newService()
+	s.Launch(nil, "/")
+	a, _ := s.Open(in("window-1"), testpdf.Sample(t, "a.pdf"))
+
+	// Another window took the tab before the delay ran out.
+	token := s.StartDrag(in("window-1"), []DragItem{{ID: a.ID}})
+	var detach func()
+	s.after = func(_ time.Duration, fn func()) { detach = fn }
+	s.EndDrag(token, true)
+	s.Drop(in("window-3"), token)
+	detach()
+
+	// Its tabs were closed while dragged.
+	token = s.StartDrag(in("window-3"), []DragItem{{ID: a.ID}})
+	s.Release(in("window-3"), a.ID)
+	s.EndDrag(token, true)
+	detach()
+
+	if !slices.Equal(s.windows.created, []string{"window-1"}) {
+		t.Fatalf("created %v; want no window for a claimed or empty drag", s.windows.created)
+	}
+	if _, ok := s.wins["window-2"]; ok {
+		t.Fatal("an unused detach window was kept")
+	}
+	s.Launch([]string{"/b.pdf"}, "/")
+	if !slices.Equal(s.windows.created, []string{"window-1"}) {
+		t.Fatalf("created %v; launched files should still go to window-1", s.windows.created)
+	}
+}
+
+func TestDragCancelledTellsEveryWindow(t *testing.T) {
+	s := newService()
+	s.DragCancelled(true)
+	if ev := s.events.events[0]; ev.name != EventDragCancelled || ev.data != (Targeted{"", true}) {
+		t.Fatalf("event %+v", ev)
 	}
 }

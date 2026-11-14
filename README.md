@@ -10,6 +10,9 @@ conversion. Go + [Wails v3](https://v3.wails.io) for the desktop shell,
 - Tabs, in one process: opening another PDF (e.g. from the file manager)
   adds a tab to the running app's last-used window, or switches to the tab
   already showing it; Ctrl+N still opens a separate window
+- Drag tabs to reorder them, onto another window to move them there, or
+  out of every window to open them in a new one; drag the app icon (or the
+  empty part of the tab bar) onto another window to merge the two
 - Light on memory: pdf.js loads only with the first document, only the active
   tab keeps rendered pages, only the three most recently used tabs keep their
   document open (others reopen on demand), files are read by byte range, and

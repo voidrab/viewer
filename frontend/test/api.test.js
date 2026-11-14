@@ -14,6 +14,7 @@ function fakeRuntime() {
       Minimise: vi.fn(),
       ToggleMaximise: vi.fn(),
       Close: vi.fn(),
+      Focus: vi.fn(),
     },
   };
 }
@@ -26,6 +27,10 @@ describe('createApi', () => {
     ['open', ['/a.pdf'], 'Open'],
     ['release', [7], 'Release'],
     ['newWindow', [], 'NewWindow'],
+    ['startDrag', [[{ id: 7, state: null }]], 'StartDrag'],
+    ['endDrag', [3, true], 'EndDrag'],
+    ['initialTabs', [], 'InitialTabs'],
+    ['drop', [3], 'Drop'],
     ['verify', [7, 'pdfa1b'], 'Verify'],
     ['convert', [7, 'pdfa2b'], 'Convert'],
   ])('%s calls the Go service method %s', (name, args, method) => {
@@ -54,6 +59,30 @@ describe('createApi', () => {
     expect(opened).toHaveBeenCalledExactlyOnceWith(['/a.pdf']);
     expect(shown).toHaveBeenCalledExactlyOnceWith(3);
     expect(failed).toHaveBeenCalledExactlyOnceWith('nope');
+  });
+
+  it('handles drag announcements for every window, moves out only for this one', async () => {
+    const rt = fakeRuntime();
+    const api = createApi(rt);
+    const dragged = vi.fn();
+    const movedOut = vi.fn();
+    api.onDrag(dragged);
+    api.onMovedOut(movedOut);
+    const cancelled = vi.fn();
+    api.onDragCancelled(cancelled);
+    const [[dragName, dragCb], [movedName, movedCb], [cancelName, cancelCb]] = rt.Events.On.mock.calls;
+    // Must match viewer.EventDrag, EventMovedOut and EventDragCancelled in Go.
+    expect([dragName, movedName, cancelName]).toEqual(['tabs:drag', 'tabs:moved-out', 'tabs:drag-cancelled']);
+    cancelCb({ data: { window: '', data: true } });
+    expect(cancelled).toHaveBeenCalledExactlyOnceWith(true);
+    const state = { token: 1, from: 'window-2', count: 1, active: true };
+    dragCb({ data: { window: '', data: state } });
+    await movedCb({ data: { window: 'window-2', data: [4] } });
+    await movedCb({ data: { window: 'window-1', data: [5] } });
+    expect(dragged).toHaveBeenCalledExactlyOnceWith(state);
+    expect(movedOut).toHaveBeenCalledExactlyOnceWith([5]);
+    api.focus();
+    expect(rt.Window.Focus).toHaveBeenCalledOnce();
   });
 
   it('forwards browser, platform and window calls', () => {

@@ -61,6 +61,7 @@ func main() {
 		app.Event.Emit(name, data)
 	}, callingWindow)
 	windows.svc = svc
+	watchDragCancels(svc.DragCancelled)
 	app.RegisterService(application.NewServiceWithOptions(svc, application.ServiceOptions{Route: viewer.Route}))
 
 	cwd, _ := os.Getwd()

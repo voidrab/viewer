@@ -116,12 +116,19 @@ export function createDocumentView({ container, pdfjs, viewerLib, assetBase }) {
       linkService.setDocument(handle.pdf, null);
     },
     /**
+     * Where the shown document is, for show.
+     * @returns {{scale: string, top: number, left: number}}
+     */
+    state() {
+      return { scale: viewer.currentScaleValue, top: container.scrollTop, left: container.scrollLeft };
+    },
+    /**
      * Takes the shown document out of the viewer, dropping its rendered pages
      * and pdf.js's caches for it.
      * @returns {{scale: string, top: number, left: number}} where it was, for show
      */
     hide() {
-      const state = { scale: viewer.currentScaleValue, top: container.scrollTop, left: container.scrollLeft };
+      const state = this.state();
       viewer.setDocument(null);
       linkService.setDocument(null, null);
       shown.pdf.cleanup();
