@@ -14,6 +14,7 @@ import (
 
 	"viewer/internal/testpdf"
 	"viewer/internal/ui/paint"
+	"viewer/internal/ui/platform"
 )
 
 // tracker records which parts of pages are rendered, in which order, and lets a
@@ -454,10 +455,62 @@ func TestStandInsAreTheNewestResolutionOfThePage(t *testing.T) {
 func TestNewPoolDefaults(t *testing.T) {
 	for _, opts := range []PoolOptions{{}, {Workers: -3, CacheBytes: -1}} {
 		p := NewPool(opts)
-		if p.budget != 128<<20 {
-			t.Errorf("budget = %d for %+v", p.budget, opts)
+		if p.fixed || p.budget != minBudget {
+			t.Errorf("budget = %d, fixed %v for %+v", p.budget, p.fixed, opts)
 		}
 		p.Close()
+	}
+}
+
+func TestBudgetFollowsTheLargestViewport(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	a, _ := sharedView(t, pool, 1, newTracker(nil))
+	if got := pool.budgetBytes(); got != minBudget {
+		t.Errorf("small viewport: budget = %d, want the least, %d", got, minBudget)
+	}
+	a.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: 1000, H: 800}})
+	if got, want := pool.budgetBytes(), viewportScreens*4*1000*800; got != want {
+		t.Errorf("1000x800: budget = %d, want %d", got, want)
+	}
+	b, _ := sharedView(t, pool, 1, newTracker(nil))
+	b.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: 4000, H: 3000}})
+	if got := pool.budgetBytes(); got != maxBudget {
+		t.Errorf("huge viewport: budget = %d, want the most, %d", got, maxBudget)
+	}
+	b.Close()
+	if got, want := pool.budgetBytes(), viewportScreens*4*1000*800; got != want {
+		t.Errorf("after the huge view closed: budget = %d, want %d", got, want)
+	}
+}
+
+func TestShrinkingTheBudgetEvictsTheOldest(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	v, _ := sharedView(t, pool, 3, newTracker(nil))
+	v.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: 2000, H: 1000}})
+	big := func() *image.RGBA { return image.NewRGBA(image.Rect(0, 0, 2000, 3000)) } // 24 MB
+	pool.mu.Lock()
+	for i := range 3 {
+		pool.store(v, testKey(i, 72), big())
+	}
+	pool.mu.Unlock()
+	v.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: 100, H: 100}}) // down to minBudget
+	if pool.has(v, testKey(0, 72)) || !pool.has(v, testKey(2, 72)) {
+		t.Error("a smaller viewport did not evict the oldest bitmaps, or evicted the newest")
+	}
+	if pool.bytes > minBudget {
+		t.Errorf("%d bytes cached, over the budget of %d", pool.bytes, minBudget)
+	}
+}
+
+func TestAGivenBudgetDoesNotFollowTheViewport(t *testing.T) {
+	pool := NewPool(PoolOptions{Workers: 1, CacheBytes: 1000})
+	t.Cleanup(pool.Close)
+	v, _ := sharedView(t, pool, 1, newTracker(nil))
+	v.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: 1000, H: 800}})
+	if got := pool.budgetBytes(); got != 1000 {
+		t.Errorf("budget = %d, want the given 1000", got)
 	}
 }
 

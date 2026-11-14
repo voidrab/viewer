@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"viewer/internal/ui/app"
 	"viewer/internal/ui/instance"
@@ -14,9 +15,24 @@ import (
 )
 
 func main() {
+	tuneGC()
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "nativeview:", err)
 		os.Exit(1)
+	}
+}
+
+// gcPercent is the garbage collector's target when the environment sets none.
+// Nearly all of the heap is page bitmaps and decoded images, which the
+// collector does not scan, so collecting four times as often as Go's default
+// costs little time, while the heap may outgrow what is live by a quarter
+// rather than double it.
+const gcPercent = 25
+
+// tuneGC sets gcPercent, unless GOGC or GOMEMLIMIT says how to collect.
+func tuneGC() {
+	if os.Getenv("GOGC") == "" && os.Getenv("GOMEMLIMIT") == "" {
+		debug.SetGCPercent(gcPercent)
 	}
 }
 

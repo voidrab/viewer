@@ -13,10 +13,24 @@ type PoolOptions struct {
 	// Workers is the number of renders in flight at once; zero means half the
 	// CPUs, at least one.
 	Workers int
-	// CacheBytes bounds the memory of all cached page bitmaps; zero means
-	// 128 MiB.
+	// CacheBytes bounds the memory of all cached page bitmaps. Zero means a
+	// budget that follows the views' viewports: viewportScreens viewports'
+	// worth of pixels, between minBudget and maxBudget.
 	CacheBytes int
 }
+
+// A pool whose budget follows the viewports keeps viewportScreens times the
+// pixels of the largest viewport. Rendering ahead wants about six viewports'
+// worth, and a page counts whole once any of it is wanted, so this is the
+// least that keeps rendering ahead within half the budget, as want requires,
+// without holding on to pages long scrolled past. minBudget leaves room for
+// the previews of a small window, and maxBudget bounds a large screen, where
+// rendering ahead gives way to the parts in view.
+const (
+	viewportScreens = 16
+	minBudget       = 32 << 20
+	maxBudget       = 128 << 20
+)
 
 // Pool renders parts of pages for any number of views on a few workers and
 // keeps their bitmaps under one memory budget. Work is ordered by priority:
@@ -34,6 +48,8 @@ type Pool struct {
 	nextID int
 
 	budget int
+	fixed  bool        // the budget was given, rather than following the viewports
+	areas  map[int]int // the viewport of each view, in pixels
 	cache  map[cacheKey]*entry
 	lru    *list.List // front is most recently used
 	bytes  int
@@ -77,12 +93,12 @@ func NewPool(opts PoolOptions) *Pool {
 	if opts.Workers <= 0 {
 		opts.Workers = max(1, runtime.NumCPU()/2)
 	}
-	if opts.CacheBytes <= 0 {
-		opts.CacheBytes = 128 << 20
-	}
 	p := &Pool{
-		budget: opts.CacheBytes,
-		cache:  map[cacheKey]*entry{}, lru: list.New(), byPage: map[viewPage][]*entry{},
+		budget: opts.CacheBytes, fixed: opts.CacheBytes > 0, areas: map[int]int{},
+		cache: map[cacheKey]*entry{}, lru: list.New(), byPage: map[viewPage][]*entry{},
+	}
+	if !p.fixed {
+		p.budget = minBudget
 	}
 	p.cond = sync.NewCond(&p.mu)
 	for range opts.Workers {
@@ -112,13 +128,44 @@ func (p *Pool) clearCache() {
 	p.lru.Init()
 }
 
-// attach gives a view its identity in the pool.
-func (p *Pool) attach(v *View) {
+// attach gives a view of viewport size vp its identity in the pool.
+func (p *Pool) attach(v *View, vp image.Point) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.nextID++
 	v.id = p.nextID
 	v.inflight = map[key]*job{}
-	p.mu.Unlock()
+	p.areas[v.id] = vp.X * vp.Y
+	p.fitBudget()
+}
+
+// setViewport tells the pool the new viewport size of v.
+func (p *Pool) setViewport(v *View, vp image.Point) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.areas[v.id] = vp.X * vp.Y
+	p.fitBudget()
+}
+
+// fitBudget sets a budget that follows the viewports from the largest of them,
+// and evicts what no longer fits. The caller holds p.mu.
+func (p *Pool) fitBudget() {
+	if p.fixed {
+		return
+	}
+	biggest := 0
+	for _, a := range p.areas {
+		biggest = max(biggest, a)
+	}
+	p.budget = min(max(viewportScreens*4*biggest, minBudget), maxBudget)
+	p.trim()
+}
+
+// budgetBytes returns the budget in effect.
+func (p *Pool) budgetBytes() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.budget
 }
 
 // detach cancels a view's work and forgets its bitmaps. It returns once no
@@ -134,6 +181,8 @@ func (p *Pool) detach(v *View) {
 		}
 		e = next
 	}
+	delete(p.areas, v.id)
+	p.fitBudget()
 	for v.running {
 		p.cond.Wait()
 	}
@@ -369,6 +418,12 @@ func (p *Pool) store(v *View, k key, img *image.RGBA) {
 	vp := viewPage{v.id, k.page}
 	p.byPage[vp] = append(p.byPage[vp], e)
 	p.bytes += len(img.Pix)
+	p.trim()
+}
+
+// trim evicts the least recently used bitmaps beyond the budget, keeping at
+// least the newest. The caller holds p.mu.
+func (p *Pool) trim() {
 	for p.bytes > p.budget && p.lru.Len() > 1 {
 		p.remove(p.lru.Back().Value.(*entry))
 	}

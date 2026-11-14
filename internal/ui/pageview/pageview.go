@@ -169,7 +169,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	if v.pool == nil {
 		v.pool, v.ownsPool = NewPool(PoolOptions{Workers: opts.Workers, CacheBytes: opts.CacheBytes}), true
 	}
-	v.pool.attach(v)
+	v.pool.attach(v, viewport)
 	return v, nil
 }
 
@@ -309,7 +309,7 @@ func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
 	dpi := dpiFor(v.lay.Scale())
 	view := image.Rectangle{Max: v.lay.Viewport()}
 	plan := v.plan(dpi, view, true)
-	if plan.bytes > v.pool.budget/2 {
+	if plan.bytes > v.pool.budgetBytes()/2 {
 		// Rendering ahead would push the parts in view out of the cache, and
 		// they would be rendered over and over.
 		plan = v.plan(dpi, view, false)
@@ -535,6 +535,7 @@ func (v *View) HandleEvent(ev platform.Event) bool {
 	switch ev := ev.(type) {
 	case platform.ResizeEvent:
 		v.lay.SetViewport(ev.Size.W, ev.Size.H)
+		v.pool.setViewport(v, v.lay.Viewport())
 		return true
 	case platform.ScrollEvent:
 		if ev.Mods&platform.Ctrl != 0 {
