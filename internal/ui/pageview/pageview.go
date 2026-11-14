@@ -24,7 +24,7 @@ type Options struct {
 	// Gap is the space between pages and Margin the space around the column,
 	// in pixels. Zero means 12 and 12.
 	Gap, Margin int
-	// Background is painted behind the pages; zero means mid gray.
+	// Background is painted behind the pages.
 	Background color.NRGBA
 	// CacheBytes bounds the memory of cached page bitmaps; zero means 256 MiB.
 	CacheBytes int
@@ -56,7 +56,7 @@ func (o *Options) fill() {
 	}
 }
 
-// Zoom steps for the keyboard.
+// zoomStep is the factor by which one zoom step multiplies the scale.
 const zoomStep = 1.25
 
 // key identifies a rendered bitmap: a page at a whole dpi.
@@ -81,8 +81,8 @@ func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64) (*image.RG
 	return p.Render(ctx, gopdfrab.RenderOptions{Scale: scale})
 }
 
-// View is a document in a viewport. Draw, HandleEvent and Resize belong to
-// one goroutine; rendering happens on workers it starts itself.
+// View is a document in a viewport. Draw and HandleEvent belong to one
+// goroutine; rendering happens on workers it starts itself.
 type View struct {
 	pages      []*gopdfrab.Page
 	render     renderFunc
@@ -143,8 +143,8 @@ func (v *View) Close() {
 	v.mu.Unlock()
 }
 
-// dpiFor is the whole dpi a page is rendered at for the current scale, which
-// is also how gopdfrab rounds it.
+// dpiFor returns the whole dpi, at least 1, that a page is rendered at for
+// scale. Cached bitmaps are keyed by this value.
 func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
 
 // Draw paints the visible pages into c, whose bounds are the viewport. A page

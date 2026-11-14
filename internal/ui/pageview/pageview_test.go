@@ -91,7 +91,7 @@ func TestStaleBitmapStandsInWhileRerendering(t *testing.T) {
 	v.Draw(c)
 	waitInv(t, inv)
 	v.HandleEvent(platform.KeyEvent{Down: true, Rune: '+', Mods: platform.Ctrl})
-	v.Draw(c) // the new scale is not rendered yet: the old bitmap is stretched
+	v.Draw(c) // the new scale is not rendered yet, so the old bitmap is stretched
 	r := v.Layout().ViewRect(0)
 	if got := c.Img.RGBAAt(r.Min.X+r.Dx()/2, r.Min.Y+r.Dy()/2); got != red {
 		t.Errorf("stand-in pixel = %v, want red", got)

@@ -615,8 +615,8 @@ func TestDragCancelledTellsEveryWindow(t *testing.T) {
 	}
 }
 
-// TestDefaultAfterRunsTheFunction checks that a Service built by New runs
-// delayed work on a real timer, which the fixture normally replaces.
+// TestDefaultAfterRunsTheFunction verifies that a Service built by New runs
+// delayed work on a real timer, which test fixtures normally replace.
 func TestDefaultAfterRunsTheFunction(t *testing.T) {
 	s := New(nil, nil, nil, nil)
 	ran := make(chan struct{})
