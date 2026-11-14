@@ -97,6 +97,7 @@ func TestFakeClipboardRoundTrips(t *testing.T) {
 	win, _ := f.NewWindow(WindowOptions{})
 	w := win.(*FakeWindow)
 	<-w.Events() // the initial resize
+	<-w.Events() // and frame
 	w.RequestPaste()
 	select {
 	case ev := <-w.Events():
