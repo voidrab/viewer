@@ -112,12 +112,16 @@ func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
 		return
 	}
 	clip := dst.Intersect(c.Clip())
+	// The source column of each destination column is the same on every row.
+	cols := make([]int, clip.Dx())
+	for i := range cols {
+		cols[i] = src.Rect.Min.X + (clip.Min.X+i-dst.Min.X)*sw/dst.Dx()
+	}
 	for y := clip.Min.Y; y < clip.Max.Y; y++ {
 		sy := src.Rect.Min.Y + (y-dst.Min.Y)*sh/dst.Dy()
 		row := c.Img.Pix[c.Img.PixOffset(clip.Min.X, y):][:4*clip.Dx()]
 		for i := 0; i < len(row); i += 4 {
-			sx := src.Rect.Min.X + (clip.Min.X+i/4-dst.Min.X)*sw/dst.Dx()
-			p := src.Pix[src.PixOffset(sx, sy):][:4]
+			p := src.Pix[src.PixOffset(cols[i/4], sy):][:4]
 			blend(row[i:i+4:i+4], color.RGBA{p[0], p[1], p[2], p[3]})
 		}
 	}

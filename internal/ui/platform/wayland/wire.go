@@ -65,9 +65,7 @@ func (e *Encoder) Array(b []byte) *Encoder {
 func (e *Encoder) FD(fd int) *Encoder { e.fds = append(e.fds, fd); return e }
 
 func (e *Encoder) pad() {
-	for len(e.buf)%4 != 0 {
-		e.buf = append(e.buf, 0)
-	}
+	e.buf = append(e.buf, make([]byte, padded(len(e.buf))-len(e.buf))...)
 }
 
 // Decoder reads the arguments of one received event. The first failure is

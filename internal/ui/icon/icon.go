@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"slices"
 
 	"golang.org/x/image/vector"
 
@@ -80,9 +81,7 @@ func Draw(c *paint.Canvas, rect image.Rectangle, ic Icon, col color.NRGBA, width
 	r.Reset(w, h)
 	add := func(poly []Pt) {
 		if !positive(poly) {
-			for i, j := 0, len(poly)-1; i < j; i, j = i+1, j-1 {
-				poly[i], poly[j] = poly[j], poly[i]
-			}
+			slices.Reverse(poly)
 		}
 		for i, p := range poly {
 			x, y := float32(p.X*sx), float32(p.Y*sy)

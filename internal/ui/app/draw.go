@@ -24,33 +24,33 @@ func humanSize(n int64) string {
 	return fmt.Sprintf("%.1f %s", size, suffix)
 }
 
+// viewButtons are the toolbar buttons that need an open document.
+var viewButtons = []widget.ButtonID{
+	widget.ButtonPrev, widget.ButtonNext, widget.ButtonZoomOut, widget.ButtonZoomMode,
+	widget.ButtonZoomIn, widget.ButtonFind, widget.ButtonPDFA,
+}
+
 // chrome brings the widgets in line with the current state.
 func (a *App) chrome() {
 	d := a.current()
 	tb := a.toolbar
-	titles := make([]string, len(a.docs))
-	for i, x := range a.docs {
-		titles[i] = x.name
+	a.tabs.Titles = a.tabs.Titles[:0]
+	for _, x := range a.docs {
+		a.tabs.Titles = append(a.tabs.Titles, x.name)
 	}
-	a.tabs.Titles, a.tabs.Active = titles, a.active
+	a.tabs.Active = a.active
 
+	for _, id := range viewButtons {
+		tb.Disabled[id] = d == nil
+	}
 	if d == nil {
 		tb.PageText, tb.ZoomText = "", "Fit width"
-		for _, id := range []widget.ButtonID{
-			widget.ButtonPrev, widget.ButtonNext, widget.ButtonZoomOut, widget.ButtonZoomMode,
-			widget.ButtonZoomIn, widget.ButtonFind, widget.ButtonPDFA,
-		} {
-			tb.Disabled[id] = true
-		}
 		a.status.Info, a.status.Right = "", nil
 		a.setTitle("Viewer")
 	} else {
 		page, pages := d.view.Page(), d.view.Pages()
 		tb.PageText = fmt.Sprintf("%d / %d", page+1, pages)
 		tb.ZoomText = d.view.ZoomLabel()
-		for _, id := range []widget.ButtonID{widget.ButtonZoomOut, widget.ButtonZoomMode, widget.ButtonZoomIn, widget.ButtonFind, widget.ButtonPDFA} {
-			tb.Disabled[id] = false
-		}
 		tb.Disabled[widget.ButtonPrev] = page <= 0
 		tb.Disabled[widget.ButtonNext] = page >= pages-1
 		a.status.Info = d.name + "  " + humanSize(d.bytes)
@@ -85,7 +85,7 @@ func (a *App) draw() {
 	}
 	a.chrome()
 	c := a.canvas
-	c.Fill(c.Bounds(), a.palette.Canvas)
+	c.Fill(c.Bounds(), a.opts.Palette.Canvas)
 	toolbar, tabs, content, status := a.layout()
 	a.toolbar.Draw(c, toolbar.Min)
 	if d := a.current(); d != nil {
@@ -101,9 +101,9 @@ func (a *App) draw() {
 // hint tells the user how to open something, centred in r.
 func (a *App) hint(r image.Rectangle) {
 	for i, line := range []string{"No document open", "Press Ctrl+O, or start with file names"} {
-		col := a.palette.Faint
+		col := a.opts.Palette.Faint
 		if i == 0 {
-			col = a.palette.Muted
+			col = a.opts.Palette.Muted
 		}
 		y := r.Min.Y + r.Dy()/2 - a.face.Height() + i*(a.face.Height()+6)
 		a.face.Draw(a.canvas, r.Min.X+(r.Dx()-a.face.Width(line))/2, y, line, col)

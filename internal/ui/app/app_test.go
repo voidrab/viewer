@@ -600,7 +600,7 @@ func TestPointerRoutingAndHover(t *testing.T) {
 	}
 	// Events with no section under them, such as beyond the window, are harmless.
 	f.pointer(platform.Move, platform.None, winW+50, -20)
-	if s, _ := f.a.hit(image.Pt(-1, -1)); s != sectionNone {
+	if s := f.a.hit(image.Pt(-1, -1)); s != sectionNone {
 		t.Errorf("section outside the window = %d", s)
 	}
 	if o := f.a.origin(sectionNone); o != (image.Point{}) {
@@ -716,7 +716,7 @@ func TestNewAppliesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.palette != theme.Light() || a.opts.Verify == nil || a.opts.Inspect == nil || a.opts.Now == nil || a.opts.AfterFunc == nil {
+	if a.opts.Palette != theme.Light() || a.opts.Verify == nil || a.opts.Inspect == nil || a.opts.Now == nil || a.opts.AfterFunc == nil {
 		t.Error("defaults were not applied")
 	}
 	// The default AfterFunc runs its function after the delay.

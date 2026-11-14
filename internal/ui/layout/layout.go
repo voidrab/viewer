@@ -4,6 +4,7 @@
 package layout
 
 import (
+	"cmp"
 	"image"
 	"math"
 	"sort"
@@ -106,7 +107,7 @@ func (l *Layout) ScrollBy(d image.Point) { l.ScrollTo(l.scroll.Add(d)) }
 func (l *Layout) ScrollTo(p image.Point) {
 	maxX := max(0, l.width+2*l.margin-l.viewport.X)
 	maxY := max(0, l.total-l.viewport.Y)
-	l.scroll = image.Pt(clampInt(p.X, 0, maxX), clampInt(p.Y, 0, maxY))
+	l.scroll = image.Pt(clamp(p.X, 0, maxX), clamp(p.Y, 0, maxY))
 }
 
 // PageRect returns page i's rectangle in document pixels. Pages are centred
@@ -141,7 +142,7 @@ func (l *Layout) Current() int {
 	}
 	mid := l.scroll.Y + l.viewport.Y/2
 	i := sort.Search(len(l.pages), func(i int) bool { return l.tops[i] > mid }) - 1
-	return clampInt(i, 0, len(l.pages)-1)
+	return clamp(i, 0, len(l.pages)-1)
 }
 
 // GoTo scrolls so that page i's top edge lies gap pixels below the top of the
@@ -150,7 +151,7 @@ func (l *Layout) GoTo(i int) {
 	if len(l.pages) == 0 {
 		return
 	}
-	l.ScrollTo(image.Pt(l.scroll.X, l.tops[clampInt(i, 0, len(l.pages)-1)]-l.gap))
+	l.ScrollTo(image.Pt(l.scroll.X, l.tops[clamp(i, 0, len(l.pages)-1)]-l.gap))
 }
 
 // HitPage returns the page under viewport point p and the point's position on
@@ -249,6 +250,5 @@ func fit(s float64) float64 {
 	return math.Min(s, MaxScale)
 }
 
-func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, v)) }
-
-func clampInt(v, lo, hi int) int { return max(lo, min(hi, v)) }
+// clamp limits v to [lo, hi].
+func clamp[T cmp.Ordered](v, lo, hi T) T { return max(lo, min(hi, v)) }

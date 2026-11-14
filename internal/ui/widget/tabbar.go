@@ -147,7 +147,7 @@ func (b *TabBar) HandleEvent(ev platform.PointerEvent) Action {
 	switch ev.Kind {
 	case platform.Move:
 		b.hover = b.hitTest(p)
-		if b.press >= 0 && !b.drag && abs(p.X-b.pressX) > dragSlop {
+		if b.press >= 0 && !b.drag && max(p.X-b.pressX, b.pressX-p.X) > dragSlop {
 			b.drag = true
 		}
 		if b.drag {
@@ -183,13 +183,6 @@ func (b *TabBar) HandleEvent(ev platform.PointerEvent) Action {
 		}
 	}
 	return Action{}
-}
-
-func abs(v int) int {
-	if v < 0 {
-		return -v
-	}
-	return v
 }
 
 // Dragging reports whether a tab is being dragged within the bar.

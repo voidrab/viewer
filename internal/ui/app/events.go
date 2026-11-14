@@ -7,19 +7,18 @@ import (
 	"viewer/internal/ui/widget"
 )
 
-// hit returns the section at p and the origin of that section's own
-// coordinates.
-func (a *App) hit(p image.Point) (section, image.Point) {
+// hit returns the section at p.
+func (a *App) hit(p image.Point) section {
 	toolbar, tabs, content, _ := a.layout()
 	switch {
 	case p.In(toolbar):
-		return sectionToolbar, toolbar.Min
+		return sectionToolbar
 	case p.In(tabs):
-		return sectionTabs, tabs.Min
+		return sectionTabs
 	case p.In(content):
-		return sectionContent, content.Min
+		return sectionContent
 	}
-	return sectionNone, image.Point{}
+	return sectionNone
 }
 
 // origin returns the origin of a section's own coordinates.
@@ -41,7 +40,7 @@ func (a *App) origin(s section) image.Point {
 // be dragged beyond the bar.
 func (a *App) pointer(ev platform.PointerEvent) {
 	p := image.Pt(int(ev.X), int(ev.Y))
-	under, _ := a.hit(p)
+	under := a.hit(p)
 	target := under
 	if a.capture != sectionNone {
 		target = a.capture
@@ -103,34 +102,33 @@ func (a *App) toolbarAction(act widget.Action) {
 	if act.Kind != widget.ActionButton {
 		return
 	}
-	d := a.current()
-	switch widget.ButtonID(act.Index) {
+	id := widget.ButtonID(act.Index)
+	switch id {
 	case widget.ButtonOpen:
 		a.pick()
+		return
 	case widget.ButtonFind:
-		a.say(widget.MessageWarn, "Find is not available yet")
+		a.say(widget.MessageWarn, findUnavailable)
+		return
 	case widget.ButtonPDFA:
 		a.verify()
+		return
+	}
+	d := a.current()
+	if d == nil {
+		return
+	}
+	switch id {
 	case widget.ButtonPrev:
-		if d != nil {
-			d.view.GoToPage(d.view.Page() - 1)
-		}
+		d.view.GoToPage(d.view.Page() - 1)
 	case widget.ButtonNext:
-		if d != nil {
-			d.view.GoToPage(d.view.Page() + 1)
-		}
+		d.view.GoToPage(d.view.Page() + 1)
 	case widget.ButtonZoomOut:
-		if d != nil {
-			d.view.ZoomOut()
-		}
+		d.view.ZoomOut()
 	case widget.ButtonZoomIn:
-		if d != nil {
-			d.view.ZoomIn()
-		}
+		d.view.ZoomIn()
 	case widget.ButtonZoomMode:
-		if d != nil {
-			d.view.CycleZoom()
-		}
+		d.view.CycleZoom()
 	}
 }
 
@@ -142,43 +140,47 @@ func (a *App) selectTab(i int) {
 	}
 }
 
+// findUnavailable is the message shown where find would start.
+const findUnavailable = "Find is not available yet"
+
 // key handles shortcuts, passing everything else to the active view. It
 // reports whether the shortcut asks to quit.
 func (a *App) key(ev platform.KeyEvent) (quit bool) {
 	if !ev.Down {
 		return false
 	}
-	if ev.Mods&platform.Ctrl != 0 {
-		switch {
-		case ev.Rune == 'q':
-			return true
-		case ev.Rune == 'o' || ev.Rune == 't':
-			a.pick()
-			return false
-		case ev.Rune == 'w':
-			a.closeTab(a.active)
-			return false
-		case ev.Rune == 'n':
-			a.say(widget.MessageWarn, "Several windows are not available yet")
-			return false
-		case ev.Rune == 'f':
-			a.say(widget.MessageWarn, "Find is not available yet")
-			return false
-		case ev.Rune >= '1' && ev.Rune <= '9':
-			if i := int(ev.Rune - '1'); i < len(a.docs) {
-				a.selectTab(i)
-			}
-			return false
-		case ev.Key == platform.KeyTab && ev.Mods&platform.Shift != 0, ev.Key == platform.KeyPageUp:
-			a.selectTab(a.active - 1)
-			return false
-		case ev.Key == platform.KeyTab, ev.Key == platform.KeyPageDown:
-			a.selectTab(a.active + 1)
-			return false
-		}
+	if ev.Mods&platform.Ctrl != 0 && a.shortcut(ev) {
+		return ev.Rune == 'q'
 	}
 	if d := a.current(); d != nil && d.view.HandleEvent(ev) {
 		a.win.Invalidate()
 	}
 	return false
+}
+
+// shortcut carries out a Ctrl shortcut and reports whether ev was one. Ctrl+Q
+// is recognised but left to the caller, which quits.
+func (a *App) shortcut(ev platform.KeyEvent) bool {
+	switch {
+	case ev.Rune == 'q':
+	case ev.Rune == 'o' || ev.Rune == 't':
+		a.pick()
+	case ev.Rune == 'w':
+		a.closeTab(a.active)
+	case ev.Rune == 'n':
+		a.say(widget.MessageWarn, "Several windows are not available yet")
+	case ev.Rune == 'f':
+		a.say(widget.MessageWarn, findUnavailable)
+	case ev.Rune >= '1' && ev.Rune <= '9':
+		if i := int(ev.Rune - '1'); i < len(a.docs) {
+			a.selectTab(i)
+		}
+	case ev.Key == platform.KeyTab && ev.Mods&platform.Shift != 0, ev.Key == platform.KeyPageUp:
+		a.selectTab(a.active - 1)
+	case ev.Key == platform.KeyTab, ev.Key == platform.KeyPageDown:
+		a.selectTab(a.active + 1)
+	default:
+		return false
+	}
+	return true
 }

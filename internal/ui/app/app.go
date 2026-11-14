@@ -42,6 +42,12 @@ type Options struct {
 	AfterFunc func(d time.Duration, f func())
 }
 
+// close releases the document's view and file.
+func (d *document) close() {
+	d.view.Close()
+	d.doc.Close()
+}
+
 // newFace and newView are replaced by tests to force their failures.
 var (
 	newFace = func(size float64) (*text.Face, error) { return text.Mono().Face(size, false) }
@@ -72,8 +78,7 @@ type App struct {
 	win  platform.Window
 	opts Options
 
-	palette theme.Palette
-	face    *text.Face
+	face *text.Face
 
 	toolbar *widget.Toolbar
 	tabs    *widget.TabBar
@@ -123,10 +128,10 @@ func New(win platform.Window, opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{win: win, opts: opts, palette: opts.Palette, face: face, active: -1, inbox: make(chan func(), 16)}
-	a.toolbar = widget.NewToolbar(a.palette, face)
-	a.tabs = widget.NewTabBar(a.palette, face)
-	a.status = widget.NewStatusBar(a.palette, small)
+	a := &App{win: win, opts: opts, face: face, active: -1, inbox: make(chan func(), 16)}
+	a.toolbar = widget.NewToolbar(opts.Palette, face)
+	a.tabs = widget.NewTabBar(opts.Palette, face)
+	a.status = widget.NewStatusBar(opts.Palette, small)
 	return a, nil
 }
 
@@ -211,17 +216,12 @@ func (a *App) resize(size platform.Size) {
 	a.size = size
 	a.canvas = paint.New(size.W, size.H)
 	a.toolbar.Layout(size.W)
-	a.tabs.Layout(size.W)
 	if len(a.pending) > 0 {
 		paths := a.pending
 		a.pending = nil
 		a.Open(paths...)
 	}
-	_, _, content, _ := a.layout()
-	for _, d := range a.docs {
-		d.view.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: content.Dx(), H: content.Dy()}, Scale: 1})
-	}
-	a.win.Invalidate()
+	a.afterChange()
 }
 
 // Open opens each file in its own tab, or switches to the tab already showing
@@ -288,31 +288,23 @@ func (a *App) closeTab(i int) {
 	if i < 0 || i >= len(a.docs) {
 		return
 	}
-	d := a.docs[i]
-	d.view.Close()
-	d.doc.Close()
+	a.docs[i].close()
 	a.docs = append(a.docs[:i], a.docs[i+1:]...)
-	switch {
-	case len(a.docs) == 0:
+	if len(a.docs) == 0 {
 		a.active = -1
-	case a.active > i, a.active >= len(a.docs):
-		a.active = min(a.active-btoi(a.active > i), len(a.docs)-1)
+	} else {
+		if a.active > i {
+			a.active--
+		}
+		a.active = min(a.active, len(a.docs)-1)
 	}
 	a.afterChange()
-}
-
-func btoi(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // closeAll closes every document.
 func (a *App) closeAll() {
 	for _, d := range a.docs {
-		d.view.Close()
-		d.doc.Close()
+		d.close()
 	}
 	a.docs, a.active = nil, -1
 }

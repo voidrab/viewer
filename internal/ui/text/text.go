@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"sort"
 	"sync"
 
 	"golang.org/x/image/font"
@@ -134,10 +135,10 @@ func (f *Face) Fit(s string, maxWidth int) string {
 		return ""
 	}
 	runes := []rune(s)
-	for n := len(runes); n > 0; n-- {
-		if f.Width(string(runes[:n])) <= room {
-			return string(runes[:n]) + ellipsis
-		}
+	// The widest prefix that fits: widths only grow with the prefix, so search.
+	n := sort.Search(len(runes), func(n int) bool { return f.Width(string(runes[:n+1])) > room })
+	if n == 0 {
+		return ellipsis
 	}
-	return ellipsis
+	return string(runes[:n]) + ellipsis
 }

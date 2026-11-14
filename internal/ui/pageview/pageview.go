@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"runtime"
 	"sync"
 
 	"github.com/voidrab/gopdfrab"
@@ -29,8 +28,8 @@ type Options struct {
 	Background color.NRGBA
 	// CacheBytes bounds the memory of cached page bitmaps; zero means 256 MiB.
 	CacheBytes int
-	// Workers is the number of pages rendered at once; zero means half the
-	// CPUs, at least one.
+	// Workers is the number of pages rendered at once; zero means one, since
+	// the pages of a document render one after another whatever the number.
 	Workers int
 	// ScrollSpeed multiplies wheel scroll distances; zero means 5.
 	ScrollSpeed float64
@@ -50,7 +49,7 @@ func (o *Options) fill() {
 		o.CacheBytes = 256 << 20
 	}
 	if o.Workers == 0 {
-		o.Workers = max(1, runtime.NumCPU()/2)
+		o.Workers = 1
 	}
 	if o.ScrollSpeed == 0 {
 		o.ScrollSpeed = 5
@@ -164,11 +163,11 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	v.cancelHidden(first, last)
 	for i := first; i < last; i++ {
 		r := v.lay.ViewRect(i).Add(rect.Min)
-		c.Fill(r, color.NRGBA{255, 255, 255, 255})
 		if img := v.lookup(key{i, dpi}); img != nil {
-			c.DrawScaled(r, img)
+			c.DrawScaled(r, img) // rendered pages are opaque: no paper needed under them
 			continue
 		}
+		c.Fill(r, color.NRGBA{255, 255, 255, 255})
 		if img := v.anyRender(i); img != nil {
 			c.DrawScaled(r, img)
 		}
