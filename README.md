@@ -27,8 +27,8 @@ xdg-desktop-portal.
 ## Usage
 
 ```sh
-make build-native               # bin/viewer-native, a static binary
-sudo make install-native        # as `viewer`, with desktop entry and icon
+make build                      # bin/viewer, a static binary
+sudo make install               # with desktop entry and icon
 make default                    # make Viewer your default PDF application
 make test                       # Go tests; fails below 100% coverage
 viewer a.pdf b.pdf              # each file opens in its own tab
