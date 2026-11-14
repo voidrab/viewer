@@ -95,7 +95,9 @@ func (c *Conn) Recv() (Event, error) {
 		oob := make([]byte, syscall.CmsgSpace(4*28))
 		n, oobn, _, _, err := c.sock.ReadMsgUnix(buf, oob)
 		c.takeFDs(oob[:oobn])
-		c.in = append(c.in, buf[:n]...)
+		if n > 0 {
+			c.in = append(c.in, buf[:n]...)
+		}
 		if err != nil {
 			if err == io.EOF && len(c.in) > 0 {
 				err = io.ErrUnexpectedEOF
