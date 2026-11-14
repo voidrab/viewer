@@ -59,9 +59,10 @@ func (a *App) setCursor(c platform.Cursor) {
 	}
 }
 
-// showLinkCursor shows the hand when the pointer, over section under, is over
-// a link of the page, and the arrow otherwise. It runs after the page view has
-// seen the event, which is what finds the link.
+// showLinkCursor sets the hand cursor when the pointer, over section under, is
+// on a link of the current page, and the default cursor otherwise. It must run
+// after the page view has handled the event, because the page view finds the
+// link.
 func (a *App) showLinkCursor(under section) {
 	c := platform.CursorDefault
 	if d := a.current(); d != nil && under == sectionContent && d.view.OverLink() {

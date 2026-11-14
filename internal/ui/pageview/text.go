@@ -349,12 +349,13 @@ func (v *View) drawText(c *paint.Canvas, origin image.Point) {
 	}
 }
 
-// OverLink reports whether the pointer is over a link, which the window shows
-// with a hand.
+// OverLink reports whether the pointer is over a link. The window shows a hand
+// cursor in that case.
 func (v *View) OverLink() bool { return v.text.hovered != nil }
 
-// setHover makes the link under the pointer at p, if any and if p is
-// not on a scrollbar, the hovered one. It reports whether that changed it.
+// setHover makes the link under p the hovered link and reports whether that
+// changed it. A link is looked up only while active is true and p is over page
+// content rather than a scrollbar; otherwise the hover is cleared.
 func (v *View) setHover(p image.Point, active bool) bool {
 	t := &v.text
 	var link *gopdfrab.Link
@@ -370,8 +371,8 @@ func (v *View) setHover(p image.Point, active bool) bool {
 	return changed
 }
 
-// drawLinks paints the link under the pointer, if it is on page i, over the
-// page in c.
+// drawLinks paints the hovered link over page i in c, if the hover is on
+// that page.
 func (v *View) drawLinks(c *paint.Canvas, origin image.Point, i int, d *pageData) {
 	for k := range d.links {
 		l := &d.links[k]
