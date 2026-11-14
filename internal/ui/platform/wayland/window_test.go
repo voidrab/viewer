@@ -435,10 +435,16 @@ func TestPresentSurvivesAllocationFailure(t *testing.T) {
 func TestBackendCloseEndsWindowsAndIgnoresUnknownEvents(t *testing.T) {
 	be, f, srv, win := openWindow(t, 4, 2)
 	f.mu.Lock()
-	xdg := f.xdgSurface
+	xdg, top, wm := f.xdgSurface, f.toplevel, f.ids["xdg_wm_base"]
 	f.mu.Unlock()
 	srv.send(xdg, 9, nil) // an xdg_surface event this client does not know
-	srv.send(f.ids["xdg_wm_base"], 9, nil)
+	srv.send(wm, 9, nil)
+	// Events are handled in order, so once this close request has arrived the
+	// unknown ones before it have been dispatched.
+	srv.send(top, toplevelClose, nil)
+	if ev := next(t, win); ev != (platform.CloseEvent{}) {
+		t.Fatalf("event = %#v", ev)
+	}
 	if err := be.Close(); err != nil {
 		t.Fatal(err)
 	}
