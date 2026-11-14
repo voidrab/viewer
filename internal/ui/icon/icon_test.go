@@ -50,8 +50,9 @@ func TestEveryIconDrawsInsideItsBox(t *testing.T) {
 }
 
 func TestOverlappingStrokesStaySolid(t *testing.T) {
-	// The crossing of the plus is covered by two lines and five discs: it must
-	// be exactly as opaque as a lone line, not more and not wrapped around to less.
+	// Overlapping strokes saturate at full opacity rather than cancel. The
+	// crossing of the plus lies under two strokes and must be as opaque as a
+	// single stroke.
 	c := paint.New(Grid, Grid)
 	Draw(c, image.Rect(0, 0, Grid, Grid), Plus, black, 3)
 	if a := alphaAt(c, 12, 12); a != 255 {
@@ -132,7 +133,8 @@ func TestDrawHonoursClipAndSkipsWhatCannotShow(t *testing.T) {
 func TestDegeneratePaths(t *testing.T) {
 	c := paint.New(Grid, Grid)
 	box := image.Rect(0, 0, Grid, Grid)
-	// No points, a repeated point (no segment, but a dot), a single point.
+	// An empty path draws nothing. A zero-length segment is skipped, but each
+	// point still gets a disc, so a repeated or single point leaves a dot.
 	Draw(c, box, Icon{{}, line(5, 5, 5, 5), line(12, 12)}, black, 3)
 	ink := inkRect(c)
 	if ink.Empty() || !image.Pt(12, 12).In(ink) || !image.Pt(5, 5).In(ink) {

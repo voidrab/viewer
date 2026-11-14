@@ -52,7 +52,7 @@ func circle(cx, cy, r float64) Path {
 	return p
 }
 
-// The icons.
+// The toolbar icons, each drawn on the Grid square.
 var (
 	Open     = Icon{shape(3, 6, 9, 6, 11, 9, 21, 9, 21, 19, 3, 19)}
 	Prev     = Icon{line(15, 5, 8, 12, 15, 19)}
