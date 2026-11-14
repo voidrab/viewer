@@ -52,9 +52,9 @@ Dragging on text selects it; elsewhere it pans, as does the middle button.
 ## Layout
 
 ```
-cmd/nativeview          the app: windows, tabs, portal dialogs, theme
-internal/ui             widgets, page view, render pool, Wayland glue
-internal/pdfa           gopdfrab adapter producing JSON-friendly reports
+cmd/nativeview          entry point: file dialogs (portal), theme, single instance
+internal/ui             app, widgets, page view, text layer, Wayland platform
+internal/pdfa           gopdfrab adapter producing PDF/A reports
 internal/testpdf        builds small valid PDFs for tests
 build/                  app icon and Linux desktop entry
 ```
