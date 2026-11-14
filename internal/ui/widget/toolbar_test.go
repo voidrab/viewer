@@ -181,11 +181,16 @@ func TestToolbarDrawStatesAndContent(t *testing.T) {
 		t.Error("a switched-on button is not highlighted")
 	}
 	// A disabled button is drawn in the Faint colour and still draws its icon.
+	enabled := paint.New(900, 60)
+	tb.Draw(enabled, image.Point{})
 	tb.Disabled[ButtonOpen] = true
 	dim := paint.New(900, 60)
 	tb.Draw(dim, image.Point{})
 	if sumAlpha(dim, tb.rects[ButtonOpen]) == 0 {
 		t.Error("a disabled button drew nothing")
+	}
+	if sumRed(dim, tb.rects[ButtonOpen]) == sumRed(enabled, tb.rects[ButtonOpen]) {
+		t.Error("a disabled button looks like an enabled one")
 	}
 }
 
