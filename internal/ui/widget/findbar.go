@@ -193,7 +193,8 @@ func (b *FindBar) HandleKey(ev platform.KeyEvent) FindAction {
 	return FindNone
 }
 
-// Paste inserts text at the caret, with line breaks as spaces.
+// Paste inserts s at the caret, with each run of white space replaced by one
+// space and none at either end.
 func (b *FindBar) Paste(s string) FindAction {
 	s = squash(s)
 	if s == "" {

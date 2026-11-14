@@ -970,7 +970,7 @@ func (f *fixture) pump(done func(platform.Event) bool) {
 }
 
 // textFixture opens a document whose two pages read "alpha beta" and "beta
-// gamma", waits for the first page's text, and returns the fixture.
+// gamma", and returns the fixture.
 func textFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := newFixture(t)
@@ -1050,7 +1050,8 @@ func TestFindButtonTogglesTheBar(t *testing.T) {
 	if f.a.findOpen {
 		t.Error("the Find button did not close the bar")
 	}
-	// Opening twice changes nothing, and with no document there is nothing to search.
+	// Opening an open bar keeps its text. With no document the bar stays
+	// closed.
 	f.key('f', platform.Ctrl)
 	f.a.findBar.SetText("kept")
 	f.key('f', platform.Ctrl)

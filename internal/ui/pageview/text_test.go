@@ -193,8 +193,8 @@ func TestClickingALinkFollowsIt(t *testing.T) {
 	q := at(v, 0, 20, 70)
 	press(v, q)
 	release(v, q)
-	// The page's top lies a gap below the top of the view, and the destination,
-	// 30 points down, is brought to 6 pixels from it.
+	// The follow scrolls by the destination's 30 points less linkMargin, so
+	// page 2's top ends 30-linkMargin pixels above where GoTo left it.
 	if got := v.lay.ViewRect(2).Min.Y; got != 12-(30-linkMargin) {
 		t.Errorf("page 2 starts at %d, want %d", got, 12-(30-linkMargin))
 	}

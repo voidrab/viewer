@@ -20,7 +20,7 @@ func run(x, y float64, s string) []gopdfrab.Glyph {
 	return out
 }
 
-// box is a gopdfrab.Rect.
+// box returns the gopdfrab.Rect with corners (x0, y0) and (x1, y1).
 func box(x0, y0, x1, y1 float64) gopdfrab.Rect {
 	return gopdfrab.Rect{X0: x0, Y0: y0, X1: x1, Y1: y1}
 }

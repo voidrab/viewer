@@ -65,7 +65,7 @@ func (a *App) chrome() {
 		a.setTitle(d.name + " — Viewer")
 	}
 	if a.findOpen && a.findDoc != d {
-		a.closeFind() // the tab changed: the search belongs to the one it began in
+		a.closeFind() // A search belongs to the tab it began in.
 	}
 	if a.findOpen {
 		a.findBar.Current, a.findBar.Total, a.findBar.Searching = d.view.FindStatus()

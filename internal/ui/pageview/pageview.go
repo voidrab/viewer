@@ -111,7 +111,8 @@ type View struct {
 	lay        *layout.Layout
 	ptr        pointerState
 
-	// What is known of each page's text and links, read in the background.
+	// Page text and links, read in the background, and the state of the
+	// selection and the search. dataMu guards datas, loading and find.
 	dataMu     sync.Mutex
 	datas      map[int]*pageData
 	loading    map[int]bool

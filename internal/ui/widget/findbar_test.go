@@ -181,7 +181,7 @@ func TestFindBarDrawsTextCountAndCaret(t *testing.T) {
 	if ink := inkIn(c, ta, palette.Accent); ink.Empty() || !ink.In(ta) {
 		t.Errorf("the caret of a long query is at %v, outside the field %v", ink, ta)
 	}
-	// A hovered button is washed.
+	// A hovered button is drawn in the hover colour.
 	b.hover = partClose
 	c.Fill(c.Bounds(), palette.Canvas)
 	b.Draw(c, area)

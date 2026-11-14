@@ -31,8 +31,8 @@ func TestFindHighlightsEveryMatchAndScrollsToTheFirst(t *testing.T) {
 	}
 	waitInv(t, inv)
 	v.Draw(c) // reveals the first match
-	// The match, "Hello" at (10, 10) on page 0, is in the view, a third of the
-	// way down it or at the top of the page.
+	// The match, "Hello" at (10, 10) on page 0, is inside the view after
+	// the first draw.
 	vr := v.lay.ViewRect(0)
 	if y := vr.Min.Y + 10; y < 0 || y > 300 {
 		t.Fatalf("the first match is at y %d, outside the view", y)

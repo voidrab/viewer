@@ -67,8 +67,8 @@ type input struct {
 	repeating   *keyRepeat // the key being repeated, if any
 }
 
-// lastSerial returns the serial of the latest input event, which the compositor
-// wants with a request, such as setting the clipboard, that an input event
+// lastSerial returns the serial of the latest input event. The compositor
+// requires it with requests, such as setting the clipboard, that an input event
 // caused.
 func (in *input) lastSerial() uint32 { return in.serial.Load() }
 

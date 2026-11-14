@@ -204,7 +204,8 @@ func (a *App) openFind() {
 	a.win.Invalidate()
 }
 
-// firstLine returns the first line of s, cut to a length a search can take.
+// firstLine returns the first line of s, cut to at most 100 runes and trimmed
+// of white space.
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]

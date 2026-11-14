@@ -18,7 +18,7 @@ type findState struct {
 	cancel   context.CancelFunc
 	byPage   map[int][]textlayer.Match // the matches of each page searched so far
 	searched int                       // how many pages have been searched
-	cur      pageMatch                 // the current match, if has
+	cur      pageMatch                 // the current match, valid when has is set
 	has      bool
 	reveal   bool // the current match is to be scrolled into view
 }
@@ -28,8 +28,8 @@ type pageMatch struct{ page, index int }
 
 // Find searches the document for query, ignoring case, and highlights every
 // match. The first one from the top of the view on is made current and scrolled
-// to. Matches are found page by page in the background; FindStatus says how it
-// is going. An empty query ends the search.
+// to. Matches are found page by page in the background; FindStatus reports its
+// progress. An empty query ends the search.
 func (v *View) Find(query string) {
 	v.ClearFind()
 	if strings.TrimSpace(query) == "" {
@@ -46,9 +46,9 @@ func (v *View) Find(query string) {
 }
 
 // search looks for query in every page, from page start to the end and then
-// from the first page up to it, noting what it finds in f, the state of its
-// own search: a search that has been replaced goes on writing to a state no
-// one reads.
+// from the first page up to it. It records its results in f, the state of this
+// search. A search replaced by a later one keeps writing to its own f, which
+// nothing reads.
 func (v *View) search(ctx context.Context, f *findState, query string, start int) {
 	defer v.loadWG.Done()
 	n := len(v.pages)
@@ -133,7 +133,7 @@ func (f *findState) pages() []int {
 }
 
 // FindNext makes the next match current, wrapping from the last to the first,
-// and scrolls to it. FindPrev goes the other way.
+// and scrolls to it.
 func (v *View) FindNext() { v.stepFind(1) }
 
 // FindPrev makes the previous match current.

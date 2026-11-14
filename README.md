@@ -60,12 +60,21 @@ viewer a.pdf b.pdf              # each file opens in its own tab
 
 It needs a Wayland session (X11 is not supported yet) and, for the Open
 dialog, a desktop with xdg-desktop-portal. It has tabs, a toolbar, scrolling,
-zoom, page navigation and a PDF/A check, but not yet find, text selection,
-links or the PDF/A panel. Opening another PDF while it runs adds a tab to the
-running window (and asks the compositor to bring it forward). Drag a page to
-pan, drag the scrollbar thumbs or click beside them to jump, hold a key to
-repeat it, and Ctrl+wheel zooms around the pointer. Use `make default` as usual
-to make it your PDF application.
+zoom, page navigation, text selection and copy, find, links, and a PDF/A
+check, but not yet the PDF/A panel.
+
+- Opening another PDF while it runs adds a tab to the running window (and asks
+  the compositor to bring it forward).
+- Drag on text to select it (double click a word, triple click a line), Ctrl+C
+  to copy. Dragging anywhere else pans the page, as does the middle button;
+  the scrollbar thumbs drag and clicking beside them jumps.
+- Ctrl+F finds text, starting from the selection, with every match
+  highlighted; Enter and Shift+Enter step through them, Ctrl+V pastes.
+- Links go to their page and position, or open http, https and mailto
+  addresses with `xdg-open`.
+- Ctrl+wheel zooms around the pointer, and holding a key repeats it.
+
+Use `make default` as usual to make it your PDF application.
 
 | Shortcut              | Action                   |
 | --------------------- | ------------------------ |
@@ -75,8 +84,9 @@ to make it your PDF application.
 | Ctrl+N                | New window               |
 | ← / →                 | Previous / next page     |
 | Ctrl+F, Enter/Shift+Enter | Find, next / previous match |
+| Ctrl+A / Ctrl+C       | Select all / copy        |
 | Ctrl+= / Ctrl+− / Ctrl+0 | Zoom in / out / fit width |
-| Esc                   | Close the PDF/A panel    |
+| Esc                   | Close find, clear the selection |
 
 ## Layout
 
