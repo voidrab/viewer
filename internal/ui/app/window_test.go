@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"viewer/internal/testpdf"
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/widget"
 )
@@ -182,5 +183,20 @@ func TestTheWindowEdgesResizeIt(t *testing.T) {
 	f.pointer(platform.Enter, platform.None, winW/2, winH/2)
 	if f.a.capture != sectionNone {
 		t.Errorf("after entering, section %d has the pointer", f.a.capture)
+	}
+}
+
+func TestAHandShowsOverALink(t *testing.T) {
+	f := newFixture(t)
+	f.open(testpdf.Write(t, f.dir, "link.pdf", testpdf.BuildLink()))
+	c := f.content()
+	x, y := mid(c)
+	waitFor(t, "the hand over the link", func() bool {
+		f.pointer(platform.Move, platform.None, x, y)
+		return f.win.Cursor() == platform.CursorPointer
+	})
+	f.pointer(platform.Leave, platform.None, x, y)
+	if f.win.Cursor() != platform.CursorDefault {
+		t.Errorf("cursor after leaving = %d", f.win.Cursor())
 	}
 }

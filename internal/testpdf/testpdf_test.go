@@ -111,3 +111,16 @@ func TestBuildTextHasTheText(t *testing.T) {
 		t.Errorf("a character is %v points wide, want 9", w)
 	}
 }
+
+func TestBuildLinkHasALink(t *testing.T) {
+	doc, err := gopdfrab.OpenBytes(BuildLink())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer doc.Close()
+	p, _ := doc.Page(0)
+	links, err := p.Links(context.Background())
+	if err != nil || len(links) != 1 || links[0].URI != "https://example.com" {
+		t.Errorf("links = %+v, err %v", links, err)
+	}
+}

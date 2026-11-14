@@ -389,7 +389,10 @@ func TestHoveringALinkHighlightsIt(t *testing.T) {
 	if px() != plain {
 		t.Error("a followed link stays coloured")
 	}
-	v.HandlePointer(platform.PointerEvent{Kind: platform.Leave})
+	move(v, in)
+	if !v.HandlePointer(platform.PointerEvent{Kind: platform.Leave}) {
+		t.Error("leaving the window over a link did not ask for a redraw")
+	}
 	if v.OverLink() {
 		t.Error("still over a link after the pointer left")
 	}
