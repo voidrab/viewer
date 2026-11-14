@@ -47,76 +47,43 @@ make test           # Go + frontend tests; fails below 100% coverage
 
 ## Native build (work in progress)
 
-A second, pure-Go viewer is being built to replace the webview and pdf.js: no
-cgo, no Node, no WebKit. It renders with gopdfrab's own rasterizer and talks to
-Wayland directly.
+A second, pure-Go viewer is replacing the webview and pdf.js: no cgo, no Node,
+no WebKit. It renders with gopdfrab's rasterizer and talks to Wayland directly.
 
 ```sh
 make build-native               # bin/viewer-native, a static binary
 sudo make install-native        # as `viewer`, with the same desktop entry and icon
-make install-native PREFIX=~/.local NAME=viewer-native   # one user, beside the other viewer
-viewer a.pdf b.pdf              # each file opens in its own tab
+make install-native PREFIX=~/.local NAME=viewer-native   # beside the other viewer
 ```
 
-It needs a Wayland session (X11 is not supported yet) and, for the Open and
-Save dialogs, a desktop with xdg-desktop-portal. It has tabs, a toolbar,
-scrolling, zoom, page navigation, text selection and copy, find, links, and
-the PDF/A panel. It looks like the webview build: the same toolbar, icons,
-colours, status line and Adwaita Mono type.
+Needs a Wayland session (no X11 yet) and, for Open/Save dialogs,
+xdg-desktop-portal. Same look as the webview build, with the same features:
+tabs, zoom (fit width/page, 50-300%), page field, text selection and copy,
+find, links (highlighted and hand cursor on hover; external ones via
+`xdg-open`), the PDF/A panel, and a light/dark toggle that follows the desktop
+until you pick (kept in `~/.config/viewer/theme`).
 
-- Click the page number to type another one; Enter, or clicking elsewhere,
-  goes there, and Escape leaves it. The zoom drop-down offers fit width, fit
-  page and fixed zooms from 50% to 300%, counted as in a browser (100% is 96
-  dpi), so a page shows at the same size in both builds.
-- The sun or moon button at the right of the toolbar switches between the
-  light and the dark theme. The window follows the desktop's theme (through
-  xdg-desktop-portal's settings) until you switch; the choice is kept in
-  `~/.config/viewer/theme`, and switching back to the desktop's theme forgets
-  it, so the window follows the desktop again.
+- One process runs every window; later launches add a tab to the last-used
+  window. Ctrl+N opens another window, Ctrl+Q closes all.
+- Drop PDFs on a window to open them. Drag tabs to reorder them, onto another
+  window to move them (the document is kept), or off every window for a new
+  one. Dragging the logo moves all tabs.
+- Dragging on text selects it; elsewhere it pans, as does the middle button.
+  Ctrl+wheel zooms around the pointer.
+- The toolbar is the title bar: drag to move, double click to maximise, right
+  click for the window menu.
 
-- One process runs every window. Opening another PDF while it runs adds a tab
-  to the window last used, or switches to the tab already showing it, and
-  asks the compositor to bring that window forward. Ctrl+N opens another
-  window, and Ctrl+Q closes them all.
-- Drop PDFs from the file manager on a window to open them in new tabs.
-- Drag a tab along the tab bar to reorder the tabs. Drag it off the bar to
-  carry it: onto another window's tab bar or pages to move it there, or away
-  from every window to open it in a new one. Dragging the logo, or the empty
-  part of the tab bar, carries every tab, merging the window into the one it
-  is dropped on. A moved tab keeps its document, so nothing is read again.
-- Drag on text to select it (double click a word, triple click a line), Ctrl+C
-  to copy. Dragging anywhere else pans the page, as does the middle button;
-  the scrollbar thumbs drag and clicking beside them jumps.
-- Ctrl+F, or a click on the find field, finds text, starting from the
-  selection, with every match highlighted; Enter and Shift+Enter, or the
-  arrows in the field, step through them, Ctrl+V pastes, Escape ends it.
-- Links go to their page and position, or open http, https and mailto
-  addresses with `xdg-open`.
-- Ctrl+wheel zooms around the pointer, and holding a key repeats it.
-- The toolbar is the title bar, as on the webview build: drag its empty part
-  to move the window, double click it to maximise, right click it for the
-  compositor's window menu, and use the minimise, maximise and close controls
-  at its right end. The window's edges resize it. Where the compositor insists
-  on drawing its own title bar, the toolbar leaves the controls to it.
-- The shield button opens the PDF/A panel: pick PDF/A-1b, PDF/A-2b or plain
-  PDF structure from its drop-down, verify, and open an issue to see its messages and jump to the
-  pages it is on. Convert… asks where to save a conformant copy, reports what
-  had to be rasterized or dropped, and opens the copy (reloading its tab if it
-  is already open). One check runs at a time and can be cancelled.
-
-Use `make default` as usual to make it your PDF application.
-
-| Shortcut              | Action                   |
-| --------------------- | ------------------------ |
-| Ctrl+O                | Open (into new tabs)     |
-| Ctrl+T / Ctrl+W       | New tab / close tab      |
-| Ctrl+Tab, Ctrl+PgDn/PgUp | Next / previous tab   |
-| Ctrl+N / Ctrl+Q       | New window / close every window |
-| ← / →                 | Previous / next page     |
-| Ctrl+F, Enter/Shift+Enter | Find, next / previous match |
-| Ctrl+A / Ctrl+C       | Select all / copy        |
-| Ctrl+= / Ctrl+− / Ctrl+0 | Zoom in / out / fit width |
-| Esc                   | Close find or a drop-down, leave the page field, clear the selection, close the PDF/A panel |
+| Shortcut                  | Action                          |
+| ------------------------- | ------------------------------- |
+| Ctrl+O                    | Open (into new tabs)            |
+| Ctrl+T / Ctrl+W           | New tab / close tab             |
+| Ctrl+Tab, Ctrl+PgDn/PgUp  | Next / previous tab             |
+| Ctrl+N / Ctrl+Q           | New window / close every window |
+| ← / →                     | Previous / next page            |
+| Ctrl+F, Enter/Shift+Enter | Find, next / previous match     |
+| Ctrl+A / Ctrl+C           | Select all / copy               |
+| Ctrl+= / Ctrl+− / Ctrl+0  | Zoom in / out / fit width       |
+| Esc                       | Close find, drop-down or panel; clear selection |
 
 ## Layout
 
