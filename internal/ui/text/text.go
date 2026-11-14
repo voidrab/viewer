@@ -15,7 +15,8 @@ import (
 	"viewer/internal/ui/paint"
 )
 
-// Liberation Mono, under the SIL Open Font License 1.1; see fonts/OFL.txt.
+// The embedded Liberation Mono fonts are licensed under the SIL Open Font
+// License 1.1; see fonts/OFL.txt.
 var (
 	//go:embed fonts/LiberationMono-Regular.ttf
 	monoRegular []byte
@@ -33,7 +34,7 @@ var (
 )
 
 // Family is a regular and a bold face of one typeface, and the sized Faces
-// made from them. It is not safe for concurrent use, like the faces it makes.
+// made from them.
 type Family struct {
 	regular, bold []byte
 
@@ -121,8 +122,8 @@ func (f *Face) Draw(c *paint.Canvas, x, y int, s string, col color.NRGBA) {
 }
 
 // Fit returns s shortened with a trailing ellipsis so that it is at most
-// maxWidth pixels wide, or s itself if it already fits. When even the ellipsis
-// does not fit it returns "".
+// maxWidth pixels wide, or s itself if it already fits. When even the
+// ellipsis does not fit, Fit returns "".
 func (f *Face) Fit(s string, maxWidth int) string {
 	if f.Width(s) <= maxWidth {
 		return s

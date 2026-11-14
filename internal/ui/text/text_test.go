@@ -72,7 +72,7 @@ func TestDrawPaintsInsideItsLine(t *testing.T) {
 	if !ink.In(line) {
 		t.Errorf("ink %v spills outside the line box %v", ink, line)
 	}
-	// The glyphs sit on the baseline: nothing but descenders is below it.
+	// No ink may extend below the line box.
 	if ink.Max.Y > 8+f.Ascent()+f.Height()-f.Ascent() {
 		t.Errorf("ink reaches %d", ink.Max.Y)
 	}
@@ -100,7 +100,7 @@ func TestDrawHonoursTheClipColourAndBold(t *testing.T) {
 	}
 	c.PopClip()
 
-	// Colour comes through.
+	// The text is drawn in the requested colour.
 	red := paint.New(60, 30)
 	f.Draw(red, 2, 2, "M", color.NRGBA{255, 0, 0, 255})
 	found := false
