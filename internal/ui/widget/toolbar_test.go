@@ -122,8 +122,9 @@ func TestToolbarHover(t *testing.T) {
 	}
 }
 
-// buttonPixel returns a pixel from the top-left corner region of button id,
-// where only the button's background shows, not its icon.
+// buttonPixel returns the pixel one pixel inside the top-left corner of button
+// id. The icon is inset further than that, so the pixel shows only the
+// button's background.
 func buttonPixel(c *paint.Canvas, tb *Toolbar, id ButtonID) (r, g, b, a uint8) {
 	p := c.Img.RGBAAt(tb.rects[id].Min.X+1, tb.rects[id].Min.Y+1)
 	return p.R, p.G, p.B, p.A
@@ -154,7 +155,9 @@ func TestToolbarDrawStatesAndContent(t *testing.T) {
 	}
 
 	idle := nrgba(palette.Chrome)
-	// Hover washes, a pressed button washes darker, a switched-on button shows the selection.
+	// A hovered button gets the Hover wash, a button that is pressed and
+	// hovered gets the Active wash, and a switched-on button gets the
+	// Selection fill.
 	x, y := mid(tb.rects[ButtonNext])
 	tb.HandleEvent(ptr(platform.Move, platform.None, x, y))
 	c = paint.New(900, 60)
@@ -177,7 +180,7 @@ func TestToolbarDrawStatesAndContent(t *testing.T) {
 	if r, g, b, _ := buttonPixel(c, tb, ButtonFind); (color4{r, g, b}) == (color4{idle.R, idle.G, idle.B}) {
 		t.Error("a switched-on button is not highlighted")
 	}
-	// A disabled button is dimmed: its icon is fainter than an enabled one's.
+	// A disabled button is drawn in the Faint colour and still draws its icon.
 	tb.Disabled[ButtonOpen] = true
 	dim := paint.New(900, 60)
 	tb.Draw(dim, image.Point{})

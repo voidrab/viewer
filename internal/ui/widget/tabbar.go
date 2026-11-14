@@ -24,7 +24,7 @@ const (
 	ActionClose              // the tab at Index asked to be closed
 	ActionNew                // the new-tab button was clicked
 	ActionReorder            // the tab at Index was dragged to position To
-	ActionButton             // the toolbar button with ID Index was pressed
+	ActionButton             // the toolbar button at Index was clicked
 )
 
 // Action is the result of an event handled by a widget.

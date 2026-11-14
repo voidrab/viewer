@@ -20,7 +20,7 @@ const (
 	ButtonPrev
 	ButtonNext
 	ButtonZoomOut
-	ButtonZoomMode // shows the zoom; pressing it steps to the next zoom preset
+	ButtonZoomMode // the zoom button, which shows ZoomText
 	ButtonZoomIn
 	ButtonFind
 	ButtonPDFA
@@ -44,9 +44,8 @@ type Toolbar struct {
 	// PageText is shown between the page buttons, such as "3 / 12", and
 	// ZoomText on the zoom button, such as "Fit width" or "125%".
 	PageText, ZoomText string
-	// Disabled buttons are dimmed and ignore the pointer; On buttons are
-	// drawn as switched on, as the find box's and the PDF/A panel's are while
-	// they are open.
+	// Disabled buttons are drawn dimmed and ignore the pointer. On buttons
+	// are drawn as switched on, for example while their panel is open.
 	Disabled, On map[ButtonID]bool
 
 	rects   [buttonCount]image.Rectangle
@@ -71,8 +70,9 @@ var icons = map[ButtonID]icon.Icon{
 	ButtonZoomOut: icon.Minus, ButtonZoomIn: icon.Plus, ButtonFind: icon.Search, ButtonPDFA: icon.Shield,
 }
 
-// Layout positions the buttons for a bar width pixels wide. The text between
-// the page buttons and on the zoom button gets the room it needs.
+// Layout records width as the bar's width and positions the buttons from the
+// left edge. The page and zoom buttons are sized to fit their text, so longer
+// text pushes the later buttons right.
 func (t *Toolbar) Layout(width int) {
 	t.width = width
 	y := (theme.ToolbarHeight - toolButton) / 2
@@ -108,8 +108,9 @@ func (t *Toolbar) hitTest(p image.Point) ButtonID {
 	return -1
 }
 
-// HandleEvent applies a pointer event, in the toolbar's own coordinates. A
-// button fires when the left button is released over the one it went down on.
+// HandleEvent applies a pointer event given in the toolbar's own coordinates.
+// It returns an Action of kind ActionButton when the left button is released
+// over the button it was pressed on, and the zero Action otherwise.
 func (t *Toolbar) HandleEvent(ev platform.PointerEvent) Action {
 	if !t.laid {
 		t.Layout(t.width)
