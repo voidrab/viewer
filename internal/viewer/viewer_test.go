@@ -614,3 +614,16 @@ func TestDragCancelledTellsEveryWindow(t *testing.T) {
 		t.Fatalf("event %+v", ev)
 	}
 }
+
+// TestDefaultAfterRunsTheFunction checks that a Service built by New runs
+// delayed work on a real timer, which the fixture normally replaces.
+func TestDefaultAfterRunsTheFunction(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	ran := make(chan struct{})
+	s.after(time.Millisecond, func() { close(ran) })
+	select {
+	case <-ran:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the delayed function never ran")
+	}
+}
