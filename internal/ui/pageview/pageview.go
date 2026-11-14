@@ -45,6 +45,9 @@ type Options struct {
 	// and over the one that is current; zero means translucent yellow and
 	// orange.
 	Match, CurrentMatch color.NRGBA
+	// LinkHover is the colour laid over the link under the pointer; zero
+	// means translucent blue.
+	LinkHover color.NRGBA
 	// Scrollbar is the colour of the scrollbars drawn over the pages, whose
 	// opacity the view sets; zero means a mid gray.
 	Scrollbar color.NRGBA
@@ -71,6 +74,9 @@ func (o *Options) fill() {
 	}
 	if o.CurrentMatch == (color.NRGBA{}) {
 		o.CurrentMatch = color.NRGBA{0xff, 0x8c, 0x00, 0xb4}
+	}
+	if o.LinkHover == (color.NRGBA{}) {
+		o.LinkHover = color.NRGBA{0x2f, 0x80, 0xed, 0x50}
 	}
 	if o.Scrollbar == (color.NRGBA{}) {
 		o.Scrollbar = color.NRGBA{0x9a, 0x9a, 0xa0, 0xff}

@@ -350,3 +350,47 @@ func TestSelectionColourIsConfigurable(t *testing.T) {
 		t.Errorf("highlight = %v, want red", got)
 	}
 }
+
+func TestHoveringALinkHighlightsIt(t *testing.T) {
+	v, _, _ := textView(t, 1, []gopdfrab.Link{
+		{Box: gopdfrab.Rect{X0: 10, Y0: 60, X1: 40, Y1: 80}, URI: "https://example.com", Page: -1},
+	})
+	c := paint.New(124, 300)
+	ready(t, v, c, 0)
+	in, out := at(v, 0, 20, 70), at(v, 0, 70, 90)
+	px := func() color.NRGBA {
+		v.Draw(c)
+		return color.NRGBAModel.Convert(c.Img.RGBAAt(in.X, in.Y)).(color.NRGBA)
+	}
+	plain := px()
+
+	if v.OverLink() {
+		t.Fatal("over a link before the pointer moved")
+	}
+	if !v.HandlePointer(ptr(platform.Move, platform.None, in.X, in.Y)) || !v.OverLink() {
+		t.Fatal("moving onto the link did not hover it")
+	}
+	hover := px()
+	if hover == plain {
+		t.Error("the hovered link is not highlighted")
+	}
+	if !v.HandlePointer(ptr(platform.Move, platform.None, out.X, out.Y)) || v.OverLink() {
+		t.Error("moving off the link did not end the hover")
+	}
+	if px() != plain {
+		t.Error("the highlight stayed after the pointer left")
+	}
+
+	// Following the link leaves nothing behind once the pointer moves off it.
+	move(v, in)
+	press(v, in)
+	release(v, in)
+	move(v, out)
+	if px() != plain {
+		t.Error("a followed link stays coloured")
+	}
+	v.HandlePointer(platform.PointerEvent{Kind: platform.Leave})
+	if v.OverLink() {
+		t.Error("still over a link after the pointer left")
+	}
+}

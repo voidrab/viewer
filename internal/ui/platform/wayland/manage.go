@@ -11,6 +11,7 @@ const (
 // cursorShapes maps each cursor to its wp_cursor_shape_device_v1 shape.
 var cursorShapes = map[platform.Cursor]uint32{
 	platform.CursorDefault:  1,
+	platform.CursorPointer:  4,
 	platform.CursorResizeE:  18,
 	platform.CursorResizeN:  19,
 	platform.CursorResizeNE: 20,

@@ -74,7 +74,11 @@ func (a *App) pointer(ev platform.PointerEvent) {
 		if ev.Kind == platform.Leave {
 			cursor = platform.CursorDefault
 		}
-		a.setCursor(cursor)
+		if ev.Kind == platform.Leave || cursor != platform.CursorDefault {
+			a.setCursor(cursor)
+		} else {
+			defer a.showLinkCursor(under)
+		}
 	}
 	target := under
 	if a.capture != sectionNone {

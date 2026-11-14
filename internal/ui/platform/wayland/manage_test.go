@@ -92,7 +92,7 @@ func TestCursorShapesFollowThePointer(t *testing.T) {
 }
 
 func TestEveryCursorHasAShape(t *testing.T) {
-	for c := platform.CursorDefault; c <= platform.CursorResizeSE; c++ {
+	for c := platform.CursorDefault; c <= platform.CursorPointer; c++ {
 		if cursorShapes[c] == 0 {
 			t.Errorf("cursor %d has no shape", c)
 		}

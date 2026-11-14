@@ -32,6 +32,8 @@ type textState struct {
 	anchor, focus caret // the selection runs between them, in either order
 	selecting     bool  // a press is dragging the focus
 	pressed       *gopdfrab.Link
+	hovered       *gopdfrab.Link // the link under the pointer
+	hoveredPage   int
 	pressAt       image.Point
 	moved         bool
 	clickAt       image.Point
@@ -339,9 +341,44 @@ func (v *View) drawText(c *paint.Canvas, origin image.Point) {
 		if d == nil {
 			continue
 		}
+		v.drawLinks(c, origin, i, d)
 		v.drawFind(c, origin, i, d)
 		if lo, hi, ok := v.text.rangeOn(i, len(d.text.Chars)); ok {
 			v.highlight(c, origin, i, d.text.Rects(lo, hi), v.opts.Selection)
+		}
+	}
+}
+
+// OverLink reports whether the pointer is over a link, which the window shows
+// with a hand.
+func (v *View) OverLink() bool { return v.text.hovered != nil }
+
+// setHover makes the link under the pointer at p, if any and if p is
+// not on a scrollbar, the hovered one. It reports whether that changed it.
+func (v *View) setHover(p image.Point, active bool) bool {
+	t := &v.text
+	var link *gopdfrab.Link
+	var page int
+	if pg, ok := v.pageAt(p); ok && active && v.barAt(p) == noAxis {
+		if d := v.ensureData(pg); d != nil {
+			x, y := v.toPage(pg, p)
+			link, page = d.linkAt(x, y), pg
+		}
+	}
+	changed := link != t.hovered || link != nil && page != t.hoveredPage
+	t.hovered, t.hoveredPage = link, page
+	return changed
+}
+
+// drawLinks paints the link under the pointer, if it is on page i, over the
+// page in c.
+func (v *View) drawLinks(c *paint.Canvas, origin image.Point, i int, d *pageData) {
+	for k := range d.links {
+		l := &d.links[k]
+		b := l.Box
+		r := []textlayer.Rect{{X0: b.X0, Y0: b.Y0, X1: b.X1, Y1: b.Y1}}
+		if h := v.text.hovered; h == l && v.text.hoveredPage == i {
+			v.highlight(c, origin, i, r, v.opts.LinkHover)
 		}
 	}
 }

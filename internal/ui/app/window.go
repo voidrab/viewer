@@ -59,6 +59,17 @@ func (a *App) setCursor(c platform.Cursor) {
 	}
 }
 
+// showLinkCursor shows the hand when the pointer, over section under, is over
+// a link of the page, and the arrow otherwise. It runs after the page view has
+// seen the event, which is what finds the link.
+func (a *App) showLinkCursor(under section) {
+	c := platform.CursorDefault
+	if d := a.current(); d != nil && under == sectionContent && d.view.OverLink() {
+		c = platform.CursorPointer
+	}
+	a.setCursor(c)
+}
+
 // grabbed hands the pointer to the compositor, for a move, a resize or its
 // window menu. The release of the press that began it goes to the compositor,
 // so no section keeps the pointer.

@@ -109,6 +109,9 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 	case platform.Leave:
 		changed := s.hover != noAxis
 		s.hover = noAxis
+		if v.setHover(p, false) {
+			changed = true
+		}
 		return changed
 	case platform.Press:
 		switch ev.Button {
@@ -151,27 +154,39 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 		if h := v.barAt(p); h != s.hover {
 			s.hover, changed = h, true
 		}
+		if v.setHover(p, true) {
+			changed = true
+		}
 		return changed
 	}
 	// Moves, and the pointer entering.
 	switch {
 	case s.drag != noAxis:
+		v.setHover(p, false)
 		v.dragBar(p)
 		return true
 	case v.text.selecting:
-		return v.dragText(p)
+		cleared := false
+		if v.text.moved {
+			cleared = v.setHover(p, false)
+		}
+		return v.dragText(p) || cleared
 	case s.pan:
+		cleared := v.setHover(p, false)
 		if t := &v.text; t.pressed != nil && (abs(p.X-t.pressAt.X) > dragSlop || abs(p.Y-t.pressAt.Y) > dragSlop) {
 			t.pressed, t.moved = nil, true // dragging the page, not clicking a link
 		}
 		before := v.lay.Scroll()
 		v.lay.ScrollBy(s.last.Sub(p))
 		s.last = p
-		return v.lay.Scroll() != before
+		return v.lay.Scroll() != before || cleared
 	}
 	h := v.barAt(p)
 	changed := h != s.hover
 	s.hover = h
+	if v.setHover(p, true) {
+		changed = true
+	}
 	return changed
 }
 

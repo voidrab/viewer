@@ -203,6 +203,7 @@ const (
 	CursorResizeNE
 	CursorResizeSW
 	CursorResizeSE
+	CursorPointer // the hand over a link
 )
 
 // ResizeCursor returns the cursor for resizing from edges, or CursorDefault
