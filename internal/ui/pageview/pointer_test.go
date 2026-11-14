@@ -163,6 +163,9 @@ func TestDraggingThePage(t *testing.T) {
 	if v.HandlePointer(ptr(platform.Press, platform.Right, 50, 150)) || v.ptr.pan {
 		t.Error("a right-button press started a drag")
 	}
+	if v.HandlePointer(ptr(platform.Release, platform.Right, 50, 150)) {
+		t.Error("a right-button release asked for a redraw")
+	}
 	v.HandlePointer(ptr(platform.Press, platform.Left, 50, 150))
 	v.HandlePointer(ptr(platform.Release, platform.Middle, 50, 150))
 	if !v.ptr.pan {

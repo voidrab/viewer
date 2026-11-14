@@ -31,11 +31,12 @@ const (
 
 // pointerState is what the pointer is doing in the view.
 type pointerState struct {
-	hover axis        // the scrollbar under the pointer
-	drag  axis        // the scrollbar being dragged
-	grab  int         // where in the thumb it was taken, from the thumb's start
-	pan   bool        // the page is being dragged
-	last  image.Point // where the pointer was last
+	hover axis            // the scrollbar under the pointer
+	drag  axis            // the scrollbar being dragged
+	grab  int             // where in the thumb it was taken, from the thumb's start
+	pan   bool            // the page is being dragged
+	panBy platform.Button // the button dragging it
+	last  image.Point     // where the pointer was last
 }
 
 // bar is the geometry of one scrollbar along its axis.
@@ -110,7 +111,12 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 		s.hover = noAxis
 		return changed
 	case platform.Press:
-		if ev.Button != platform.Left {
+		switch ev.Button {
+		case platform.Middle:
+			s.pan, s.panBy, s.last = true, platform.Middle, p
+			return false
+		case platform.Left:
+		default:
 			return false
 		}
 		if a := v.barAt(p); a != noAxis {
@@ -122,14 +128,26 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 			v.dragBar(p)
 			return true
 		}
-		s.pan, s.last = true, p
-		return false
+		handled, changed := v.pressText(p)
+		if !handled {
+			s.pan, s.panBy, s.last = true, platform.Left, p
+		}
+		return changed
 	case platform.Release:
-		if ev.Button != platform.Left {
+		if ev.Button != platform.Left && ev.Button != platform.Middle {
 			return false
 		}
-		changed := s.drag != noAxis
-		s.drag, s.pan = noAxis, false
+		changed := false
+		if ev.Button == platform.Left {
+			changed = s.drag != noAxis
+			s.drag = noAxis
+			if v.releaseText() {
+				changed = true
+			}
+		}
+		if s.pan && s.panBy == ev.Button {
+			s.pan = false
+		}
 		if h := v.barAt(p); h != s.hover {
 			s.hover, changed = h, true
 		}
@@ -140,7 +158,12 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 	case s.drag != noAxis:
 		v.dragBar(p)
 		return true
+	case v.text.selecting:
+		return v.dragText(p)
 	case s.pan:
+		if t := &v.text; t.pressed != nil && (abs(p.X-t.pressAt.X) > dragSlop || abs(p.Y-t.pressAt.Y) > dragSlop) {
+			t.pressed, t.moved = nil, true // dragging the page, not clicking a link
+		}
 		before := v.lay.Scroll()
 		v.lay.ScrollBy(s.last.Sub(p))
 		s.last = p

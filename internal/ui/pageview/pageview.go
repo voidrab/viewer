@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/voidrab/gopdfrab"
@@ -34,6 +35,12 @@ type Options struct {
 	CacheBytes, Workers int
 	// ScrollSpeed multiplies wheel scroll distances; zero means 5.
 	ScrollSpeed float64
+	// OpenURI is called with the address of a link the user follows; nil
+	// means such links do nothing.
+	OpenURI func(uri string)
+	// Selection is the colour laid over selected text; zero means a
+	// translucent blue.
+	Selection color.NRGBA
 	// Scrollbar is the colour of the scrollbars drawn over the pages, whose
 	// opacity the view sets; zero means a mid gray.
 	Scrollbar color.NRGBA
@@ -51,6 +58,9 @@ func (o *Options) fill() {
 	}
 	if o.ScrollSpeed == 0 {
 		o.ScrollSpeed = 5
+	}
+	if o.Selection == (color.NRGBA{}) {
+		o.Selection = color.NRGBA{0x3b, 0x72, 0xd9, 0x5a}
 	}
 	if o.Scrollbar == (color.NRGBA{}) {
 		o.Scrollbar = color.NRGBA{0x9a, 0x9a, 0xa0, 0xff}
@@ -91,6 +101,17 @@ type View struct {
 	lay        *layout.Layout
 	ptr        pointerState
 
+	// What is known of each page's text and links, read in the background.
+	dataMu     sync.Mutex
+	datas      map[int]*pageData
+	loading    map[int]bool
+	loadCtx    context.Context
+	loadCancel context.CancelFunc
+	loadWG     sync.WaitGroup
+	glyphs     func(ctx context.Context, page int) ([]gopdfrab.Glyph, error)
+	links      func(ctx context.Context, page int) ([]gopdfrab.Link, error)
+	text       textState
+
 	// Rapid zooming is not rendered until it pauses; see deferring.
 	now       func() time.Time
 	after     func(d time.Duration, f func()) stopper
@@ -116,7 +137,11 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	if err != nil {
 		return nil, err
 	}
-	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool, now: time.Now, after: afterFunc}
+	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool, now: time.Now, after: afterFunc,
+		datas: map[int]*pageData{}, loading: map[int]bool{}}
+	v.loadCtx, v.loadCancel = context.WithCancel(context.Background())
+	v.glyphs = func(ctx context.Context, i int) ([]gopdfrab.Glyph, error) { return v.pages[i].Glyphs(ctx) }
+	v.links = func(ctx context.Context, i int) ([]gopdfrab.Link, error) { return v.pages[i].Links(ctx) }
 	sizes := make([]layout.Size, n)
 	for i := range n {
 		p, err := doc.Page(i)
@@ -145,6 +170,8 @@ func (v *View) Close() {
 	if v.timer != nil {
 		v.timer.Stop()
 	}
+	v.loadCancel()
+	v.loadWG.Wait()
 	v.pool.detach(v)
 	if v.ownsPool {
 		v.pool.Close()
@@ -224,6 +251,7 @@ func (v *View) DrawIn(c *paint.Canvas, rect image.Rectangle) {
 	defer c.PopClip()
 	c.Fill(rect, v.opts.Background)
 	v.want(c, rect)
+	v.drawText(c, rect.Min)
 	v.drawBars(c, rect.Min)
 }
 
@@ -487,12 +515,16 @@ func (v *View) key(ev platform.KeyEvent) bool {
 			v.zoomBy(1 / zoomStep)
 		case '0':
 			v.lay.SetMode(layout.ZoomFitWidth)
+		case 'a':
+			v.SelectAll()
 		default:
 			return false
 		}
 		return true
 	}
 	switch ev.Key {
+	case platform.KeyEscape:
+		return v.ClearSelection()
 	case platform.KeyPageDown:
 		v.lay.ScrollBy(page)
 	case platform.KeyPageUp:
