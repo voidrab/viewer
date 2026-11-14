@@ -2,6 +2,7 @@ package platform
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"sync"
 )
@@ -53,6 +54,8 @@ type FakeWindow struct {
 	activations []string
 	clipboard   string
 	closed      bool
+	calls       []string
+	cursor      Cursor
 }
 
 // Events implements Window.
@@ -120,6 +123,51 @@ func (w *FakeWindow) RequestPaste() {
 	if w.clipboard != "" && !w.closed {
 		w.events <- PasteEvent{Text: w.clipboard}
 	}
+}
+
+// Move implements Window by recording the call.
+func (w *FakeWindow) Move() { w.record("move") }
+
+// Resize implements Window by recording the call with its edges.
+func (w *FakeWindow) Resize(edges Edge) { w.record(fmt.Sprintf("resize %d", edges)) }
+
+// SetMaximized implements Window by recording the call.
+func (w *FakeWindow) SetMaximized(maximized bool) {
+	w.record(map[bool]string{true: "maximize", false: "unmaximize"}[maximized])
+}
+
+// Minimize implements Window by recording the call.
+func (w *FakeWindow) Minimize() { w.record("minimize") }
+
+// ShowMenu implements Window by recording the call with its position.
+func (w *FakeWindow) ShowMenu(x, y int) { w.record(fmt.Sprintf("menu %d %d", x, y)) }
+
+// SetCursor implements Window by keeping the cursor.
+func (w *FakeWindow) SetCursor(c Cursor) {
+	w.mu.Lock()
+	w.cursor = c
+	w.mu.Unlock()
+}
+
+// Cursor returns the cursor last given to SetCursor.
+func (w *FakeWindow) Cursor() Cursor {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.cursor
+}
+
+func (w *FakeWindow) record(call string) {
+	w.mu.Lock()
+	w.calls = append(w.calls, call)
+	w.mu.Unlock()
+}
+
+// Calls returns the window management calls made so far, oldest first, such
+// as "move", "resize 9", "maximize", "unmaximize", "minimize" and "menu 4 5".
+func (w *FakeWindow) Calls() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.calls...)
 }
 
 // Close implements Window; it is idempotent.

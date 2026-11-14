@@ -58,6 +58,8 @@ type input struct {
 	keymap            *Keymap
 	mods, group       uint32
 	serial            atomic.Uint32 // that of the latest event that carried one
+	enterSerial       atomic.Uint32 // that of the latest pointer entry
+	cursorDevice      atomic.Uint32 // the pointer's wp_cursor_shape_device_v1, or zero
 
 	// The compositor does not repeat keys; the client does, at the rate and
 	// after the delay it announces. Without an announcement these defaults, the
@@ -122,6 +124,7 @@ func (b *Backend) onSeat(opcode uint16, d *Decoder) {
 	if caps&seatCapPointer != 0 && b.in.pointer == 0 {
 		b.in.pointer = b.c.NewID(b.onPointer)
 		b.c.Send(b.seat, seatGetPointer, func(e *Encoder) { e.Uint(b.in.pointer) })
+		b.newCursorDevice()
 	}
 	if caps&seatCapKeyboard != 0 && b.in.keyboard == 0 {
 		b.in.keyboard = b.c.NewID(b.onKeyboard)
@@ -147,7 +150,12 @@ func (b *Backend) onPointer(opcode uint16, d *Decoder) {
 	case pointerEnter:
 		serial, surface, x, y := d.Uint(), d.Uint(), d.Fixed(), d.Fixed()
 		in.serial.Store(serial)
+		in.enterSerial.Store(serial)
 		in.pointerWin, in.px, in.py = b.windowFor(surface), x, y
+		// The cursor is the client's to set on every entry.
+		if in.pointerWin != nil {
+			b.setShape(in.pointerWin.currentCursor())
+		}
 		in.emitPointer(platform.Enter, platform.None)
 	case pointerLeave:
 		in.emitPointer(platform.Leave, platform.None)

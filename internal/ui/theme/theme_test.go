@@ -36,3 +36,12 @@ func TestPalettes(t *testing.T) {
 		t.Error("text does not contrast with the chrome")
 	}
 }
+
+func TestOfPicksThePalette(t *testing.T) {
+	if Of(true) != Dark() || Of(false) != Light() || !Dark().Dark || Light().Dark {
+		t.Error("Of or Dark is wrong")
+	}
+	if CloseHover.A != 255 {
+		t.Error("CloseHover is translucent")
+	}
+}

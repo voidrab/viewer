@@ -1,6 +1,7 @@
 // Package portal asks the desktop's file chooser, through the
-// xdg-desktop-portal D-Bus service, for files to open. It holds the protocol
-// logic; the D-Bus connection itself is supplied as a Bus.
+// xdg-desktop-portal D-Bus service, for files to open and where to save one.
+// It holds the protocol logic; the D-Bus connection itself is supplied as a
+// Bus.
 package portal
 
 import (
@@ -9,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -34,6 +36,9 @@ type Bus interface {
 	// OpenFile calls org.freedesktop.portal.FileChooser.OpenFile and returns
 	// the object path of the request it started.
 	OpenFile(parent, title string, options map[string]any) (request string, err error)
+	// SaveFile calls org.freedesktop.portal.FileChooser.SaveFile and returns
+	// the object path of the request it started.
+	SaveFile(parent, title string, options map[string]any) (request string, err error)
 }
 
 // FilterSpec is one pattern of a file filter: a glob (Kind 0) or a MIME type
@@ -64,27 +69,61 @@ func requestPath(sender, token string) string {
 	return "/org/freedesktop/portal/desktop/request/" + sender + "/" + token
 }
 
+// pdfFilter limits a dialog to PDF files.
+var pdfFilter = []Filter{{
+	Name:  "PDF documents",
+	Specs: []FilterSpec{{Kind: 1, Pattern: "application/pdf"}, {Kind: 0, Pattern: "*.pdf"}},
+}}
+
 // PickPDFs shows the desktop's file chooser, titled title, for one or more PDF
 // files and returns the paths chosen. It returns no paths and no error when the
 // user cancels, and ctx.Err() when ctx ends first.
 func PickPDFs(ctx context.Context, bus Bus, title string) ([]string, error) {
+	resp, err := ask(ctx, bus, func(token string) (string, error) {
+		return bus.OpenFile("", title, map[string]any{"handle_token": token, "multiple": true, "filters": pdfFilter})
+	})
+	if err != nil || resp == nil {
+		return nil, err
+	}
+	return filePaths(resp.URIs), nil
+}
+
+// SavePDF shows the desktop's file chooser, titled title, for where to save a
+// PDF, suggesting the path suggested, and returns the path chosen. It returns
+// "" and no error when the user cancels or chooses no local file, and
+// ctx.Err() when ctx ends first.
+func SavePDF(ctx context.Context, bus Bus, title, suggested string) (string, error) {
+	resp, err := ask(ctx, bus, func(token string) (string, error) {
+		return bus.SaveFile("", title, map[string]any{
+			"handle_token":   token,
+			"current_name":   filepath.Base(suggested),
+			"current_folder": append([]byte(filepath.Dir(suggested)), 0), // a NUL-terminated byte string
+			"filters":        pdfFilter,
+		})
+	})
+	if err != nil || resp == nil {
+		return "", err
+	}
+	if paths := filePaths(resp.URIs); len(paths) > 0 {
+		return paths[0], nil
+	}
+	return "", nil
+}
+
+// ask makes a file chooser request with call, which is given the request's
+// token, and waits for its response. It returns a nil response when the user
+// cancels.
+func ask(ctx context.Context, bus Bus, call func(token string) (string, error)) (*Response, error) {
 	token := newToken()
 	path := requestPath(bus.Sender(), token)
-	// Subscribe first: the response may arrive before OpenFile returns.
+	// Subscribe first: the response may arrive before the call returns.
 	responses, cancel, err := bus.Subscribe(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { cancel() }()
 
-	request, err := bus.OpenFile("", title, map[string]any{
-		"handle_token": token,
-		"multiple":     true,
-		"filters": []Filter{{
-			Name:  "PDF documents",
-			Specs: []FilterSpec{{Kind: 1, Pattern: "application/pdf"}, {Kind: 0, Pattern: "*.pdf"}},
-		}},
-	})
+	request, err := call(token)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +141,7 @@ func PickPDFs(ctx context.Context, bus Bus, title string) ([]string, error) {
 	case resp := <-responses:
 		switch resp.Code {
 		case 0:
-			return filePaths(resp.URIs), nil
+			return &resp, nil
 		case 1:
 			return nil, nil
 		}

@@ -3,11 +3,19 @@ package app
 import (
 	"fmt"
 	"image"
+	"strings"
 
+	"viewer/internal/ui/icon"
+	"viewer/internal/ui/pageview"
+	"viewer/internal/ui/theme"
+
+	"viewer/internal/ui/paint"
+	"viewer/internal/ui/platform"
 	"viewer/internal/ui/widget"
 )
 
-// humanSize formats a byte count for display.
+// humanSize formats a byte count for display as the webview build does, with
+// one decimal below 10: "512 B", "1.5 KB", "270 KB".
 func humanSize(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -21,13 +29,20 @@ func humanSize(n int64) string {
 			break
 		}
 	}
-	return fmt.Sprintf("%.1f %s", size, suffix)
+	if size < 10 {
+		return fmt.Sprintf("%.1f %s", size, suffix)
+	}
+	return fmt.Sprintf("%.0f %s", size, suffix)
 }
 
-// viewButtons are the toolbar buttons that need an open document.
-var viewButtons = []widget.ButtonID{
-	widget.ButtonPrev, widget.ButtonNext, widget.ButtonZoomOut, widget.ButtonZoomMode,
-	widget.ButtonZoomIn, widget.ButtonFind, widget.ButtonPDFA,
+// statusInfo is the line about document d in the status bar: its name, page
+// count, size and PDF version.
+func statusInfo(d *document) string {
+	parts := []string{d.name, fmt.Sprintf("%d pages", d.view.Pages()), humanSize(d.bytes)}
+	if d.version != "" {
+		parts = append(parts, "pdf "+d.version)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // chrome brings the widgets in line with the current state.
@@ -43,41 +58,63 @@ func (a *App) chrome() {
 		x.view.SetActive(i == a.active)
 	}
 
-	for _, id := range viewButtons {
-		tb.Disabled[id] = d == nil
-	}
+	tb.NoDocument = d == nil // which hides the controls that need one
 	if d == nil {
-		tb.PageText, tb.ZoomText = "", "Fit width"
-		a.status.Info, a.status.Right = "", nil
+		a.endPageEdit(false)
+		a.menu.Close()
+		tb.Page, tb.Pages, tb.ZoomText = 0, 0, pageview.ZoomPresets[0].Label
+		a.status.Info, a.status.Claimed, a.status.Right = "", "", nil
 		a.setTitle("Viewer")
 	} else {
 		page, pages := d.view.Page(), d.view.Pages()
-		tb.PageText = fmt.Sprintf("%d / %d", page+1, pages)
+		tb.Page, tb.Pages = page+1, pages
 		tb.ZoomText = d.view.ZoomLabel()
 		tb.Disabled[widget.ButtonPrev] = page <= 0
 		tb.Disabled[widget.ButtonNext] = page >= pages-1
-		a.status.Info = d.name + "  " + humanSize(d.bytes)
-		a.status.Right = a.status.Right[:0]
-		if d.claimed != "" {
-			a.status.Right = append(a.status.Right, d.claimed)
-		}
-		a.status.Right = append(a.status.Right, tb.ZoomText, tb.PageText)
+		a.status.Info, a.status.Claimed = statusInfo(d), d.claimed
+		a.status.Right = append(a.status.Right[:0], d.view.ZoomPercent())
 		a.setTitle(d.name + " — Viewer")
 	}
-	if a.findOpen && a.findDoc != d {
+	if a.findBar.Open && a.findDoc != d {
 		a.closeFind() // A search belongs to the tab it began in.
 	}
-	if a.findOpen {
-		a.findBar.Current, a.findBar.Total, a.findBar.Searching = d.view.FindStatus()
+	if a.toolbar.EditingPage && a.pageDoc != d {
+		a.endPageEdit(false) // So does a page number being typed.
 	}
-	tb.On[widget.ButtonFind] = a.findOpen
+	a.syncFind()
+	tb.On[widget.ButtonZoomMode] = a.menu.Open && a.menuKind == menuZoom
+	tb.On[widget.ButtonPDFA] = a.panelOpen
+	tb.Controls, tb.Maximized = !a.decorated, a.maximized
 	tb.Layout(a.size.W)
+	a.panelChrome(d)
 	a.tabs.Layout(a.size.W)
 
 	if a.message != "" && !a.opts.Now().Before(a.messageUntil) {
 		a.message = ""
 	}
 	a.status.Message, a.status.Kind = a.message, a.messageKind
+}
+
+// syncFind brings the find field's count in line with its search.
+func (a *App) syncFind() {
+	if a.findBar.Open {
+		a.findBar.Current, a.findBar.Total, a.findBar.Searching = a.findDoc.view.FindStatus()
+	}
+}
+
+// panelChrome brings the PDF/A panel in line with the document d, the active
+// one or nil.
+func (a *App) panelChrome(d *document) {
+	p := a.panel
+	if d != a.panelDoc {
+		a.panelDoc = d
+		p.ScrollToTop()
+	}
+	p.Running = a.job != nil
+	p.Name, p.Meta, p.Result = "", "", nil
+	if d != nil {
+		p.Name, p.Meta, p.Result = d.name, panelMeta(d), d.result
+	}
 }
 
 // setTitle sets the window title when it changes.
@@ -90,8 +127,11 @@ func (a *App) setTitle(title string) {
 
 // draw paints the whole window and presents it.
 func (a *App) draw() {
-	if a.canvas == nil {
+	if a.size == (platform.Size{}) {
 		return
+	}
+	if a.canvas == nil || a.canvas.Bounds().Size() != image.Pt(a.size.W, a.size.H) {
+		a.canvas = paint.New(a.size.W, a.size.H)
 	}
 	a.chrome()
 	c := a.canvas
@@ -99,26 +139,85 @@ func (a *App) draw() {
 	toolbar, tabs, content, status := a.layout()
 	a.toolbar.Draw(c, toolbar.Min)
 	if d := a.current(); d != nil {
+		a.findBar.Draw(c, a.findRect())
 		a.tabs.Draw(c, tabs.Min)
 		d.view.DrawIn(c, content)
-		if a.findOpen {
-			a.findBar.Draw(c, content)
+		if r := a.panelRect(); !r.Empty() {
+			a.panel.Draw(c, r)
 		}
 	} else {
 		a.hint(content)
 	}
 	a.status.Draw(c, status)
+	a.menu.Draw(c)
 	a.win.Present(c.Img)
 }
 
-// hint tells the user how to open something, centred in r.
+// findRect returns where the find field is, in window coordinates.
+func (a *App) findRect() image.Rectangle {
+	return a.toolbar.ButtonRect(widget.ButtonFind).Add(a.origin(sectionToolbar))
+}
+
+// Empty-state geometry, in pixels: the logo, the lines under it, and the
+// button that opens a file.
+const (
+	hintLogo = 48
+	hintGap  = 8
+	kbdPad   = 4
+)
+
+// hintLayout returns where the parts of the empty state lie when it is
+// centred in r: the logo, the top of each of the two lines of text, and the
+// open button.
+func (a *App) hintLayout(r image.Rectangle) (logo image.Rectangle, line1, line2 int, button image.Rectangle) {
+	lh := a.face.Height() + 4
+	bw, bh := a.face.Width(hintButton)+16, lh+6
+	total := hintLogo + hintGap + 2*lh + 14 + bh
+	y := r.Min.Y + (r.Dy()-total)/2
+	cx := r.Min.X + r.Dx()/2
+	logo = image.Rect(cx-hintLogo/2, y, cx+hintLogo/2, y+hintLogo)
+	line1 = logo.Max.Y + hintGap
+	line2 = line1 + lh
+	by := line2 + lh + 14
+	button = image.Rect(cx-bw/2, by, cx-bw/2+bw, by+bh)
+	return
+}
+
+// The empty state's text, as in the webview build.
+const (
+	hintTitle  = "no document open"
+	hintKeys   = " to open"
+	hintButton = "open file…"
+)
+
+// hint draws the empty state centred in r: the logo, what to press to open a
+// file, and a button that opens one.
 func (a *App) hint(r image.Rectangle) {
-	for i, line := range []string{"No document open", "Press Ctrl+O, or start with file names"} {
-		col := a.opts.Palette.Faint
-		if i == 0 {
-			col = a.opts.Palette.Muted
-		}
-		y := r.Min.Y + r.Dy()/2 - a.face.Height() + i*(a.face.Height()+6)
-		a.face.Draw(a.canvas, r.Min.X+(r.Dx()-a.face.Width(line))/2, y, line, col)
+	p := a.opts.Palette
+	c := a.canvas
+	logo, y1, y2, button := a.hintLayout(r)
+	c.DrawImage(logo.Min, icon.Logo(hintLogo))
+	f := a.face
+	f.Draw(c, r.Min.X+(r.Dx()-f.Width(hintTitle))/2, y1, hintTitle, p.Muted)
+
+	// Ctrl and O as keycaps, then the rest of the line.
+	keys := []string{"Ctrl", "O"}
+	w := f.Width(hintKeys)
+	for _, k := range keys {
+		w += f.Width(k) + 2*kbdPad + 6
 	}
+	x := r.Min.X + (r.Dx()-w)/2
+	for _, k := range keys {
+		kr := image.Rect(x, y2, x+f.Width(k)+2*kbdPad, y2+f.Height()+2)
+		c.StrokeRound(kr, 3, 1, p.Border)
+		f.Draw(c, kr.Min.X+kbdPad, kr.Min.Y+1, k, p.Muted)
+		x = kr.Max.X + 6
+	}
+	f.Draw(c, x-6, y2+1, hintKeys, p.Faint)
+
+	if a.hintHover {
+		c.FillRound(button, theme.Radius, p.Hover)
+	}
+	c.StrokeRound(button, theme.Radius, 1, p.Border)
+	f.Draw(c, button.Min.X+8, button.Min.Y+(button.Dy()-f.Height())/2, hintButton, p.Text)
 }

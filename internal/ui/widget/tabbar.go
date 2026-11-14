@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"math"
 
+	"viewer/internal/ui/icon"
 	"viewer/internal/ui/paint"
 	"viewer/internal/ui/platform"
 	"viewer/internal/ui/text"
@@ -19,12 +20,15 @@ type ActionKind int
 
 // Tab bar actions.
 const (
-	ActionNone    ActionKind = iota
-	ActionSelect             // the tab at Index was clicked
-	ActionClose              // the tab at Index asked to be closed
-	ActionNew                // the new-tab button was clicked
-	ActionReorder            // the tab at Index was dragged to position To
-	ActionButton             // the toolbar button at Index was clicked
+	ActionNone       ActionKind = iota
+	ActionSelect                // the tab at Index was clicked
+	ActionClose                 // the tab at Index asked to be closed
+	ActionNew                   // the new-tab button was clicked
+	ActionReorder               // the tab at Index was dragged to position To
+	ActionButton                // the toolbar button at Index was clicked
+	ActionTitlePress            // the left button went down on the title bar at At
+	ActionMove                  // the title bar is being dragged: move the window
+	ActionMenu                  // the title bar was right-clicked at At
 )
 
 // Action is the result of an event handled by a widget.
@@ -32,6 +36,7 @@ type Action struct {
 	Kind  ActionKind
 	Index int
 	To    int
+	At    image.Point // where the pointer was, in the widget's coordinates
 }
 
 // Tab geometry, in pixels.
@@ -225,10 +230,15 @@ func (b *TabBar) Draw(c *paint.Canvas, origin image.Point) {
 			b.drawGlyph(c, at(cr), "×", p.Muted)
 		}
 	}
+	// The new-tab button is a plus in a round-cornered square, as the toolbar's
+	// buttons are.
+	nb := at(newButton(b.newTab))
+	fg := p.Muted
 	if b.hover.plus {
-		c.Fill(at(b.newTab.Inset(3)), p.Hover)
+		c.FillRound(nb, theme.Radius, p.Hover)
+		fg = p.Text
 	}
-	b.drawGlyph(c, at(b.newTab), "+", p.Muted)
+	icon.Draw(c, nb.Inset((toolButton-toolIcon)/2), icon.Plus, fg, 1.6)
 
 	if b.drag {
 		x := b.newTab.Min.X
@@ -237,6 +247,13 @@ func (b *TabBar) Draw(c *paint.Canvas, origin image.Point) {
 		}
 		c.Fill(at(image.Rect(x-1, 3, x+1, theme.TabBarHeight-3)), p.Accent)
 	}
+}
+
+// newButton returns the square the new-tab button is drawn in, within its
+// place r on the bar: toolButton pixels, from the bar's gap after the tabs.
+func newButton(r image.Rectangle) image.Rectangle {
+	y := r.Min.Y + (r.Dy()-toolButton)/2
+	return image.Rect(r.Min.X+tabGap, y, r.Min.X+tabGap+toolButton, y+toolButton)
 }
 
 // drawGlyph draws s centred in r.

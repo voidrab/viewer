@@ -22,7 +22,7 @@ type seatSetup struct {
 	keyboard chan uint32
 }
 
-func newSeatSetup(t *testing.T, caps uint32) *seatSetup {
+func newSeatSetup(t *testing.T, caps uint32, extra ...Global) *seatSetup {
 	t.Helper()
 	ss := &seatSetup{pointer: make(chan uint32, 1), keyboard: make(chan uint32, 1)}
 	a, b := pair(t)
@@ -36,6 +36,7 @@ func newSeatSetup(t *testing.T, caps uint32) *seatSetup {
 		}
 	}
 	globals := append(append([]Global(nil), wmGlobals...), Global{Name: 4, Interface: "wl_seat", Version: 5})
+	globals = append(globals, extra...)
 	base := f.handler(globals)
 	ss.srv = serve(t, b, func(s *server, ev Event, d *Decoder) {
 		if seatID != 0 && ev.Object == seatID {
@@ -62,6 +63,7 @@ func newSeatSetup(t *testing.T, caps uint32) *seatSetup {
 	f.configure(ss.srv, 100, 100, 1)
 	next(t, win)
 	next(t, win)
+	skipFrame(win)
 	f.mu.Lock()
 	ss.surface = f.surface
 	f.mu.Unlock()

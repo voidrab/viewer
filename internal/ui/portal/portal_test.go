@@ -19,6 +19,7 @@ type fakeBus struct {
 	opened    map[string]any
 	parent    string
 	title     string
+	method    string // "save" after a SaveFile call
 }
 
 func (b *fakeBus) Sender() string { return b.sender }
@@ -38,6 +39,12 @@ func (b *fakeBus) Subscribe(path string) (<-chan Response, func(), error) {
 func (b *fakeBus) OpenFile(parent, title string, options map[string]any) (string, error) {
 	b.parent, b.title, b.opened = parent, title, options
 	return b.open(parent, title, options)
+}
+
+// SaveFile records its call like OpenFile, under the method name "save".
+func (b *fakeBus) SaveFile(parent, title string, options map[string]any) (string, error) {
+	b.method = "save"
+	return b.OpenFile(parent, title, options)
 }
 
 // pick runs PickPDFs against bus with a fixed token.
@@ -197,5 +204,48 @@ func TestNewTokenIsFreshAndWellFormed(t *testing.T) {
 		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
 			t.Fatalf("token %q has a non-hex character", a)
 		}
+	}
+}
+
+// save runs SavePDF against bus with a fixed token.
+func save(t *testing.T, bus *fakeBus) (string, error) {
+	t.Helper()
+	orig := newToken
+	newToken = func() string { return "tok" }
+	defer func() { newToken = orig }()
+	return SavePDF(context.Background(), bus, "Save converted PDF", "/home/me/docs/a.pdfa.pdf")
+}
+
+func TestSaveReturnsTheChosenPath(t *testing.T) {
+	bus := answering(Response{URIs: []string{"file:///home/me/out%20put.pdf"}})
+	got, err := save(t, bus)
+	if err != nil || got != "/home/me/out put.pdf" {
+		t.Fatalf("SavePDF = %q, %v", got, err)
+	}
+	if bus.method != "save" || bus.title != "Save converted PDF" {
+		t.Errorf("method %q title %q", bus.method, bus.title)
+	}
+	// The dialog suggests the file's name in its folder, the folder as the
+	// NUL-terminated bytes the portal takes.
+	if bus.opened["handle_token"] != "tok" || bus.opened["current_name"] != "a.pdfa.pdf" ||
+		!reflect.DeepEqual(bus.opened["current_folder"], []byte("/home/me/docs\x00")) {
+		t.Errorf("options = %v", bus.opened)
+	}
+	if _, ok := bus.opened["filters"].([]Filter); !ok {
+		t.Errorf("filters = %#v", bus.opened["filters"])
+	}
+}
+
+func TestSaveReportsCancellationAndFailure(t *testing.T) {
+	for name, resp := range map[string]Response{
+		"cancelled":     {Code: 1},
+		"no local file": {URIs: []string{"https://example.com/x.pdf"}},
+	} {
+		if got, err := save(t, answering(resp)); got != "" || err != nil {
+			t.Errorf("%s: SavePDF = %q, %v; want nothing at all", name, got, err)
+		}
+	}
+	if _, err := save(t, answering(Response{Code: 2})); !errors.Is(err, ErrFailed) {
+		t.Errorf("a failed dialog = %v", err)
 	}
 }

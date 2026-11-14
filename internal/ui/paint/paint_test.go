@@ -177,3 +177,92 @@ func TestOpaqueFillReplacesWhatIsThere(t *testing.T) {
 		t.Errorf("a pixel outside the fill changed: %v", got)
 	}
 }
+
+func TestFillRoundRoundsTheCornersOnly(t *testing.T) {
+	c := New(20, 20)
+	c.Fill(c.Bounds(), white)
+	c.FillRound(image.Rect(2, 2, 18, 12), 4, red)
+	if p := at(c, 10, 7); p != (color.RGBA{255, 0, 0, 255}) {
+		t.Errorf("middle = %v", p)
+	}
+	if p := at(c, 10, 2); p != (color.RGBA{255, 0, 0, 255}) {
+		t.Errorf("straight top edge = %v", p)
+	}
+	if p := at(c, 2, 2); p != (color.RGBA{255, 255, 255, 255}) {
+		t.Errorf("corner pixel = %v, want it left out", p)
+	}
+	// The curve is anti-aliased: a pixel on it is partly covered.
+	if p := at(c, 3, 3); p.G == 0 || p.G == 255 {
+		t.Errorf("pixel on the curve = %v, want a blend", p)
+	}
+	if p := at(c, 1, 7); p != (color.RGBA{255, 255, 255, 255}) {
+		t.Errorf("outside = %v", p)
+	}
+}
+
+func TestFillRoundOfASquareIsACircle(t *testing.T) {
+	c := New(20, 20)
+	c.FillRound(image.Rect(0, 0, 20, 20), 100, red)
+	if at(c, 10, 10).A != 255 || at(c, 0, 0).A != 0 || at(c, 2, 2).A != 0 || at(c, 10, 0).A == 0 {
+		t.Errorf("circle: centre %v corner %v near corner %v top %v", at(c, 10, 10), at(c, 0, 0), at(c, 2, 2), at(c, 10, 0))
+	}
+}
+
+func TestFillRoundFallsBackAndClips(t *testing.T) {
+	c := New(10, 10)
+	// No radius is a plain fill, corners included.
+	c.FillRound(image.Rect(0, 0, 4, 4), 0, red)
+	if at(c, 0, 0).A != 255 {
+		t.Error("radius 0 did not fill the corner")
+	}
+	// Outside the clip, or transparent, nothing is drawn.
+	c.PushClip(image.Rect(5, 5, 10, 10))
+	c.FillRound(image.Rect(0, 0, 5, 5), 2, red)
+	c.FillRound(image.Rect(5, 5, 10, 10), 2, color.NRGBA{})
+	c.PopClip()
+	if at(c, 4, 4).A != 0 || at(c, 7, 7).A != 0 {
+		t.Error("clipped or transparent round fill painted")
+	}
+	if coverage(0, 0, 0, 3, 1) != 0 {
+		t.Error("an empty rectangle covers something")
+	}
+}
+
+func TestStrokeRoundPaintsOnlyTheBorder(t *testing.T) {
+	c := New(20, 20)
+	c.StrokeRound(image.Rect(0, 0, 20, 14), 4, 1, red)
+	if at(c, 10, 0).A != 255 || at(c, 0, 7).A != 255 || at(c, 19, 7).A != 255 {
+		t.Errorf("edges: top %v left %v right %v", at(c, 10, 0), at(c, 0, 7), at(c, 19, 7))
+	}
+	if at(c, 10, 7).A != 0 || at(c, 0, 0).A != 0 {
+		t.Errorf("inside %v or corner %v painted", at(c, 10, 7), at(c, 0, 0))
+	}
+	// No width draws nothing; no radius is a square stroke.
+	c2 := New(10, 10)
+	c2.StrokeRound(c2.Bounds(), 3, 0, red)
+	if at(c2, 5, 0).A != 0 {
+		t.Error("zero-width stroke painted")
+	}
+	c2.StrokeRound(c2.Bounds(), 0, 1, red)
+	if at(c2, 0, 0).A != 255 || at(c2, 5, 5).A != 0 {
+		t.Error("square stroke wrong")
+	}
+}
+
+func TestStrokeRoundWiderThanItsCorners(t *testing.T) {
+	c := New(20, 20)
+	c.StrokeRound(image.Rect(0, 0, 20, 20), 2, 5, red)
+	if at(c, 10, 2).A != 255 || at(c, 4, 4).A != 255 || at(c, 10, 10).A != 0 || at(c, 0, 0).A == 255 {
+		t.Errorf("band: edge %v inner corner %v middle %v outer corner %v", at(c, 10, 2), at(c, 4, 4), at(c, 10, 10), at(c, 0, 0))
+	}
+}
+
+func TestShadowFadesOutwards(t *testing.T) {
+	c := New(30, 30)
+	r := image.Rect(10, 10, 20, 20)
+	c.Shadow(r, 0, 1, []uint8{80, 40})
+	inner, outer := at(c, 15, 21).A, at(c, 15, 22).A // below r, dropped a pixel
+	if inner == 0 || outer == 0 || outer >= inner || at(c, 15, 15).A != 0 {
+		t.Errorf("shadow: inner ring %d outer ring %d inside %d", inner, outer, at(c, 15, 15).A)
+	}
+}

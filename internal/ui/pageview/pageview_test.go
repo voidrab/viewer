@@ -3,8 +3,10 @@ package pageview
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -427,25 +429,52 @@ func TestPageNavigationAndZoomSteps(t *testing.T) {
 	}
 }
 
-func TestCycleZoomStepsThroughThePresets(t *testing.T) {
+func TestZoomLabelNamesThePresetOrThePercentage(t *testing.T) {
 	v, _ := newView(t, openDoc(t, 3), image.Pt(124, 124), Options{})
-	want := []string{"Fit width", "Fit page", "50%", "75%", "100%", "125%", "150%", "200%", "300%", "Fit width"}
-	for i, label := range want {
-		if got := v.ZoomLabel(); got != label {
-			t.Fatalf("step %d: label %q, want %q", i, got, label)
+	want := []string{"fit width", "fit page", "50%", "75%", "100%", "125%", "150%", "200%", "300%"}
+	for i, p := range ZoomPresets {
+		v.SetZoomPreset(p)
+		if got := v.ZoomLabel(); got != want[i] {
+			t.Errorf("preset %d: label %q, want %q", i, got, want[i])
 		}
-		v.CycleZoom()
 	}
-	// From a scale between two presets it goes to the next one up.
-	v.Layout().SetZoom(1.1)
-	v.CycleZoom()
-	if got := v.ZoomLabel(); got != "125%" {
-		t.Errorf("from 110%%: %q, want 125%%", got)
+	// A preset's percentage is in CSS pixels: 100% is 96 dpi.
+	v.SetZoomPreset(ZoomPresets[4])
+	if got := v.Layout().Scale(); math.Abs(got-CSSScale) > 1e-9 {
+		t.Errorf("100%% is scale %v, want %v", got, CSSScale)
 	}
-	// Past the largest preset it wraps to fit width.
-	v.Layout().SetZoom(5)
-	v.CycleZoom()
-	if got := v.ZoomLabel(); got != "Fit width" {
-		t.Errorf("from 500%%: %q, want Fit width", got)
+	// A scale no preset has is labelled with its percentage.
+	v.Layout().SetZoom(1.337 * CSSScale)
+	if got := v.ZoomLabel(); got != "134%" || v.ZoomPresetIndex() != -1 {
+		t.Errorf("at 133.7%%: label %q, preset %d", got, v.ZoomPresetIndex())
+	}
+}
+
+func TestZoomPresetsApplyAndAreRecognised(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 3), image.Pt(124, 124), Options{})
+	for i, p := range ZoomPresets {
+		v.SetZoomPreset(p)
+		if got := v.ZoomPresetIndex(); got != i {
+			t.Errorf("after %q: preset %d, want %d", p.Label, got, i)
+		}
+	}
+	// Fit modes still report the scale they arrive at.
+	v.SetZoomPreset(ZoomPresets[0])
+	if want := fmt.Sprintf("%d%%", int(math.Round(v.Layout().Scale()*75))); v.ZoomPercent() != want {
+		t.Errorf("ZoomPercent = %q, want %q", v.ZoomPercent(), want)
+	}
+}
+
+func TestSetColorsRepaintsTheBackdrop(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 1), image.Pt(60, 60), Options{})
+	bg, sel := color.NRGBA{10, 20, 30, 255}, color.NRGBA{1, 2, 3, 4}
+	v.SetColors(bg, sel)
+	if v.opts.Background != bg || v.opts.Selection != sel {
+		t.Errorf("colours %v %v", v.opts.Background, v.opts.Selection)
+	}
+	c := paint.New(60, 60)
+	v.Draw(c)
+	if p := c.Img.RGBAAt(0, 0); p != (color.RGBA{10, 20, 30, 255}) {
+		t.Errorf("backdrop = %v", p)
 	}
 }

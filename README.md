@@ -58,21 +58,43 @@ make install-native PREFIX=~/.local NAME=viewer-native   # one user, beside the 
 viewer a.pdf b.pdf              # each file opens in its own tab
 ```
 
-It needs a Wayland session (X11 is not supported yet) and, for the Open
-dialog, a desktop with xdg-desktop-portal. It has tabs, a toolbar, scrolling,
-zoom, page navigation, text selection and copy, find, links, and a PDF/A
-check, but not yet the PDF/A panel.
+It needs a Wayland session (X11 is not supported yet) and, for the Open and
+Save dialogs, a desktop with xdg-desktop-portal. It has tabs, a toolbar,
+scrolling, zoom, page navigation, text selection and copy, find, links, and
+the PDF/A panel. It looks like the webview build: the same toolbar, icons,
+colours, status line and Adwaita Mono type.
+
+- Click the page number to type another one; Enter, or clicking elsewhere,
+  goes there, and Escape leaves it. The zoom drop-down offers fit width, fit
+  page and fixed zooms from 50% to 300%, counted as in a browser (100% is 96
+  dpi), so a page shows at the same size in both builds.
+- The sun or moon button at the right of the toolbar switches between the
+  light and the dark theme. The window follows the desktop's theme (through
+  xdg-desktop-portal's settings) until you switch; the choice is kept in
+  `~/.config/viewer/theme`, and switching back to the desktop's theme forgets
+  it, so the window follows the desktop again.
 
 - Opening another PDF while it runs adds a tab to the running window (and asks
   the compositor to bring it forward).
 - Drag on text to select it (double click a word, triple click a line), Ctrl+C
   to copy. Dragging anywhere else pans the page, as does the middle button;
   the scrollbar thumbs drag and clicking beside them jumps.
-- Ctrl+F finds text, starting from the selection, with every match
-  highlighted; Enter and Shift+Enter step through them, Ctrl+V pastes.
+- Ctrl+F, or a click on the find field, finds text, starting from the
+  selection, with every match highlighted; Enter and Shift+Enter, or the
+  arrows in the field, step through them, Ctrl+V pastes, Escape ends it.
 - Links go to their page and position, or open http, https and mailto
   addresses with `xdg-open`.
 - Ctrl+wheel zooms around the pointer, and holding a key repeats it.
+- The toolbar is the title bar, as on the webview build: drag its empty part
+  to move the window, double click it to maximise, right click it for the
+  compositor's window menu, and use the minimise, maximise and close controls
+  at its right end. The window's edges resize it. Where the compositor insists
+  on drawing its own title bar, the toolbar leaves the controls to it.
+- The shield button opens the PDF/A panel: pick PDF/A-1b, PDF/A-2b or plain
+  PDF structure from its drop-down, verify, and open an issue to see its messages and jump to the
+  pages it is on. Convert… asks where to save a conformant copy, reports what
+  had to be rasterized or dropped, and opens the copy (reloading its tab if it
+  is already open). One check runs at a time and can be cancelled.
 
 Use `make default` as usual to make it your PDF application.
 
@@ -86,7 +108,7 @@ Use `make default` as usual to make it your PDF application.
 | Ctrl+F, Enter/Shift+Enter | Find, next / previous match |
 | Ctrl+A / Ctrl+C       | Select all / copy        |
 | Ctrl+= / Ctrl+− / Ctrl+0 | Zoom in / out / fit width |
-| Esc                   | Close find, clear the selection |
+| Esc                   | Close find or a drop-down, leave the page field, clear the selection, close the PDF/A panel |
 
 ## Layout
 

@@ -413,6 +413,9 @@ func (v *View) plan(dpi int, view image.Rectangle, ahead bool) framePlan {
 func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi int) {
 	vr := pg.vr.Add(rect.Min)
 	px := v.pixelSize(pg.page, dpi)
+	// A soft shadow, fading out over a few pixels, lifts the paper off the
+	// backdrop as in the webview build.
+	c.Shadow(vr, 0, 0, pageShadow)
 	type placed struct {
 		at  image.Rectangle
 		img *image.RGBA
@@ -445,7 +448,16 @@ func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi 
 	}
 }
 
+// pageShadow is the opacity of each ring of a page's shadow, outwards.
+var pageShadow = []uint8{36, 20, 10, 5}
+
 func abs(v int) int { return max(v, -v) }
+
+// SetColors changes the colours of the backdrop behind the pages and of the
+// selection laid over text.
+func (v *View) SetColors(background, selection color.NRGBA) {
+	v.opts.Background, v.opts.Selection = background, selection
+}
 
 // Page returns the zero-based index of the page at the middle of the view.
 func (v *View) Page() int { return v.lay.Current() }
@@ -460,40 +472,62 @@ func (v *View) GoToPage(i int) { v.lay.GoTo(i) }
 func (v *View) ZoomIn()  { v.zoomBy(zoomStep) }
 func (v *View) ZoomOut() { v.zoomBy(1 / zoomStep) }
 
-// zoomPresets are the scales CycleZoom steps through after the two fit modes.
-var zoomPresets = []float64{0.5, 0.75, 1, 1.25, 1.5, 2, 3}
+// CSSScale is the layout scale of a zoom of 100%: 96 pixels per inch, as CSS
+// and pdf.js in the webview build count them, over PDF's 72 points per inch.
+// Zoom percentages are given in these units, so that a page shows at the
+// same size in both builds.
+const CSSScale = 96.0 / 72
 
-// CycleZoom steps to the next zoom preset: fit width, fit page, then the fixed
-// scales in ascending order, and round again. From a scale between presets it
-// goes to the next one up.
-func (v *View) CycleZoom() {
-	switch v.lay.Mode() {
-	case layout.ZoomFitWidth:
-		v.lay.SetMode(layout.ZoomFitPage)
-		return
-	case layout.ZoomFitPage:
-		v.lay.SetZoom(zoomPresets[0])
-		return
-	}
-	for _, p := range zoomPresets {
-		if p > v.lay.Scale()+1e-9 {
-			v.lay.SetZoom(p)
-			return
-		}
-	}
-	v.lay.SetMode(layout.ZoomFitWidth)
+// ZoomPreset is one of the zooms offered in the zoom menu: a fit mode, or a
+// fixed zoom when Mode is layout.ZoomFixed, where Scale 1 is 100%.
+type ZoomPreset struct {
+	Label string
+	Mode  layout.ZoomMode
+	Scale float64
 }
 
-// ZoomLabel describes the zoom for display: "Fit width", "Fit page" or a
-// percentage.
-func (v *View) ZoomLabel() string {
-	switch v.lay.Mode() {
-	case layout.ZoomFitWidth:
-		return "Fit width"
-	case layout.ZoomFitPage:
-		return "Fit page"
+// ZoomPresets are the zooms the zoom menu offers, as in the webview build: the
+// two fit modes, then fixed scales in ascending order.
+var ZoomPresets = []ZoomPreset{
+	{"fit width", layout.ZoomFitWidth, 0}, {"fit page", layout.ZoomFitPage, 0},
+	{"50%", layout.ZoomFixed, 0.5}, {"75%", layout.ZoomFixed, 0.75}, {"100%", layout.ZoomFixed, 1},
+	{"125%", layout.ZoomFixed, 1.25}, {"150%", layout.ZoomFixed, 1.5}, {"200%", layout.ZoomFixed, 2},
+	{"300%", layout.ZoomFixed, 3},
+}
+
+// SetZoomPreset applies the zoom preset p.
+func (v *View) SetZoomPreset(p ZoomPreset) {
+	if p.Mode == layout.ZoomFixed {
+		v.lay.SetZoom(p.Scale * CSSScale)
+		return
 	}
-	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()*100)))
+	v.lay.SetMode(p.Mode)
+}
+
+// ZoomPresetIndex returns the index in ZoomPresets of the zoom in use, or -1
+// for a scale no preset has.
+func (v *View) ZoomPresetIndex() int {
+	for i, p := range ZoomPresets {
+		if p.Mode == v.lay.Mode() && (p.Mode != layout.ZoomFixed || math.Abs(p.Scale*CSSScale-v.lay.Scale()) < 1e-9) {
+			return i
+		}
+	}
+	return -1
+}
+
+// ZoomLabel describes the zoom for display: the label of its preset, such as
+// "fit width", or else a percentage.
+func (v *View) ZoomLabel() string {
+	if i := v.ZoomPresetIndex(); i >= 0 {
+		return ZoomPresets[i].Label
+	}
+	return v.ZoomPercent()
+}
+
+// ZoomPercent returns the zoom as a percentage, such as "134%", whatever the
+// zoom mode.
+func (v *View) ZoomPercent() string {
+	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()/CSSScale*100)))
 }
 
 // HandleEvent applies a resize, scroll or key event and reports whether the

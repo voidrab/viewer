@@ -37,8 +37,10 @@ type StatusBar struct {
 	// Message is shown after Info in the colour of Kind; empty for none.
 	Message string
 	Kind    MessageKind
-	// Right are values shown right-aligned, in order, such as the claimed
-	// conformance, the zoom and the page counter.
+	// Claimed is the conformance the document claims, such as "PDF/A-1b",
+	// shown in the OK colour before Right; empty for none.
+	Claimed string
+	// Right are values shown right-aligned, in order, such as the zoom.
 	Right []string
 }
 
@@ -60,7 +62,7 @@ func (s *StatusBar) messageColour(k MessageKind) color.NRGBA {
 	case MessageBad:
 		return s.Palette.Bad
 	}
-	return s.Palette.Accent
+	return s.Palette.Text
 }
 
 // Draw paints the bar into r. The right-hand values keep their room; Info and
@@ -82,6 +84,11 @@ func (s *StatusBar) Draw(c *paint.Canvas, r image.Rectangle) {
 		s.Face.Draw(c, limit, y, s.Right[i], p.Muted)
 		limit -= statusGap
 	}
+	if s.Claimed != "" {
+		limit -= s.Face.Width(s.Claimed)
+		s.Face.Draw(c, limit, y, s.Claimed, p.OK)
+		limit -= statusGap
+	}
 
 	x := r.Min.X + statusPad
 	if s.Info != "" {
@@ -89,7 +96,11 @@ func (s *StatusBar) Draw(c *paint.Canvas, r image.Rectangle) {
 		s.Face.Draw(c, x, y, info, p.Muted)
 		x += s.Face.Width(info) + statusGap
 	}
+	// A message reads like a console line: an accent mark, then the text.
 	if s.Message != "" && limit-x > 0 {
+		const mark = "› "
+		s.Face.Draw(c, x, y, s.Face.Fit(mark, limit-x), p.Accent)
+		x += s.Face.Width(mark)
 		s.Face.Draw(c, x, y, s.Face.Fit(s.Message, limit-x), s.messageColour(s.Kind))
 	}
 }

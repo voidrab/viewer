@@ -76,6 +76,7 @@ func TestFindBarTyping(t *testing.T) {
 		{platform.KeyEvent{Down: true, Rune: 0x7f}, FindNone}, // DEL
 		{platform.KeyEvent{Down: true, Rune: '\t'}, FindNone}, // a control character
 		{key(platform.KeyTab, 0), FindNone},
+		{key(platform.KeyLeft, 0), FindNone}, // caret movement changes no text
 	} {
 		if got := b.HandleKey(tc.ev); got != tc.want {
 			t.Errorf("%+v = %v, want %v", tc.ev, got, tc.want)
@@ -103,23 +104,34 @@ func TestFindBarPaste(t *testing.T) {
 	}
 }
 
+// findRect is where the tests put the field.
+var findRect = image.Rect(300, 5, 300+FindWidth, 31)
+
 func TestFindBarGeometry(t *testing.T) {
 	b := newFind(t)
-	area := image.Rect(0, 100, 800, 500)
-	r := b.Rect(area)
-	if r.Dx() != findWidth || r.Dy() != findHeight || r.Max.X != area.Max.X-findMargin || r.Min.Y != area.Min.Y+findMargin {
-		t.Errorf("rect = %v in %v", r, area)
+	r := findRect
+	// Closed, or open with no query, the field has no buttons and the text
+	// takes the room right of the icon.
+	if ta := b.textArea(r); ta.Min.X <= r.Min.X+findIcon || ta.Max.X != r.Max.X-findPad {
+		t.Errorf("text area %v in %v", ta, r)
 	}
-	if narrow := b.Rect(image.Rect(0, 0, 200, 100)); narrow.Dx() != 200-2*findMargin {
-		t.Errorf("rect in a narrow area = %v", narrow)
+	if b.partAt(r, image.Pt(r.Max.X-5, r.Min.Y+13)) != partText {
+		t.Error("a closed field has buttons")
 	}
-	// The buttons sit in a row at the right end, in order.
-	prev, next, closeBtn := b.button(r, partPrev), b.button(r, partNext), b.button(r, partClose)
-	if !(prev.Max.X <= next.Min.X && next.Max.X <= closeBtn.Min.X && closeBtn.Max.X <= r.Max.X) {
-		t.Errorf("buttons overlap or leave the bar: %v %v %v in %v", prev, next, closeBtn, r)
+	// During a search the buttons sit in a row at the right end, in order,
+	// with the count and then the text left of them.
+	b.Open = true
+	b.SetText("x")
+	b.Current, b.Total = 1, 3
+	prev, next := b.button(r, partPrev), b.button(r, partNext)
+	if !(prev.Max.X <= next.Min.X && next.Max.X <= r.Max.X) {
+		t.Errorf("buttons overlap or leave the field: %v %v in %v", prev, next, r)
 	}
-	// A bar too narrow for its parts still has a text area.
-	if ta := b.textArea(image.Rect(0, 0, 60, findHeight)); ta.Dx() < 0 {
+	if ta := b.textArea(r); ta.Max.X > prev.Min.X-b.Face.Width("1 / 3") {
+		t.Errorf("text area %v runs into the count", ta)
+	}
+	// A field too narrow for its parts still has a text area.
+	if ta := b.textArea(image.Rect(0, 0, 40, 26)); ta.Dx() < 0 {
 		t.Errorf("text area %v", ta)
 	}
 }
@@ -127,16 +139,19 @@ func TestFindBarGeometry(t *testing.T) {
 func TestFindBarCountText(t *testing.T) {
 	b := newFind(t)
 	for _, tc := range []struct {
+		open      bool
 		text      string
 		cur, tot  int
 		searching bool
 		want      string
 	}{
-		{"", 0, 0, false, ""},
-		{"x", 0, 0, true, "…"},
-		{"x", 0, 0, false, "No results"},
-		{"x", 3, 12, true, "3/12"},
+		{true, "", 0, 0, false, ""},
+		{false, "x", 3, 12, false, ""},
+		{true, "x", 0, 0, true, "…"},
+		{true, "x", 0, 0, false, "No matches"},
+		{true, "x", 3, 12, true, "3 / 12"},
 	} {
+		b.Open = tc.open
 		b.SetText(tc.text)
 		b.Current, b.Total, b.Searching = tc.cur, tc.tot, tc.searching
 		if got := b.countText(); got != tc.want {
@@ -145,17 +160,34 @@ func TestFindBarCountText(t *testing.T) {
 	}
 }
 
-func TestFindBarDrawsTextCountAndCaret(t *testing.T) {
+func TestFindBarDrawsPlaceholderTextCountAndCaret(t *testing.T) {
 	b := newFind(t)
-	area := image.Rect(0, 0, 600, 200)
-	c := paint.New(600, 200)
-	c.Fill(c.Bounds(), palette.Canvas)
+	c := paint.New(600, 40)
+	r := findRect
+	// Closed and empty: the icon and a faint placeholder, on the chrome.
+	c.Fill(c.Bounds(), palette.Chrome)
+	b.Draw(c, r)
+	if ink := inkIn(c, b.textArea(r), palette.Faint); ink.Empty() {
+		t.Error("the placeholder was not drawn")
+	}
+	if got := c.Img.RGBAAt(r.Min.X+2, r.Min.Y+13); got != nrgba(palette.Chrome) {
+		t.Error("a closed field has a background")
+	}
+	// Hovered, it is washed.
+	b.hover = partText
+	b.Draw(c, r)
+	if got := c.Img.RGBAAt(r.Min.X+2, r.Min.Y+13); got == nrgba(palette.Chrome) {
+		t.Error("a hovered field was not highlighted")
+	}
+	b.hover = partNone
+
+	b.Open = true
 	b.SetText("needle")
 	b.Current, b.Total = 2, 9
-	b.Draw(c, area)
-	r := b.Rect(area)
-	if got := c.Img.RGBAAt(r.Min.X+findPad+2, r.Min.Y+findHeight/2); got == nrgba(palette.Canvas) {
-		t.Error("the bar was not drawn")
+	c.Fill(c.Bounds(), palette.Chrome)
+	b.Draw(c, r)
+	if got := c.Img.RGBAAt(r.Min.X+findPad+findIcon+2, r.Min.Y+4); got != nrgba(palette.Raised) {
+		t.Errorf("an open field is %v, want the raised colour", got)
 	}
 	ta := b.textArea(r)
 	if ink := inkIn(c, ta, palette.Text); ink.Empty() {
@@ -164,89 +196,104 @@ func TestFindBarDrawsTextCountAndCaret(t *testing.T) {
 	if ink := inkIn(c, ta, palette.Accent); ink.Empty() || ink.Dx() != 1 {
 		t.Errorf("the caret is %v, want a one-pixel line", ink)
 	}
-	if ink := inkIn(c, r, palette.Muted); ink.Empty() {
+	if ink := inkIn(c, image.Rect(ta.Max.X, r.Min.Y, r.Max.X, r.Max.Y), palette.Muted); ink.Empty() {
 		t.Error("the count and buttons were not drawn")
 	}
-	// "No results" is drawn in the bad colour.
+	// "No matches" is drawn in the bad colour.
 	b.Total = 0
-	c.Fill(c.Bounds(), palette.Canvas)
-	b.Draw(c, area)
+	b.Draw(c, r)
 	if ink := inkIn(c, r, palette.Bad); ink.Empty() {
-		t.Error("no results was not drawn in the bad colour")
+		t.Error("no matches was not drawn in the bad colour")
 	}
 	// A query longer than the field scrolls so that the caret stays in it.
 	b.SetText("a very long query that cannot possibly fit in the field of the bar")
-	c.Fill(c.Bounds(), palette.Canvas)
-	b.Draw(c, area)
+	c.Fill(c.Bounds(), palette.Chrome)
+	b.Draw(c, r)
+	ta = b.textArea(r)
 	if ink := inkIn(c, ta, palette.Accent); ink.Empty() || !ink.In(ta) {
 		t.Errorf("the caret of a long query is at %v, outside the field %v", ink, ta)
 	}
-	// A hovered button is drawn in the hover colour.
-	b.hover = partClose
-	c.Fill(c.Bounds(), palette.Canvas)
-	b.Draw(c, area)
-	cb := b.button(r, partClose)
-	if got := c.Img.RGBAAt(cb.Min.X+1, cb.Min.Y+1); got == nrgba(palette.Raised) {
+	// A hovered button is drawn in the hover colour, its arrow in the text one.
+	b.Total = 9
+	b.hover = partNext
+	c.Fill(c.Bounds(), palette.Chrome)
+	b.Draw(c, r)
+	if ink := inkIn(c, b.button(r, partNext), palette.Text); ink.Empty() {
 		t.Error("a hovered button was not highlighted")
 	}
 }
 
 func TestFindBarPointer(t *testing.T) {
 	b := newFind(t)
-	area := image.Rect(0, 0, 600, 200)
-	r := b.Rect(area)
-	b.SetText("hello")
+	r := findRect
 	centre := func(rect image.Rectangle) (float64, float64) {
 		return float64(rect.Min.X+rect.Max.X) / 2, float64(rect.Min.Y+rect.Max.Y) / 2
 	}
 	ev := func(kind platform.PointerKind, btn platform.Button, x, y float64) platform.PointerEvent {
 		return platform.PointerEvent{Kind: kind, Button: btn, X: x, Y: y}
 	}
+	// A press on a closed field asks to start a search.
+	x, y := centre(r)
+	if act, over := b.HandlePointer(ev(platform.Press, platform.Left, x, y), r); act != FindOpen || !over {
+		t.Errorf("press on the closed field = %v, %v", act, over)
+	}
+	if act, over := b.HandlePointer(ev(platform.Release, platform.Left, x, y), r); act != FindNone || !over {
+		t.Errorf("its release = %v, %v", act, over)
+	}
+
+	b.Open = true
+	b.SetText("hello")
+	b.Current, b.Total = 1, 3
 	click := func(part findPart) (FindAction, bool) {
 		x, y := centre(b.button(r, part))
-		_, over := b.HandlePointer(ev(platform.Move, platform.None, x, y), area)
+		_, over := b.HandlePointer(ev(platform.Move, platform.None, x, y), r)
 		if !over || b.hover != part {
 			t.Fatalf("hover over %v: %v, %v", part, over, b.hover)
 		}
-		b.HandlePointer(ev(platform.Press, platform.Left, x, y), area)
-		return b.HandlePointer(ev(platform.Release, platform.Left, x, y), area)
+		b.HandlePointer(ev(platform.Press, platform.Left, x, y), r)
+		return b.HandlePointer(ev(platform.Release, platform.Left, x, y), r)
 	}
-	for part, want := range map[findPart]FindAction{partPrev: FindPrev, partNext: FindNext, partClose: FindClose} {
+	for part, want := range map[findPart]FindAction{partPrev: FindPrev, partNext: FindNext} {
 		if act, over := click(part); act != want || !over {
 			t.Errorf("clicking part %v = %v, %v, want %v", part, act, over, want)
 		}
 	}
-	// Pressing a button and releasing elsewhere does nothing.
-	x, y := centre(b.button(r, partNext))
-	b.HandlePointer(ev(platform.Press, platform.Left, x, y), area)
-	if act, _ := b.HandlePointer(ev(platform.Release, platform.Left, float64(r.Min.X+findPad), y), area); act != FindNone {
-		t.Errorf("press on a button, release on the field = %v", act)
+	// Pressing a button and releasing elsewhere does nothing, but the release
+	// still belongs to the field.
+	x, y = centre(b.button(r, partNext))
+	b.HandlePointer(ev(platform.Press, platform.Left, x, y), r)
+	if act, over := b.HandlePointer(ev(platform.Release, platform.Left, 5, 150), r); act != FindNone || !over {
+		t.Errorf("press on a button, release outside = %v, %v", act, over)
 	}
-	// A press in the field puts the caret there: at the start, middle and end.
+	// A press in the text puts the caret there: at the start, middle and end.
 	ta := b.textArea(r)
 	for _, tc := range []struct {
 		x    int
 		want int
 	}{{ta.Min.X, 0}, {ta.Min.X + b.Face.Width("hel") + 1, 3}, {ta.Max.X - 1, 5}} {
-		b.HandlePointer(ev(platform.Press, platform.Left, float64(tc.x), y), area)
-		b.HandlePointer(ev(platform.Release, platform.Left, float64(tc.x), y), area)
+		b.HandlePointer(ev(platform.Press, platform.Left, float64(tc.x), y), r)
+		b.HandlePointer(ev(platform.Release, platform.Left, float64(tc.x), y), r)
 		if b.Cursor != tc.want {
 			t.Errorf("a press at x=%d put the caret at %d, want %d", tc.x, b.Cursor, tc.want)
 		}
 	}
-	// Right-button presses on the bar are taken but do nothing; presses and
-	// releases elsewhere are not on the bar at all.
-	if act, over := b.HandlePointer(ev(platform.Press, platform.Right, x, y), area); act != FindNone || !over {
-		t.Errorf("right press on the bar = %v, %v", act, over)
+	// Right-button presses on the field are taken but do nothing; presses and
+	// releases elsewhere are not on the field at all.
+	if act, over := b.HandlePointer(ev(platform.Press, platform.Right, x, y), r); act != FindNone || !over {
+		t.Errorf("right press on the field = %v, %v", act, over)
 	}
-	if _, over := b.HandlePointer(ev(platform.Press, platform.Left, 5, 150), area); over {
-		t.Error("a press beside the bar was taken")
+	if _, over := b.HandlePointer(ev(platform.Press, platform.Left, 5, 150), r); over {
+		t.Error("a press beside the field was taken")
 	}
-	b.HandlePointer(ev(platform.Release, platform.Left, 5, 150), area)
-	b.HandlePointer(ev(platform.Press, platform.Left, x, y), area)
-	b.HandlePointer(ev(platform.Release, platform.Right, x, y), area) // another button's release does not click
-	b.HandlePointer(ev(platform.Release, platform.Left, 5, 150), area)
-	b.HandlePointer(ev(platform.Leave, platform.None, 0, 0), area)
+	if _, over := b.HandlePointer(ev(platform.Release, platform.Left, 5, 150), r); over {
+		t.Error("a release beside the field was taken")
+	}
+	b.HandlePointer(ev(platform.Press, platform.Left, x, y), r)
+	b.HandlePointer(ev(platform.Release, platform.Right, x, y), r) // another button's release does not click
+	if _, over := b.HandlePointer(ev(platform.Move, platform.None, 5, 150), r); over {
+		t.Error("a move beside the field was taken with no button held")
+	}
+	b.HandlePointer(ev(platform.Leave, platform.None, 0, 0), r)
 	if b.hover != partNone {
 		t.Error("the hover outlived the pointer")
 	}

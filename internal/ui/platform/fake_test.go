@@ -75,7 +75,7 @@ func TestFakeNewWindowError(t *testing.T) {
 
 // TestEventsImplementEvent verifies that every event type satisfies Event.
 func TestEventsImplementEvent(t *testing.T) {
-	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}, PasteEvent{}}
+	evs := []Event{ResizeEvent{}, FrameEvent{}, CloseEvent{}, FocusEvent{}, PointerEvent{}, ScrollEvent{}, KeyEvent{}, PasteEvent{}, StateEvent{}}
 	for _, e := range evs {
 		e.isEvent()
 	}
@@ -114,4 +114,43 @@ func TestFakeClipboardRoundTrips(t *testing.T) {
 	}
 	w.Close()
 	w.RequestPaste() // a closed window gets no event
+}
+
+func TestFakeWindowRecordsWindowManagement(t *testing.T) {
+	var f Fake
+	win, _ := f.NewWindow(WindowOptions{})
+	w := win.(*FakeWindow)
+	w.Move()
+	w.Resize(EdgeBottom | EdgeRight)
+	w.SetMaximized(true)
+	w.SetMaximized(false)
+	w.Minimize()
+	w.ShowMenu(4, 5)
+	want := []string{"move", "resize 10", "maximize", "unmaximize", "minimize", "menu 4 5"}
+	if got := w.Calls(); len(got) != len(want) {
+		t.Fatalf("calls = %q", got)
+	} else {
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("call %d = %q, want %q", i, got[i], want[i])
+			}
+		}
+	}
+	w.SetCursor(CursorResizeSE)
+	if w.Cursor() != CursorResizeSE {
+		t.Errorf("cursor = %d", w.Cursor())
+	}
+}
+
+func TestResizeCursor(t *testing.T) {
+	for edges, want := range map[Edge]Cursor{
+		EdgeTop: CursorResizeN, EdgeBottom: CursorResizeS, EdgeLeft: CursorResizeW, EdgeRight: CursorResizeE,
+		EdgeTop | EdgeLeft: CursorResizeNW, EdgeTop | EdgeRight: CursorResizeNE,
+		EdgeBottom | EdgeLeft: CursorResizeSW, EdgeBottom | EdgeRight: CursorResizeSE,
+		0: CursorDefault, EdgeTop | EdgeBottom: CursorDefault,
+	} {
+		if got := ResizeCursor(edges); got != want {
+			t.Errorf("ResizeCursor(%d) = %d, want %d", edges, got, want)
+		}
+	}
 }

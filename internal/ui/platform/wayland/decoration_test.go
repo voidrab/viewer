@@ -7,9 +7,10 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-func TestServerSideDecorationIsRequestedWhenOffered(t *testing.T) {
-	globals := append(append([]Global(nil), wmGlobals...), Global{Name: 9, Interface: "zxdg_decoration_manager_v1", Version: 1})
-	be, f, _ := wmSetup(t, globals)
+var decorationGlobals = append(append([]Global(nil), wmGlobals...), Global{Name: 9, Interface: "zxdg_decoration_manager_v1", Version: 1})
+
+func TestClientSideDecorationIsRequestedWhenOffered(t *testing.T) {
+	be, f, _ := wmSetup(t, decorationGlobals)
 	win, err := be.NewWindow(platform.WindowOptions{Size: platform.Size{W: 100, H: 100}})
 	if err != nil {
 		t.Fatal(err)
@@ -18,8 +19,8 @@ func TestServerSideDecorationIsRequestedWhenOffered(t *testing.T) {
 	f.wait("set_mode")
 	f.wait("commit") // the mode is set before the first commit
 	f.mu.Lock()
-	if f.decorationMode != decorationModeServer {
-		t.Errorf("mode = %d, want server-side (%d)", f.decorationMode, decorationModeServer)
+	if f.decorationMode != decorationModeClient {
+		t.Errorf("mode = %d, want client-side (%d)", f.decorationMode, decorationModeClient)
 	}
 	f.mu.Unlock()
 
@@ -40,6 +41,67 @@ func TestServerSideDecorationIsRequestedWhenOffered(t *testing.T) {
 			t.Fatalf("destroyed = %v", got)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// configureStates sends a toplevel configure with the given states, and the
+// xdg_surface configure that applies it.
+func (f *fakeWM) configureStates(s *server, w, h int32, serial uint32, states ...uint32) {
+	f.mu.Lock()
+	top, xdg := f.toplevel, f.xdgSurface
+	f.mu.Unlock()
+	var arr []byte
+	for _, st := range states {
+		arr = order.AppendUint32(arr, st)
+	}
+	s.send(top, toplevelConfigure, func(e *Encoder) { e.Int(w).Int(h).Array(arr) })
+	s.send(xdg, xdgSurfaceConfigure, func(e *Encoder) { e.Uint(serial) })
+}
+
+func TestACompositorThatDecoratesIsReported(t *testing.T) {
+	be, f, srv := wmSetup(t, decorationGlobals)
+	win, _ := be.NewWindow(platform.WindowOptions{Size: platform.Size{W: 100, H: 100}})
+	f.wait("commit")
+	f.mu.Lock()
+	deco := f.decoration
+	f.mu.Unlock()
+	srv.send(deco, decorationConfigure, func(e *Encoder) { e.Uint(decorationModeServer) })
+	srv.send(deco, 7, nil) // an event this client does not use
+	f.configure(srv, 100, 100, 1)
+	if ev := next(t, win); ev != (platform.StateEvent{Decorated: true}) {
+		t.Errorf("first event = %#v, want a decorated state", ev)
+	}
+	if ev := next(t, win); ev != (platform.ResizeEvent{Size: platform.Size{W: 100, H: 100}, Scale: 1}) {
+		t.Errorf("then %#v, want the resize", ev)
+	}
+	next(t, win) // the frame
+	// Client-side again: the state goes back to the zero one.
+	srv.send(deco, decorationConfigure, func(e *Encoder) { e.Uint(decorationModeClient) })
+	f.configure(srv, 100, 100, 2)
+	if ev := next(t, win); ev != (platform.StateEvent{}) {
+		t.Errorf("after the switch back: %#v", ev)
+	}
+}
+
+func TestMaximizedAndFullscreenStatesAreReportedWhenTheyChange(t *testing.T) {
+	_, f, srv, win := openWindow(t, 100, 100) // starts in the zero state: no StateEvent
+	f.configureStates(srv, 200, 100, 6, toplevelStateMaximized, 4)
+	if ev := next(t, win); ev != (platform.StateEvent{Maximized: true}) {
+		t.Errorf("maximised: %#v", ev)
+	}
+	next(t, win) // resize
+	next(t, win) // frame
+	skipFrame(win)
+	// Full screen counts as maximised, so nothing changes.
+	f.configureStates(srv, 200, 100, 7, toplevelStateFullscreen)
+	if ev := next(t, win); ev != (platform.ResizeEvent{Size: platform.Size{W: 200, H: 100}, Scale: 1}) {
+		t.Errorf("full screen: %#v, want only the resize", ev)
+	}
+	next(t, win)
+	skipFrame(win)
+	f.configureStates(srv, 100, 100, 8, 4) // activated only
+	if ev := next(t, win); ev != (platform.StateEvent{}) {
+		t.Errorf("restored: %#v", ev)
 	}
 }
 

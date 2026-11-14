@@ -97,6 +97,48 @@ func TestParseKeymapAndLookup(t *testing.T) {
 	}
 }
 
+// numericKeymap is cut from a keymap KWin sent, which gives keysyms as hex
+// values rather than names.
+const numericKeymap = `xkb_keymap {
+xkb_keycodes "evdev_aliases(qwerty)" {
+	<ESC> = 9;
+	<AC04> = 41;
+	<AB03> = 54;
+	<UP> = 111;
+};
+xkb_symbols "pc_at_inet(evdev)" {
+	key <ESC> {	[ 0xff1b ] };
+	key <AC04> {	[ 0x66, 0x46, 0x1f0, 0xaa ] };
+	key <AB03> {	[ 0x63, 0x43, 0xa2, 0xa9 ] };
+	key <UP> {	[ 0xff52 ] };
+};
+};` + "\x00"
+
+func TestParseKeymapNumeric(t *testing.T) {
+	km, err := ParseKeymap(numericKeymap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name       string
+		code, mods uint32
+		wantKey    platform.Key
+		wantRune   rune
+	}{
+		{"ctrl f", 33, modCtrl, platform.KeyNone, 'f'},
+		{"shift f", 33, modShift, platform.KeyNone, 'F'},
+		{"ctrl c", 46, modCtrl, platform.KeyNone, 'c'},
+		{"altgr c", 46, modMod5, platform.KeyNone, '¢'},
+		{"escape", 1, 0, platform.KeyEscape, 0},
+		{"up", 103, 0, platform.KeyUp, 0},
+	} {
+		key, r := km.Lookup(tc.code, tc.mods, 0)
+		if key != tc.wantKey || r != tc.wantRune {
+			t.Errorf("%s: Lookup = %v, %q; want %v, %q", tc.name, key, r, tc.wantKey, tc.wantRune)
+		}
+	}
+}
+
 func TestParseKeymapEmpty(t *testing.T) {
 	for _, text := range []string{"", "xkb_keymap { xkb_symbols \"x\" { }; };", "xkb_keycodes \"a\" { <A> = 9;"} {
 		if _, err := ParseKeymap(text); !errors.Is(err, ErrKeymap) {
@@ -121,6 +163,13 @@ func TestResolve(t *testing.T) {
 		{"U20AC", platform.KeyNone, '€'}, {"U0", platform.KeyNone, 0},
 		{"UZZZZ", platform.KeyNone, 0}, {"U110000", platform.KeyNone, 0},
 		{"ssharp", platform.KeyNone, 'ß'}, {"Shift_L", platform.KeyNone, 0},
+		{"0xff0d", platform.KeyEnter, 0}, {"0xff55", platform.KeyPageUp, 0},
+		{"0xfe20", platform.KeyTab, 0}, {"0x61", platform.KeyNone, 'a'},
+		{"0x20", platform.KeyNone, ' '}, {"0xfc", platform.KeyNone, 'ü'},
+		{"0xffb7", platform.KeyNone, '7'}, {"0xffab", platform.KeyNone, '+'},
+		{"0x20ac", platform.KeyNone, '€'}, {"0x10020ac", platform.KeyNone, '€'},
+		{"0xffe1", platform.KeyNone, 0}, {"0x1f0", platform.KeyNone, 0},
+		{"0xzz", platform.KeyNone, 0}, {"0x1000000", platform.KeyNone, 0},
 	} {
 		if k, r := resolve(tc.name); k != tc.key || r != tc.r {
 			t.Errorf("resolve(%q) = %v, %q", tc.name, k, r)

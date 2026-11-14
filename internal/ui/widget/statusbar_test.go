@@ -19,8 +19,10 @@ func newStatus(t *testing.T) *StatusBar {
 	return NewStatusBar(palette, face)
 }
 
-// inkIn returns the rectangle of pixels in rect that exactly match col. The
-// background, the border and fully transparent pixels are ignored.
+// inkIn returns the rectangle of pixels in rect that match col: exactly, or
+// within inkTolerance in each channel, as the most covered pixels of thin
+// anti-aliased glyphs do. The background, the border and fully transparent
+// pixels are ignored.
 func inkIn(c *paint.Canvas, rect image.Rectangle, col color.NRGBA) image.Rectangle {
 	var out image.Rectangle
 	for y := rect.Min.Y; y < rect.Max.Y; y++ {
@@ -29,13 +31,23 @@ func inkIn(c *paint.Canvas, rect image.Rectangle, col color.NRGBA) image.Rectang
 			if p == nrgba(palette.Chrome) || p == nrgba(palette.Border) || p.A == 0 {
 				continue
 			}
-			// Solid text pixels match the colour exactly.
-			if p == nrgba(col) {
+			if near(p, nrgba(col)) {
 				out = out.Union(image.Rect(x, y, x+1, y+1))
 			}
 		}
 	}
 	return out
+}
+
+// inkTolerance is how far a pixel's channels may be from a colour for it to
+// count as ink in that colour: well under the distance between any two of a
+// palette's text colours.
+const inkTolerance = 32
+
+// near reports whether p is within inkTolerance of q in every channel.
+func near(p, q color.RGBA) bool {
+	d := func(a, b uint8) int { return abs(int(a) - int(b)) }
+	return d(p.R, q.R) <= inkTolerance && d(p.G, q.G) <= inkTolerance && d(p.B, q.B) <= inkTolerance && p.A == q.A
 }
 
 // anyInk returns the rectangle of pixels in rect that are neither background
@@ -93,7 +105,7 @@ func TestStatusBarMessageColours(t *testing.T) {
 	s := newStatus(t)
 	s.Info = "a.pdf"
 	for kind, want := range map[MessageKind]color.NRGBA{
-		MessageInfo: palette.Accent, MessageOK: palette.OK, MessageWarn: palette.Warn, MessageBad: palette.Bad,
+		MessageInfo: palette.Text, MessageOK: palette.OK, MessageWarn: palette.Warn, MessageBad: palette.Bad,
 	} {
 		s.Message, s.Kind = "converted", kind
 		rect := image.Rect(0, 0, 500, s.Height())
@@ -143,5 +155,17 @@ func TestStatusBarShortensWhatDoesNotFit(t *testing.T) {
 	s.Draw(empty, image.Rect(0, 0, 100, s.Height()))
 	if got := empty.Img.RGBAAt(50, s.Height()-3); got != nrgba(palette.Chrome) {
 		t.Errorf("empty bar = %v", got)
+	}
+}
+
+func TestStatusBarShowsTheClaimedConformanceInTheOKColour(t *testing.T) {
+	s := newStatus(t)
+	s.Info, s.Claimed, s.Right = "a.pdf", "PDF/A-2b", []string{"134%"}
+	c := paint.New(500, s.Height())
+	s.Draw(c, image.Rect(0, 0, 500, s.Height()))
+	ok := inkIn(c, image.Rect(0, 0, 500, s.Height()), palette.OK)
+	zoom := 500 - statusPad - s.Face.Width("134%")
+	if ok.Empty() || ok.Max.X > zoom-statusGap+1 {
+		t.Errorf("claimed conformance at %v, want it left of the zoom at %d", ok, zoom)
 	}
 }

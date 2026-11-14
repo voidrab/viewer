@@ -73,7 +73,10 @@ type ResizeEvent struct {
 	Scale float64
 }
 
-// FrameEvent asks the application to redraw and Present.
+// FrameEvent asks the application to redraw and Present. A window may hold
+// back further FrameEvents until Present answers this one, and until the
+// compositor is ready for another frame, so the application must answer
+// every FrameEvent with Present.
 type FrameEvent struct{}
 
 // CloseEvent reports that the user asked to close the window.
@@ -103,6 +106,18 @@ type ScrollEvent struct {
 // PasteEvent delivers the clipboard's text, in answer to Window.RequestPaste.
 type PasteEvent struct{ Text string }
 
+// StateEvent reports how the compositor shows the window. It arrives before
+// the ResizeEvent of the change, and only when the state differs from the last
+// one reported, which starts as the zero StateEvent.
+type StateEvent struct {
+	// Maximized reports that the window fills the screen, maximised or full
+	// screen, and so has no edges to resize from.
+	Maximized bool
+	// Decorated reports that the compositor draws the window's title bar and
+	// frame, so the application should not draw its own window controls.
+	Decorated bool
+}
+
 // KeyEvent reports a key press or release. Rune is the text the key produces,
 // or zero for a key without text.
 type KeyEvent struct {
@@ -120,6 +135,59 @@ func (PointerEvent) isEvent() {}
 func (ScrollEvent) isEvent()  {}
 func (KeyEvent) isEvent()     {}
 func (PasteEvent) isEvent()   {}
+func (StateEvent) isEvent()   {}
+
+// Edge is a set of window edges, the side or corner a resize pulls on. The
+// values are those of xdg_toplevel's resize_edge.
+type Edge uint8
+
+// Window edges; a corner is the union of its two sides.
+const (
+	EdgeTop    Edge = 1
+	EdgeBottom Edge = 2
+	EdgeLeft   Edge = 4
+	EdgeRight  Edge = 8
+)
+
+// Cursor is a pointer image the compositor draws.
+type Cursor uint8
+
+// Cursors. The resize cursors point the way an edge or corner moves.
+const (
+	CursorDefault Cursor = iota
+	CursorResizeN
+	CursorResizeS
+	CursorResizeW
+	CursorResizeE
+	CursorResizeNW
+	CursorResizeNE
+	CursorResizeSW
+	CursorResizeSE
+)
+
+// ResizeCursor returns the cursor for resizing from edges, or CursorDefault
+// for a set of edges that is no side or corner.
+func ResizeCursor(edges Edge) Cursor {
+	switch edges {
+	case EdgeTop:
+		return CursorResizeN
+	case EdgeBottom:
+		return CursorResizeS
+	case EdgeLeft:
+		return CursorResizeW
+	case EdgeRight:
+		return CursorResizeE
+	case EdgeTop | EdgeLeft:
+		return CursorResizeNW
+	case EdgeTop | EdgeRight:
+		return CursorResizeNE
+	case EdgeBottom | EdgeLeft:
+		return CursorResizeSW
+	case EdgeBottom | EdgeRight:
+		return CursorResizeSE
+	}
+	return CursorDefault
+}
 
 // WindowOptions describes a window to open.
 type WindowOptions struct {
@@ -139,7 +207,8 @@ type Window interface {
 	// Present shows img, which must match the last reported size. The backend
 	// copies it, so the caller may reuse the buffer.
 	Present(img *image.RGBA)
-	// Invalidate requests a FrameEvent.
+	// Invalidate requests a FrameEvent. Requests made before the window is
+	// ready for a frame may be answered by a single FrameEvent.
 	Invalidate()
 	SetTitle(title string)
 	// Activate asks the compositor to bring the window to the front, citing
@@ -152,6 +221,21 @@ type Window interface {
 	// RequestPaste asks for the clipboard's text, which arrives later as a
 	// PasteEvent, or not at all if the clipboard holds no text.
 	RequestPaste()
+	// Move lets the user move the window with the pointer, from the button
+	// press last delivered until its release.
+	Move()
+	// Resize lets the user resize the window from edges with the pointer, from
+	// the button press last delivered until its release.
+	Resize(edges Edge)
+	// SetMaximized maximises the window, or restores it from maximised.
+	SetMaximized(maximized bool)
+	// Minimize hides the window to the taskbar or dock.
+	Minimize()
+	// ShowMenu opens the compositor's window menu at (x, y), following the
+	// button press last delivered.
+	ShowMenu(x, y int)
+	// SetCursor sets the pointer's image while it is over the window.
+	SetCursor(c Cursor)
 	// Close destroys the window and closes the Events channel.
 	Close()
 }

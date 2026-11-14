@@ -31,6 +31,7 @@ type fixture struct {
 	now    time.Time
 	timers []func()
 	picks  [][]string
+	seen   int // the window management calls already looked at
 }
 
 const winW, winH = 900, 600
@@ -186,11 +187,15 @@ func TestDrawPresentsTheWholeWindow(t *testing.T) {
 	if f.win.Title() != "doc.pdf — Viewer" {
 		t.Errorf("title = %q", f.win.Title())
 	}
-	// The status line shows the file info on the left, and the conformance,
-	// zoom and page on the right.
+	// The status line shows the file's name, pages, size and version on the
+	// left, and the conformance it claims and the zoom on the right; the
+	// toolbar shows the page and the zoom preset.
 	st := f.a.status
-	if st.Info == "" || len(st.Right) != 3 || st.Right[0] != "PDF/A-1b" || st.Right[1] != "Fit width" || st.Right[2] != "1 / 3" {
-		t.Errorf("status info %q right %v", st.Info, st.Right)
+	if !strings.HasPrefix(st.Info, "doc.pdf · 3 pages · ") || st.Claimed != "PDF/A-1b" || len(st.Right) != 1 || !strings.HasSuffix(st.Right[0], "%") {
+		t.Errorf("status info %q claimed %q right %v", st.Info, st.Claimed, st.Right)
+	}
+	if tb := f.a.toolbar; tb.Page != 1 || tb.Pages != 3 || tb.ZoomText != "fit width" || tb.NoDocument {
+		t.Errorf("toolbar page %d / %d zoom %q", tb.Page, tb.Pages, tb.ZoomText)
 	}
 	// A second frame does not change the title.
 	f.a.Handle(platform.FrameEvent{})
@@ -221,10 +226,8 @@ func TestNoDocumentShowsAHintAndDisablesTheToolbar(t *testing.T) {
 	if !ink {
 		t.Error("the empty window shows no hint")
 	}
-	for _, id := range []widget.ButtonID{widget.ButtonPrev, widget.ButtonNext, widget.ButtonZoomIn, widget.ButtonPDFA} {
-		if !f.a.toolbar.Disabled[id] {
-			t.Errorf("button %d is enabled with nothing open", id)
-		}
+	if !f.a.toolbar.NoDocument {
+		t.Error("the toolbar shows the document controls with nothing open")
 	}
 	if f.win.Title() != "Viewer" {
 		t.Errorf("title = %q", f.win.Title())
@@ -371,7 +374,7 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 		t.Errorf("Open without a dialog: kind %d message %q", f.a.messageKind, f.a.message)
 	}
 	f.clickButton(widget.ButtonFind)
-	if !f.a.findOpen {
+	if !f.a.findBar.Open {
 		t.Error("the Find button did not open the find bar")
 	}
 	f.key('n', platform.Ctrl)
@@ -459,53 +462,6 @@ func TestControlQQuits(t *testing.T) {
 	}
 	if f.a.Handle(platform.KeyEvent{Rune: 'q', Mods: platform.Ctrl}) {
 		t.Error("releasing Ctrl+Q quit")
-	}
-}
-
-func TestVerifyReportsInTheStatusLine(t *testing.T) {
-	cases := []struct {
-		name   string
-		report pdfa.Report
-		err    error
-		want   string
-		kind   widget.MessageKind
-	}{
-		{"valid", pdfa.Report{Valid: true}, nil, "PDF/A-1b: no issues found", widget.MessageOK},
-		{"issues", pdfa.Report{Total: 7, Issues: make([]pdfa.Issue, 3)}, nil, "PDF/A-1b: 7 issues in 3 checks", widget.MessageBad},
-		{"error", pdfa.Report{}, errors.New("this document is damaged"), "this document is damaged", widget.MessageBad},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t)
-			f.a.opts.Verify = func(_ context.Context, path, profile string) (pdfa.Report, error) {
-				if profile != "pdfa1b" || filepath.Base(path) != "a.pdf" {
-					t.Errorf("Verify(%q, %q)", path, profile)
-				}
-				return tc.report, tc.err
-			}
-			f.open(f.pdf("a.pdf", 1))
-			f.a.Handle(platform.FrameEvent{})
-			f.clickButton(widget.ButtonPDFA)
-			if f.a.messageKind != widget.MessageInfo {
-				t.Errorf("while verifying: %q", f.a.message)
-			}
-			select {
-			case fn := <-f.a.inbox:
-				fn()
-			case <-time.After(5 * time.Second):
-				t.Fatal("the verification never reported")
-			}
-			if f.a.message != tc.want || f.a.messageKind != tc.kind {
-				t.Errorf("message %q kind %d, want %q kind %d", f.a.message, f.a.messageKind, tc.want, tc.kind)
-			}
-		})
-	}
-	// With nothing open the button has nothing to verify.
-	f := newFixture(t)
-	f.start()
-	f.a.verify()
-	if f.a.message != "" {
-		t.Errorf("verifying nothing said %q", f.a.message)
 	}
 }
 
@@ -626,7 +582,7 @@ func TestScrollAndKeysReachTheView(t *testing.T) {
 	// Ctrl+0 is not an app shortcut, so the view handles it.
 	f.key('+', platform.Ctrl)
 	f.key('0', platform.Ctrl)
-	if view.ZoomLabel() != "Fit width" {
+	if view.ZoomLabel() != "fit width" {
 		t.Errorf("Ctrl+0 left zoom %q", view.ZoomLabel())
 	}
 }
@@ -663,7 +619,7 @@ func TestHandleReportsQuit(t *testing.T) {
 
 func TestHumanSize(t *testing.T) {
 	for n, want := range map[int64]string{
-		0: "0 B", 1023: "1023 B", 1024: "1.0 KB", 281927: "275.3 KB", 5 << 20: "5.0 MB", 3 << 30: "3.0 GB", 5 << 40: "5120.0 GB",
+		0: "0 B", 1023: "1023 B", 1024: "1.0 KB", 281927: "275 KB", 5 << 20: "5.0 MB", 3 << 30: "3.0 GB", 5 << 40: "5120 GB",
 	} {
 		if got := humanSize(n); got != want {
 			t.Errorf("humanSize(%d) = %q, want %q", n, got, want)
@@ -750,12 +706,18 @@ func TestRunDrivesTheWindow(t *testing.T) {
 	dir := t.TempDir()
 	path := testpdf.Write(t, dir, "run.pdf", testpdf.BuildPages([][2]int{{200, 300}, {200, 300}}))
 
-	// A fixture with the same document gives the position of the PDF/A button.
+	// A fixture with the same document gives the position of the PDF/A button,
+	// and of the Verify button in the panel it opens.
 	ref := newFixture(t)
 	ref.open(path)
 	ref.a.Handle(platform.FrameEvent{})
 	btn := ref.a.toolbar.ButtonRect(widget.ButtonPDFA)
 	bx, by := (btn.Min.X+btn.Max.X)/2, (btn.Min.Y+btn.Max.Y)/2
+	ref.a.setPanel(true)
+	ref.a.Handle(platform.FrameEvent{})
+	panel := ref.a.panelRect()
+	vr := ref.a.panel.ItemRect(widget.PanelAction{Kind: widget.PanelVerify}, panel.Dx()).Add(panel.Min)
+	vx, vy := (vr.Min.X+vr.Max.X)/2, (vr.Min.Y+vr.Max.Y)/2
 
 	errc := make(chan error, 1)
 	go func() {
@@ -778,21 +740,26 @@ func TestRunDrivesTheWindow(t *testing.T) {
 		t.Errorf("title = %q", fw.Title())
 	}
 
-	// Clicking the PDF/A button verifies in the background; the result comes back
-	// through the event loop and shows in the status line in the OK colour.
+	// The PDF/A button opens the panel, whose Verify button checks in the
+	// background; the result comes back through the event loop and shows in
+	// the panel in the OK colour.
 	ok := theme.Light().OK
 	okPixel := color.RGBA{ok.R, ok.G, ok.B, 255}
-	fw.Send(platform.PointerEvent{Kind: platform.Move, X: float64(bx), Y: float64(by)})
-	fw.Send(platform.PointerEvent{Kind: platform.Press, Button: platform.Left, X: float64(bx), Y: float64(by)})
-	fw.Send(platform.PointerEvent{Kind: platform.Release, Button: platform.Left, X: float64(bx), Y: float64(by)})
-	waitFor(t, "the verification result in the status line", func() bool {
+	click := func(x, y int) {
+		fw.Send(platform.PointerEvent{Kind: platform.Move, X: float64(x), Y: float64(y)})
+		fw.Send(platform.PointerEvent{Kind: platform.Press, Button: platform.Left, X: float64(x), Y: float64(y)})
+		fw.Send(platform.PointerEvent{Kind: platform.Release, Button: platform.Left, X: float64(x), Y: float64(y)})
+	}
+	click(bx, by)
+	click(vx, vy)
+	waitFor(t, "the verification result in the panel", func() bool {
 		shots := fw.Presented()
 		if len(shots) == 0 {
 			return false
 		}
 		img := shots[len(shots)-1]
-		for y := winH - theme.StatusHeight; y < winH; y++ {
-			for x := 0; x < winW; x++ {
+		for y := panel.Min.Y; y < panel.Max.Y; y++ {
+			for x := panel.Min.X; x < panel.Max.X; x++ {
 				if img.RGBAAt(x, y) == okPixel {
 					return true
 				}
@@ -890,7 +857,7 @@ func TestScrollbarThumbDragsInTheWindow(t *testing.T) {
 	f.open(f.pdf("a.pdf", 12))
 	c := f.content()
 	view := f.a.current().view
-	x := c.Max.X - 3 // over the vertical scrollbar
+	x := c.Max.X - 8 // over the vertical scrollbar, inside the window's frame
 	f.pointer(platform.Move, platform.None, x, c.Min.Y+4)
 	f.pointer(platform.Press, platform.Left, x, c.Min.Y+4)
 	f.pointer(platform.Move, platform.None, x, c.Max.Y)
@@ -994,11 +961,11 @@ func settled(t *testing.T, f *fixture) (current, total int) {
 
 func TestCtrlFOpensTheFindBarAndSearches(t *testing.T) {
 	f := textFixture(t)
-	if f.a.findOpen {
+	if f.a.findBar.Open {
 		t.Fatal("the find bar starts open")
 	}
 	f.key('f', platform.Ctrl)
-	if !f.a.findOpen || f.a.findDoc != f.a.current() {
+	if !f.a.findBar.Open || f.a.findDoc != f.a.current() {
 		t.Fatal("Ctrl+F did not open the find bar")
 	}
 	for _, r := range "beta" {
@@ -1028,7 +995,7 @@ func TestCtrlFOpensTheFindBarAndSearches(t *testing.T) {
 	}
 	// Escape closes the bar and clears the search.
 	f.special(platform.KeyEscape, 0)
-	if f.a.findOpen {
+	if f.a.findBar.Open {
 		t.Error("Escape left the find bar open")
 	}
 	if _, total, _ := f.a.current().view.FindStatus(); total != 0 {
@@ -1036,20 +1003,33 @@ func TestCtrlFOpensTheFindBarAndSearches(t *testing.T) {
 	}
 }
 
-func TestFindButtonTogglesTheBar(t *testing.T) {
+func TestClickingTheFindFieldStartsASearch(t *testing.T) {
 	f := textFixture(t)
 	f.clickButton(widget.ButtonFind)
-	if !f.a.findOpen {
-		t.Fatal("the Find button did not open the bar")
+	if !f.a.findBar.Open {
+		t.Fatal("clicking the find field did not start a search")
 	}
 	f.a.Handle(platform.FrameEvent{})
-	if !f.a.toolbar.On[widget.ButtonFind] {
-		t.Error("the Find button does not show that the bar is open")
+	if !f.a.findBar.Open {
+		t.Error("the find field does not show that it has the keys")
 	}
+	// A second click stays in the field; Escape ends the search and clears it.
 	f.clickButton(widget.ButtonFind)
-	if f.a.findOpen {
-		t.Error("the Find button did not close the bar")
+	f.key('x', 0)
+	if !f.a.findBar.Open || string(f.a.findBar.Text) != "x" {
+		t.Errorf("after a second click: open %v text %q", f.a.findBar.Open, string(f.a.findBar.Text))
 	}
+	f.special(platform.KeyEscape, 0)
+	if f.a.findBar.Open || len(f.a.findBar.Text) != 0 {
+		t.Error("Escape did not end the search")
+	}
+	// The toolbar's own handling of the field, which the find field normally
+	// takes first, starts a search too.
+	f.a.toolbarAction(widget.Action{Kind: widget.ActionButton, Index: int(widget.ButtonFind)})
+	if !f.a.findBar.Open {
+		t.Error("the toolbar's find button did not start a search")
+	}
+	f.special(platform.KeyEscape, 0)
 	// Opening an open bar keeps its text. With no document the bar stays
 	// closed.
 	f.key('f', platform.Ctrl)
@@ -1061,7 +1041,7 @@ func TestFindButtonTogglesTheBar(t *testing.T) {
 	empty := newFixture(t)
 	empty.start()
 	empty.key('f', platform.Ctrl)
-	if empty.a.findOpen {
+	if empty.a.findBar.Open {
 		t.Error("the find bar opened with no document")
 	}
 }
@@ -1160,21 +1140,24 @@ func TestFindBarTakesKeysAndPointerButNotNavigation(t *testing.T) {
 	if view.Layout().Scroll() != before {
 		t.Error("a caret key scrolled the document")
 	}
-	// A click on the bar's close button closes it, and does not reach the page.
-	c := f.content()
-	r := f.a.findBar.Rect(image.Rect(0, 0, c.Dx(), c.Dy())).Add(c.Min)
-	x, y := r.Max.X-15, (r.Min.Y+r.Max.Y)/2
-	f.click(x, y)
-	if f.a.findOpen {
-		t.Error("clicking the close button left the bar open")
+	// A click on the field's next button steps to the next match, and does
+	// not reach the toolbar.
+	for _, r := range "a" {
+		f.key(r, 0)
 	}
-	// A click beside the bar is for the page.
-	f.key('f', platform.Ctrl)
+	settled(t, f)
+	r := f.a.findRect()
+	f.click(r.Max.X-10, (r.Min.Y+r.Max.Y)/2)
+	if cur, total := settled(t, f); total < 2 || cur != 2 {
+		t.Errorf("after clicking next: match %d of %d, want 2", cur, total)
+	}
+	// A click in the content is for the page, and the search goes on.
+	c := f.content()
 	f.pointer(platform.Press, platform.Left, c.Min.X+5, c.Min.Y+c.Dy()/2)
 	f.pointer(platform.Move, platform.None, c.Min.X+5, c.Min.Y+c.Dy()/2-30)
 	f.pointer(platform.Release, platform.Left, c.Min.X+5, c.Min.Y+c.Dy()/2-30)
-	if view.Layout().Scroll().Y == before.Y {
-		t.Error("dragging beside the bar did not pan the page")
+	if view.Layout().Scroll().Y == before.Y || !f.a.findBar.Open {
+		t.Errorf("dragging the page: scrolled %v, find open %v", view.Layout().Scroll().Y != before.Y, f.a.findBar.Open)
 	}
 }
 
@@ -1185,7 +1168,7 @@ func TestSwitchingTabsClosesTheFindBar(t *testing.T) {
 	f.key('f', platform.Ctrl)
 	f.a.selectTab(1)
 	f.a.Handle(platform.FrameEvent{})
-	if f.a.findOpen {
+	if f.a.findBar.Open {
 		t.Error("the find bar stayed open on another tab")
 	}
 }

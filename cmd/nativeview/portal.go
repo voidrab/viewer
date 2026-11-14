@@ -15,6 +15,7 @@ const (
 	portalName      = "org.freedesktop.portal.Desktop"
 	portalPath      = "/org/freedesktop/portal/desktop"
 	chooserOpenFile = "org.freedesktop.portal.FileChooser.OpenFile"
+	chooserSaveFile = "org.freedesktop.portal.FileChooser.SaveFile"
 	requestIface    = "org.freedesktop.portal.Request"
 	responseSignal  = requestIface + ".Response"
 )
@@ -22,18 +23,36 @@ const (
 // dialogTimeout bounds how long a file dialog may stay open.
 const dialogTimeout = 30 * time.Minute
 
-// pickFiles shows the desktop's file chooser and returns the PDFs chosen. It
-// connects to the session bus afresh each time, so a dialog never depends on
-// the state of an earlier one.
-func pickFiles() ([]string, error) {
+// pickFiles shows the desktop's file chooser and returns the PDFs chosen.
+func pickFiles() (paths []string, err error) {
+	err = withBus(func(ctx context.Context, bus portal.Bus) (err error) {
+		paths, err = portal.PickPDFs(ctx, bus, "Open PDF")
+		return err
+	})
+	return paths, err
+}
+
+// saveFile asks the desktop's file chooser where to save a converted PDF,
+// suggesting suggested, and returns the path chosen, or "" if none was.
+func saveFile(suggested string) (path string, err error) {
+	err = withBus(func(ctx context.Context, bus portal.Bus) (err error) {
+		path, err = portal.SavePDF(ctx, bus, "Save converted PDF", suggested)
+		return err
+	})
+	return path, err
+}
+
+// withBus runs a dialog on a fresh connection to the session bus, so that a
+// dialog never depends on the state of an earlier one.
+func withBus(dialog func(ctx context.Context, bus portal.Bus) error) error {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
-		return nil, fmt.Errorf("no desktop file dialog: %w", err)
+		return fmt.Errorf("no desktop file dialog: %w", err)
 	}
 	defer conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), dialogTimeout)
 	defer cancel()
-	return portal.PickPDFs(ctx, dbusBus{conn}, "Open PDF")
+	return dialog(ctx, dbusBus{conn})
 }
 
 // dbusBus adapts a godbus connection to portal.Bus.
@@ -98,12 +117,21 @@ func parseResponse(body []any) (portal.Response, bool) {
 }
 
 func (b dbusBus) OpenFile(parent, title string, options map[string]any) (string, error) {
+	return b.choose(chooserOpenFile, parent, title, options)
+}
+
+func (b dbusBus) SaveFile(parent, title string, options map[string]any) (string, error) {
+	return b.choose(chooserSaveFile, parent, title, options)
+}
+
+// choose calls the FileChooser method and returns the request's object path.
+func (b dbusBus) choose(method, parent, title string, options map[string]any) (string, error) {
 	vars := make(map[string]dbus.Variant, len(options))
 	for k, v := range options {
 		vars[k] = dbus.MakeVariant(v)
 	}
 	var request dbus.ObjectPath
-	call := b.conn.Object(portalName, portalPath).Call(chooserOpenFile, 0, parent, title, vars)
+	call := b.conn.Object(portalName, portalPath).Call(method, 0, parent, title, vars)
 	if err := call.Store(&request); err != nil {
 		return "", errors.Join(errors.New("the desktop has no file dialog"), err)
 	}

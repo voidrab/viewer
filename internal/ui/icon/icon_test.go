@@ -30,6 +30,7 @@ func TestEveryIconDrawsInsideItsBox(t *testing.T) {
 	icons := map[string]Icon{
 		"Open": Open, "Prev": Prev, "Next": Next, "Up": Up, "Down": Down, "Plus": Plus, "Minus": Minus,
 		"Close": Close, "Search": Search, "Shield": Shield, "FitWidth": FitWidth, "Menu": Menu,
+		"Check": Check, "WinMinimize": WinMinimize, "WinMaximize": WinMaximize, "WinRestore": WinRestore, "WinClose": WinClose,
 	}
 	for name, ic := range icons {
 		c := paint.New(60, 60)
@@ -142,5 +143,23 @@ func TestDegeneratePaths(t *testing.T) {
 	}
 	if a := alphaAt(c, 12, 12); a < 200 {
 		t.Errorf("a one-point path is not a solid dot: alpha %d", a)
+	}
+}
+
+func TestLogoIsScaledOnceForEachSize(t *testing.T) {
+	small := Logo(18)
+	if small.Rect != image.Rect(0, 0, 18, 18) {
+		t.Fatalf("Logo(18) is %v", small.Rect)
+	}
+	if Logo(18) != small {
+		t.Error("the same size was scaled again")
+	}
+	big := Logo(48)
+	// The gopher fills the middle and leaves the corners clear.
+	if big.RGBAAt(24, 24).A == 0 || big.RGBAAt(0, 0).A != 0 {
+		t.Errorf("logo: middle %v corner %v", big.RGBAAt(24, 24), big.RGBAAt(0, 0))
+	}
+	if Logo(-1).Rect.Dx() != 0 {
+		t.Error("a negative size gave a non-empty logo")
 	}
 }

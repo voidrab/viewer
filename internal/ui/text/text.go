@@ -16,12 +16,13 @@ import (
 	"viewer/internal/ui/paint"
 )
 
-// The embedded Liberation Mono fonts are licensed under the SIL Open Font
-// License 1.1; see fonts/OFL.txt.
+// The embedded Adwaita Mono fonts, subset to Latin, Greek, Cyrillic and common
+// symbols, are licensed under the SIL Open Font License 1.1; see fonts/OFL.txt.
+// Adwaita Mono is what the webview build shows on a GNOME or KDE desktop.
 var (
-	//go:embed fonts/LiberationMono-Regular.ttf
+	//go:embed fonts/AdwaitaMono-Regular.ttf
 	monoRegular []byte
-	//go:embed fonts/LiberationMono-Bold.ttf
+	//go:embed fonts/AdwaitaMono-Bold.ttf
 	monoBold []byte
 )
 

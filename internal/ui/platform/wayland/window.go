@@ -14,6 +14,7 @@ const (
 
 	surfaceDestroy      = 0
 	surfaceAttach       = 1
+	surfaceFrame        = 3
 	surfaceDamageBuffer = 9
 	surfaceCommit       = 6
 
@@ -37,17 +38,27 @@ const (
 	decorationDestroy     = 0
 	decorationGetToplevel = 1
 	decorationSetMode     = 1
+	decorationConfigure   = 0
+	decorationModeClient  = 1
 	decorationModeServer  = 2
 
 	activationActivate = 2 // xdg_activation_v1.activate(token, surface)
 
-	toplevelDestroy     = 0
-	toplevelSetTitle    = 2
-	toplevelSetAppID    = 3
-	toplevelSetMinSize  = 8
-	toplevelConfigure   = 0
-	toplevelClose       = 1
-	toplevelStateActive = 4
+	toplevelDestroy        = 0
+	toplevelSetTitle       = 2
+	toplevelSetAppID       = 3
+	toplevelShowWindowMenu = 4
+	toplevelMove           = 5
+	toplevelResize         = 6
+	toplevelSetMinSize     = 8
+	toplevelSetMaximized   = 9
+	toplevelUnsetMaximized = 10
+	toplevelSetMinimized   = 13
+	toplevelConfigure      = 0
+	toplevelClose          = 1
+
+	toplevelStateMaximized  = 1
+	toplevelStateFullscreen = 2
 )
 
 // ErrNoGlobal is returned by Open when the compositor lacks a required
@@ -72,6 +83,9 @@ type Backend struct {
 	// then no clipboard.
 	dataManager uint32
 	clip        clipboard
+	// cursorShape is wp_cursor_shape_manager_v1, or zero without one: the
+	// client then sets no cursor.
+	cursorShape uint32
 
 	in input
 
@@ -99,6 +113,9 @@ func Open(conn *Conn) (*Backend, error) {
 	if b.wmBase, _, err = b.c.Bind("xdg_wm_base", 1, b.onWmBase); err != nil {
 		return nil, errors.Join(ErrNoGlobal, err)
 	}
+	// Cursor shapes are optional. The manager is bound before the seat, whose
+	// pointer needs it for its cursor device.
+	b.cursorShape, _, _ = b.c.Bind("wp_cursor_shape_manager_v1", 1, nil)
 	// The seat is optional: without one, windows receive no input events.
 	if b.seat, _, err = b.c.Bind("wl_seat", 5, b.onSeat); err == nil {
 		if err := b.c.Roundtrip(); err != nil {
@@ -112,8 +129,9 @@ func Open(conn *Conn) (*Backend, error) {
 			b.c.Send(b.dataManager, dataManagerGetDevice, func(e *Encoder) { e.Uint(b.clip.device).Uint(b.seat) })
 		}
 	}
-	// Server-side decoration is optional. Without zxdg_decoration_manager_v1,
-	// windows do not request it and the compositor's default applies.
+	// zxdg_decoration_manager_v1 is optional. With it, windows ask to draw
+	// their own title bar, which the compositor may refuse; without it, they
+	// draw their own, as the protocol's absence means.
 	b.decoration, _, _ = b.c.Bind("zxdg_decoration_manager_v1", 1, nil)
 	// xdg_activation_v1 lets a window ask to be brought forward. It is
 	// optional: without it, Activate does nothing.
@@ -181,7 +199,7 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 		c.Send(b.compositor, compositorCreateSurface, func(e *Encoder) { e.Uint(w.surface) }),
 		c.Send(b.wmBase, wmBaseGetXdgSurface, func(e *Encoder) { e.Uint(w.xdgSurface).Uint(w.surface) }),
 		c.Send(w.xdgSurface, xdgSurfaceGetToplevel, func(e *Encoder) { e.Uint(w.toplevel) }),
-		w.requestServerDecoration(),
+		w.requestClientDecoration(),
 		c.Send(w.toplevel, toplevelSetTitle, func(e *Encoder) { e.String(opts.Title) }),
 		c.Send(w.toplevel, toplevelSetAppID, func(e *Encoder) { e.String(opts.AppID) }),
 		c.Send(w.toplevel, toplevelSetMinSize, func(e *Encoder) { e.Int(int32(opts.MinSize.W)).Int(int32(opts.MinSize.H)) }),
@@ -197,19 +215,31 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 	return w, nil
 }
 
-// requestServerDecoration asks the compositor to draw the window's title bar
-// and borders. It does nothing when the compositor does not offer
-// zxdg_decoration_manager_v1.
-func (w *window) requestServerDecoration() error {
+// requestClientDecoration tells the compositor that the window draws its own
+// title bar and frame. The compositor answers with the mode it settles on,
+// which the window reports in its StateEvents. It does nothing when the
+// compositor does not offer zxdg_decoration_manager_v1.
+func (w *window) requestClientDecoration() error {
 	if w.b.decoration == 0 {
 		return nil
 	}
 	c := w.b.c
-	w.decoration = c.NewID(nil)
+	w.decoration = c.NewID(w.onDecoration)
 	return errors.Join(
 		c.Send(w.b.decoration, decorationGetToplevel, func(e *Encoder) { e.Uint(w.decoration).Uint(w.toplevel) }),
-		c.Send(w.decoration, decorationSetMode, func(e *Encoder) { e.Uint(decorationModeServer) }),
+		c.Send(w.decoration, decorationSetMode, func(e *Encoder) { e.Uint(decorationModeClient) }),
 	)
+}
+
+// onDecoration records the decoration mode the compositor chose. It takes
+// effect with the next xdg_surface.configure.
+func (w *window) onDecoration(opcode uint16, d *Decoder) {
+	if opcode == decorationConfigure {
+		mode := d.Uint()
+		w.mu.Lock()
+		w.pending.Decorated = mode == decorationModeServer
+		w.mu.Unlock()
+	}
 }
 
 // window is a Wayland xdg toplevel.
@@ -221,9 +251,20 @@ type window struct {
 
 	mu         sync.Mutex
 	size       platform.Size
+	pending    platform.StateEvent // the state of the configure under way
+	state      platform.StateEvent // the state last reported
+	cursor     platform.Cursor
 	configured bool
-	closed     bool
-	buffers    []*buffer
+
+	// Frame pacing: the window sends a FrameEvent only when the compositor is
+	// ready for a new frame, and at most one at a time. frameCallback is the
+	// wl_callback of the last commit until the compositor has shown it, or
+	// zero; frameQueued is set from sending a FrameEvent until Present
+	// answers it; frameWanted records a frame asked for meanwhile.
+	frameCallback            uint32
+	frameQueued, frameWanted bool
+	closed                   bool
+	buffers                  []*buffer
 }
 
 // buffer is one wl_buffer backed by shared memory.
@@ -241,12 +282,51 @@ type buffer struct {
 func (w *window) emit(ev platform.Event) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.closed {
-		return
+	if !w.closed {
+		w.send(ev)
 	}
+}
+
+// send queues ev and reports whether it was queued: it is dropped when the
+// application has stalled. The caller holds w.mu and has checked that the
+// window is open.
+func (w *window) send(ev platform.Event) bool {
 	select {
 	case w.events <- ev:
+		return true
 	default:
+		return false
+	}
+}
+
+// requestFrame sends a FrameEvent now if the window may draw, and otherwise
+// records that one is wanted: before the first configure, while the compositor
+// has yet to show the last frame, and while a FrameEvent is already waiting.
+// A frame asked for while one waits is wanted again afterwards, because the
+// application may already have drawn that one before the change that asked.
+// The caller holds w.mu.
+func (w *window) requestFrame() {
+	switch {
+	case w.closed:
+	case !w.configured || w.frameCallback != 0 || w.frameQueued:
+		w.frameWanted = true
+	default:
+		w.frameWanted = false
+		w.frameQueued = w.send(platform.FrameEvent{})
+	}
+}
+
+// onFrame handles the compositor's signal that it has shown the last frame,
+// so a new one may be drawn.
+func (w *window) onFrame(opcode uint16, _ *Decoder) {
+	if opcode != callbackDone {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.frameCallback = 0
+	if w.frameWanted {
+		w.requestFrame()
 	}
 }
 
@@ -254,10 +334,17 @@ func (w *window) emit(ev platform.Event) {
 func (w *window) onToplevel(opcode uint16, d *Decoder) {
 	switch opcode {
 	case toplevelConfigure:
-		width, height := d.Int(), d.Int()
+		width, height, states := d.Int(), d.Int(), d.Array()
 		w.mu.Lock()
 		if width > 0 && height > 0 {
 			w.size = platform.Size{W: int(width), H: int(height)}
+		}
+		w.pending.Maximized = false
+		for i := 0; i+4 <= len(states); i += 4 {
+			switch order.Uint32(states[i:]) {
+			case toplevelStateMaximized, toplevelStateFullscreen:
+				w.pending.Maximized = true
+			}
 		}
 		w.mu.Unlock()
 	case toplevelClose:
@@ -281,16 +368,29 @@ func (w *window) onXdgSurface(opcode uint16, d *Decoder) {
 		}
 	}
 	w.dropStale()
+	state, changed := w.pending, w.pending != w.state
+	w.state = w.pending
 	w.mu.Unlock()
+	if changed {
+		w.emit(state)
+	}
 	w.emit(platform.ResizeEvent{Size: size, Scale: 1})
-	w.emit(platform.FrameEvent{})
+	w.mu.Lock()
+	w.requestFrame()
+	w.mu.Unlock()
 }
 
 // Events implements platform.Window.
 func (w *window) Events() <-chan platform.Event { return w.events }
 
-// Invalidate implements platform.Window.
-func (w *window) Invalidate() { w.emit(platform.FrameEvent{}) }
+// Invalidate implements platform.Window. The FrameEvent waits until the
+// compositor is ready for a frame, and several requests made meanwhile bring
+// one FrameEvent.
+func (w *window) Invalidate() {
+	w.mu.Lock()
+	w.requestFrame()
+	w.mu.Unlock()
+}
 
 // Activate implements platform.Window with xdg_activation_v1.
 func (w *window) Activate(token string) {
@@ -305,17 +405,25 @@ func (w *window) SetTitle(title string) {
 	w.b.c.Send(w.toplevel, toplevelSetTitle, func(e *Encoder) { e.String(title) })
 }
 
-// Present implements platform.Window. A frame that does not match the
-// window's current size is dropped; a FrameEvent follows the next resize.
+// Present implements platform.Window, answering the FrameEvent sent last. A
+// frame that does not match the window's current size is dropped, as is one
+// there is no memory for; a frame wanted meanwhile is then sent at once.
 func (w *window) Present(img *image.RGBA) {
 	size := platform.Size{W: img.Rect.Dx(), H: img.Rect.Dy()}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.closed || !w.configured || size != w.size {
+	w.frameQueued = false
+	if w.closed || !w.configured {
 		return
 	}
-	buf := w.freeBuffer(size)
+	var buf *buffer
+	if size == w.size {
+		buf = w.freeBuffer(size)
+	}
 	if buf == nil {
+		if w.frameWanted {
+			w.requestFrame()
+		}
 		return
 	}
 	copyARGB(buf.mem.data, buf.stride, img)
@@ -323,6 +431,10 @@ func (w *window) Present(img *image.RGBA) {
 	c := w.b.c
 	c.Send(w.surface, surfaceAttach, func(e *Encoder) { e.Uint(buf.id).Int(0).Int(0) })
 	c.Send(w.surface, surfaceDamageBuffer, func(e *Encoder) { e.Int(0).Int(0).Int(int32(size.W)).Int(int32(size.H)) })
+	// The compositor signals on this callback when it is ready for the next
+	// frame, which paces drawing to what it shows.
+	w.frameCallback = c.NewID(w.onFrame)
+	c.Send(w.surface, surfaceFrame, func(e *Encoder) { e.Uint(w.frameCallback) })
 	c.Send(w.surface, surfaceCommit, nil)
 }
 

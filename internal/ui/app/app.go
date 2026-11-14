@@ -30,13 +30,26 @@ const messageTime = 4 * time.Second
 // Options configures an App. The zero value is usable; the function fields
 // exist so tests can replace the parts that touch the system.
 type Options struct {
-	// Palette is the colour scheme; the zero value means the light one.
+	// Palette is the colour scheme to start with; the zero value means the
+	// light one, or the dark one if Dark is set.
 	Palette theme.Palette
+	Dark    bool
+	// SaveTheme, if not nil, is called when the user switches the theme,
+	// with whether it is now dark, so that the choice can be kept.
+	SaveTheme func(dark bool)
+	// Themes, if not nil, delivers changes of the desktop's theme, true for
+	// dark, which the window follows.
+	Themes <-chan bool
 	// PickFiles asks the user for files to open. Nil means the platform
 	// provides no file dialog.
 	PickFiles func() ([]string, error)
-	// Verify and Inspect default to the pdfa package's.
+	// SaveFile asks the user where to save a converted copy, suggesting
+	// suggested, and returns "" if they choose nowhere. Nil means the platform
+	// provides no save dialog, and copies are saved at the suggested path.
+	SaveFile func(suggested string) (string, error)
+	// Verify, Convert and Inspect default to the pdfa package's.
 	Verify  func(ctx context.Context, path, profile string) (pdfa.Report, error)
+	Convert func(ctx context.Context, in, out, profile string) (pdfa.ConvertReport, error)
 	Inspect func(path string) (pdfa.Info, error)
 	// Now and AfterFunc default to the time package's.
 	Now       func() time.Time
@@ -63,11 +76,14 @@ var (
 
 // document is one open PDF, shown in one tab.
 type document struct {
-	path, name string
-	bytes      int64
-	claimed    string
-	doc        *gopdfrab.Document
-	view       *pageview.View
+	path, name       string
+	bytes            int64
+	version, claimed string
+	doc              *gopdfrab.Document
+	view             *pageview.View
+	// result is what the PDF/A panel shows for the document, or nil before
+	// its first check.
+	result *widget.PanelResult
 }
 
 // section is the part of the window the pointer works on.
@@ -78,6 +94,8 @@ const (
 	sectionToolbar
 	sectionTabs
 	sectionContent
+	sectionPanel
+	sectionFrame // the window's edges, which resize it
 )
 
 // App is the viewer's single window.
@@ -90,9 +108,11 @@ type App struct {
 	// pool renders the pages of every document, under one memory budget.
 	pool *pageview.Pool
 
-	toolbar *widget.Toolbar
-	tabs    *widget.TabBar
-	status  *widget.StatusBar
+	toolbar  *widget.Toolbar
+	tabs     *widget.TabBar
+	status   *widget.StatusBar
+	menu     *widget.Menu // the zoom or profile drop-down's list
+	menuKind menuKind     // which of them it is
 
 	docs   []*document
 	active int
@@ -109,9 +129,24 @@ type App struct {
 	messageKind  widget.MessageKind
 	messageUntil time.Time
 
-	findBar  *widget.FindBar
-	findOpen bool      // the find bar is showing
-	findDoc  *document // the document it searches
+	findBar *widget.FindBar
+	findDoc *document // the document searched while findBar.Open is set
+
+	pageDoc   *document // the document whose page number is being typed
+	hintHover bool      // the pointer is over the empty state's open button
+
+	panel     *widget.Panel
+	panelOpen bool      // the PDF/A panel is wanted; it shows with a document
+	panelDoc  *document // the document it showed last
+	profiles  []pdfa.Profile
+	job       *job // the verification or conversion running, or nil
+
+	// The window as the compositor shows it: decorated by it, or with the
+	// toolbar as its title bar; maximised or not.
+	decorated, maximized bool
+	cursor               platform.Cursor // the cursor last set
+	titlePress           time.Time       // when the title bar was last pressed
+	quitting             bool            // the window's close control was clicked
 
 	picking bool        // a file dialog is open
 	inbox   chan func() // work finished off the event loop, run on it
@@ -120,10 +155,13 @@ type App struct {
 // New returns an App for win.
 func New(win platform.Window, opts Options) (*App, error) {
 	if opts.Palette == (theme.Palette{}) {
-		opts.Palette = theme.Light()
+		opts.Palette = theme.Of(opts.Dark)
 	}
 	if opts.Verify == nil {
 		opts.Verify = pdfa.Verify
+	}
+	if opts.Convert == nil {
+		opts.Convert = pdfa.Convert
 	}
 	if opts.Inspect == nil {
 		opts.Inspect = pdfa.Inspect
@@ -144,9 +182,19 @@ func New(win platform.Window, opts Options) (*App, error) {
 	}
 	a := &App{win: win, opts: opts, face: face, pool: pageview.NewPool(pageview.PoolOptions{}), active: -1, inbox: make(chan func(), 16)}
 	a.toolbar = widget.NewToolbar(opts.Palette, face)
+	a.menu = widget.NewMenu(opts.Palette, face)
+	for _, p := range pageview.ZoomPresets {
+		a.toolbar.ZoomChoices = append(a.toolbar.ZoomChoices, p.Label)
+	}
 	a.tabs = widget.NewTabBar(opts.Palette, face)
 	a.status = widget.NewStatusBar(opts.Palette, small)
 	a.findBar = widget.NewFindBar(opts.Palette, face)
+	a.profiles = pdfa.Profiles()
+	var labels []string
+	for _, p := range a.profiles {
+		labels = append(labels, p.Label)
+	}
+	a.panel = widget.NewPanel(opts.Palette, face, labels)
 	return a, nil
 }
 
@@ -161,9 +209,15 @@ func Run(win platform.Window, paths []string, opts Options) error {
 	defer a.closeAll()
 	defer win.Close()
 	a.pending = append(a.pending, paths...)
-	events, requests := win.Events(), opts.Requests
+	events, requests, themes := win.Events(), opts.Requests, opts.Themes
 	for {
 		select {
+		case dark, ok := <-themes:
+			if !ok {
+				themes = nil
+				break
+			}
+			a.setTheme(dark)
 		case ev, ok := <-events:
 			if !ok || a.Handle(ev) {
 				return nil
@@ -188,8 +242,22 @@ func (a *App) layout() (toolbar, tabs, content, status image.Rectangle) {
 	return a.layoutFor(len(a.docs) > 0)
 }
 
-// layoutFor returns the rectangles of the parts of the window, with the tab
-// bar present or not. The tab bar appears with the first document.
+// panelRect returns where the PDF/A panel is, which is empty when it is not
+// showing: right of the content, beside the pages.
+func (a *App) panelRect() image.Rectangle {
+	_, _, content, _ := a.layout()
+	if !a.showsPanel(len(a.docs) > 0) {
+		return image.Rectangle{}
+	}
+	return image.Rect(content.Max.X, content.Min.Y, a.size.W, content.Max.Y)
+}
+
+// showsPanel reports whether the panel shows, with documents open or not.
+func (a *App) showsPanel(docs bool) bool { return a.panelOpen && docs }
+
+// layoutFor returns the rectangles of the parts of the window, with documents
+// open or not. The tab bar appears with the first document, as does the panel
+// if it is open; the panel takes the right of the content.
 func (a *App) layoutFor(tabBar bool) (toolbar, tabs, content, status image.Rectangle) {
 	w, h := a.size.W, a.size.H
 	y := theme.ToolbarHeight
@@ -201,7 +269,11 @@ func (a *App) layoutFor(tabBar bool) (toolbar, tabs, content, status image.Recta
 	// In a window too small for the chrome, the content area is empty and the
 	// status line gets the height that is left, so the rectangles never invert.
 	bottom := max(y, h-theme.StatusHeight)
-	content = image.Rect(0, y, w, bottom)
+	right := w
+	if a.showsPanel(tabBar) {
+		right = w - min(widget.PanelWidth, w/2)
+	}
+	content = image.Rect(0, y, right, bottom)
 	status = image.Rect(0, bottom, w, max(bottom, h))
 	return
 }
@@ -217,7 +289,15 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		a.draw()
 	case platform.PointerEvent:
 		a.pointer(ev)
+	case platform.StateEvent:
+		a.decorated, a.maximized = ev.Decorated, ev.Maximized
+		a.win.Invalidate()
 	case platform.ScrollEvent:
+		if r := a.panelRect(); image.Pt(int(ev.X), int(ev.Y)).In(r) {
+			a.panel.Scroll(ev.DY*panelScrollSpeed, r.Size())
+			a.win.Invalidate()
+			break
+		}
 		o := a.origin(sectionContent)
 		ev.X, ev.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
 		if d := a.current(); d != nil && d.view.HandleEvent(ev) {
@@ -226,12 +306,12 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 	case platform.KeyEvent:
 		return a.key(ev)
 	case platform.PasteEvent:
-		if a.findOpen {
+		if a.findBar.Open {
 			a.findAction(a.findBar.Paste(ev.Text))
 			a.win.Invalidate()
 		}
 	}
-	return false
+	return a.quitting
 }
 
 // current returns the active document, or nil.
@@ -243,8 +323,9 @@ func (a *App) current() *document {
 }
 
 func (a *App) resize(size platform.Size) {
+	// The canvas is made when drawing, at the size then, so that a burst of
+	// resizes while the window is dragged allocates one canvas, not one each.
 	a.size = size
-	a.canvas = paint.New(size.W, size.H)
 	a.toolbar.Layout(size.W)
 	if len(a.pending) > 0 {
 		paths := a.pending
@@ -301,14 +382,18 @@ func (a *App) load(path string) (*document, error) {
 	// Once the document is added the tab bar is shown, so the view is sized
 	// for the layout with it.
 	_, _, content, _ := a.layoutFor(true)
-	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{Pool: a.pool, OpenURI: a.opts.OpenURI, Selection: a.opts.Palette.Selection}, a.win.Invalidate)
+	pal := a.opts.Palette
+	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
+		Pool: a.pool, OpenURI: a.opts.OpenURI, Gap: theme.PageGap, Margin: theme.PageMargin,
+		Background: pal.Canvas, Selection: pal.Selection,
+	}, a.win.Invalidate)
 	if err != nil {
 		doc.Close()
 		return nil, err
 	}
 	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc, view: view}
 	if info, err := a.opts.Inspect(path); err == nil {
-		d.claimed = info.Claimed
+		d.version, d.claimed = info.Version, info.Claimed
 	}
 	// The first pages are rendered in the background, so that the tab is ready
 	// when it is shown.
@@ -321,7 +406,7 @@ func (a *App) closeTab(i int) {
 	if i < 0 || i >= len(a.docs) {
 		return
 	}
-	a.docs[i].close()
+	a.drop(a.docs[i])
 	a.docs = append(a.docs[:i], a.docs[i+1:]...)
 	if len(a.docs) == 0 {
 		a.active = -1
@@ -334,10 +419,18 @@ func (a *App) closeTab(i int) {
 	a.afterChange()
 }
 
+// drop closes d, stopping its check if one is running.
+func (a *App) drop(d *document) {
+	if a.job != nil && a.job.doc == d {
+		a.job.cancel()
+	}
+	d.close()
+}
+
 // closeAll closes every document.
 func (a *App) closeAll() {
 	for _, d := range a.docs {
-		d.close()
+		a.drop(d)
 	}
 	a.docs, a.active = nil, -1
 	a.pool.Close()
@@ -404,25 +497,24 @@ func (a *App) pick() {
 	}()
 }
 
-// verify checks the active document against PDF/A-1b in the background and
-// reports the outcome in the status line.
-func (a *App) verify() {
-	d := a.current()
-	if d == nil {
-		return
+// setTheme switches the window to the dark palette or the light one.
+func (a *App) setTheme(dark bool) {
+	p := theme.Of(dark)
+	a.opts.Palette = p
+	a.toolbar.Palette, a.tabs.Palette, a.status.Palette = p, p, p
+	a.findBar.Palette, a.panel.Palette, a.menu.Palette = p, p, p
+	for _, d := range a.docs {
+		d.view.SetColors(p.Canvas, p.Selection)
 	}
-	a.say(widget.MessageInfo, "Verifying "+d.name+" against PDF/A-1b…")
-	go func() {
-		report, err := a.opts.Verify(context.Background(), d.path, "pdfa1b")
-		a.inbox <- func() {
-			switch {
-			case err != nil:
-				a.say(widget.MessageBad, err.Error())
-			case report.Valid:
-				a.say(widget.MessageOK, "PDF/A-1b: no issues found")
-			default:
-				a.say(widget.MessageBad, fmt.Sprintf("PDF/A-1b: %d issues in %d checks", report.Total, len(report.Issues)))
-			}
-		}
-	}()
+	a.win.Invalidate()
+}
+
+// toggleTheme switches between the light and the dark theme, and has the
+// choice kept.
+func (a *App) toggleTheme() {
+	dark := !a.opts.Palette.Dark
+	a.setTheme(dark)
+	if a.opts.SaveTheme != nil {
+		a.opts.SaveTheme(dark)
+	}
 }

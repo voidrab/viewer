@@ -36,7 +36,7 @@ func center(b *TabBar, i int) (x, y int) {
 }
 
 func TestLayoutSizesTabsToTheirTitles(t *testing.T) {
-	b := newBar(t, 1000, "a.pdf", "a much longer file name.pdf", strings(80))
+	b := newBar(t, 1000, "a.pdf", "a much longer file name.pdf", xs(80))
 	if len(b.tabs) != 3 {
 		t.Fatalf("%d tabs", len(b.tabs))
 	}
@@ -60,7 +60,7 @@ func TestLayoutSizesTabsToTheirTitles(t *testing.T) {
 	}
 }
 
-func strings(n int) string {
+func xs(n int) string {
 	out := make([]byte, n)
 	for i := range out {
 		out[i] = 'x'
@@ -69,7 +69,7 @@ func strings(n int) string {
 }
 
 func TestLayoutShrinksTabsToFit(t *testing.T) {
-	b := newBar(t, 400, strings(30), strings(30), strings(30), strings(30))
+	b := newBar(t, 400, xs(30), xs(30), xs(30), xs(30))
 	if b.newTab.Max.X > 400 {
 		t.Errorf("the bar overflows: new-tab button ends at %d of 400", b.newTab.Max.X)
 	}
@@ -79,7 +79,7 @@ func TestLayoutShrinksTabsToFit(t *testing.T) {
 		}
 	}
 	// With more tabs than can fit at the minimum, the minimum wins.
-	many := newBar(t, 100, strings(10), strings(10), strings(10), strings(10))
+	many := newBar(t, 100, xs(10), xs(10), xs(10), xs(10))
 	for i, r := range many.tabs {
 		if r.Dx() != tabMinWidth {
 			t.Errorf("crowded tab %d is %d wide", i, r.Dx())
@@ -300,7 +300,7 @@ func TestDrawLaysOutOnDemand(t *testing.T) {
 		t.Error("an unlaid bar painted nothing")
 	}
 	// A long title is cut to fit before its close button.
-	long := newBar(t, 300, strings(60))
+	long := newBar(t, 300, xs(60))
 	c = paint.New(300, 40)
 	long.Draw(c, image.Point{})
 	cr := closeRect(long.tabs[0])

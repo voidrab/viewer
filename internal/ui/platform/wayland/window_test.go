@@ -2,6 +2,7 @@ package wayland
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"net"
@@ -45,6 +46,22 @@ type fakeWM struct {
 
 	// activations are the xdg_activation_v1.activate requests received.
 	activations []activation
+
+	// manage lists the window management requests received, such as
+	// "move 3 7" for a move by seat 3 after the event with serial 7.
+	manage []string
+
+	// cursorDevice is the wp_cursor_shape_device_v1 made, cursorPointer the
+	// wl_pointer it was made for, and shapes the set_shape requests, each as
+	// its serial and shape.
+	cursorDevice, cursorPointer uint32
+	shapes                      [][2]uint32
+
+	// frames are the frame callbacks the client asked for. The compositor
+	// signals each at once, as one with nothing to wait for does, unless
+	// holdFrames is set; the test then signals them with frameDone.
+	frames     []uint32
+	holdFrames bool
 
 	// afterBind, if set, runs after the compositor handles a bind.
 	afterBind func(s *server, iface string, id uint32)
@@ -104,6 +121,29 @@ func (f *fakeWM) request(s *server, ev Event, d *Decoder) {
 			f.minSize = [2]int32{d.Int(), d.Int()}
 		case toplevelDestroy:
 			f.destroyed = append(f.destroyed, "toplevel")
+		case toplevelMove:
+			f.manage = append(f.manage, fmt.Sprintf("move %d %d", d.Uint(), d.Uint()))
+			f.log <- "move"
+		case toplevelResize:
+			f.manage = append(f.manage, fmt.Sprintf("resize %d %d %d", d.Uint(), d.Uint(), d.Uint()))
+			f.log <- "resize"
+		case toplevelShowWindowMenu:
+			f.manage = append(f.manage, fmt.Sprintf("menu %d %d %d %d", d.Uint(), d.Uint(), d.Int(), d.Int()))
+			f.log <- "menu"
+		case toplevelSetMaximized, toplevelUnsetMaximized, toplevelSetMinimized:
+			name := map[uint16]string{toplevelSetMaximized: "maximize", toplevelUnsetMaximized: "unmaximize", toplevelSetMinimized: "minimize"}[ev.Opcode]
+			f.manage = append(f.manage, name)
+			f.log <- name
+		}
+	case f.ids["wp_cursor_shape_manager_v1"]:
+		if ev.Opcode == cursorManagerGetPointer {
+			f.cursorDevice, f.cursorPointer = d.Uint(), d.Uint()
+			f.log <- "get_cursor_device"
+		}
+	case f.cursorDevice:
+		if ev.Opcode == cursorDeviceSetShape {
+			f.shapes = append(f.shapes, [2]uint32{d.Uint(), d.Uint()})
+			f.log <- "set_shape"
 		}
 	case f.ids["xdg_activation_v1"]:
 		if ev.Opcode == activationActivate {
@@ -135,6 +175,13 @@ func (f *fakeWM) request(s *server, ev Event, d *Decoder) {
 		switch ev.Opcode {
 		case surfaceAttach:
 			f.attached = d.Uint()
+		case surfaceFrame:
+			cb := d.Uint()
+			f.frames = append(f.frames, cb)
+			if !f.holdFrames {
+				s.send(cb, callbackDone, func(e *Encoder) { e.Uint(0) })
+			}
+			f.log <- "frame"
 		case surfaceCommit:
 			f.log <- "commit"
 		case surfaceDestroy:
@@ -220,8 +267,13 @@ func openWindow(t *testing.T, w, h int32) (*Backend, *fakeWM, *server, platform.
 	if ev := next(t, win); ev != (platform.FrameEvent{}) {
 		t.Fatalf("second event = %#v", ev)
 	}
+	skipFrame(win)
 	return be, f, srv, win
 }
+
+// skipFrame answers the FrameEvent last received, as the application must,
+// without drawing: with a frame of the wrong size, which the window drops.
+func skipFrame(win platform.Window) { win.Present(image.NewRGBA(image.Rect(0, 0, 1, 1))) }
 
 func TestWindowConfigureAndProperties(t *testing.T) {
 	_, f, _, _ := openWindow(t, 300, 200)
@@ -309,6 +361,7 @@ func TestResizeRetiresOldBuffers(t *testing.T) {
 		t.Errorf("zero configure = %#v", ev)
 	}
 	next(t, win)
+	skipFrame(win)
 	f.configure(srv, 8, 6, 7)
 	if ev := next(t, win); ev != (platform.ResizeEvent{Size: platform.Size{W: 8, H: 6}, Scale: 1}) {
 		t.Errorf("resize = %#v", ev)
