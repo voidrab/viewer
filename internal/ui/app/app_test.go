@@ -382,28 +382,84 @@ func TestToolbarOpenFindAndPDFA(t *testing.T) {
 	}
 }
 
+// drain runs the work that background goroutines handed back to the event loop.
+func (f *fixture) drain() {
+	f.t.Helper()
+	select {
+	case fn := <-f.a.inbox:
+		fn()
+	case <-time.After(5 * time.Second):
+		f.t.Fatal("no background work came back")
+	}
+}
+
 func TestPickOpensWhatTheDialogReturns(t *testing.T) {
 	f := newFixture(t)
 	b := f.pdf("picked.pdf", 1)
 	f.a.opts.PickFiles = func() ([]string, error) { return []string{b}, nil }
 	f.open(f.pdf("a.pdf", 1))
 	f.key('o', platform.Ctrl)
+	f.drain()
 	if got := f.names(); len(got) != 2 || got[1] != "picked.pdf" {
 		t.Errorf("after Ctrl+O: %v", got)
 	}
 	f.key('t', platform.Ctrl) // already open: just switches to it
+	f.drain()
 	f.a.Handle(platform.FrameEvent{})
 	// The new-tab button asks for files too.
 	n := f.a.tabs.NewTabRect()
 	_, tabs, _, _ := f.a.layout()
 	f.click(tabs.Min.X+(n.Min.X+n.Max.X)/2, tabs.Min.Y+n.Dy()/2)
+	f.drain()
 	if len(f.a.docs) != 2 {
 		t.Errorf("docs = %d", len(f.a.docs))
 	}
 	f.a.opts.PickFiles = func() ([]string, error) { return nil, errors.New("dialog failed") }
 	f.key('o', platform.Ctrl)
+	f.drain()
 	if f.a.message != "dialog failed" || f.a.messageKind != widget.MessageBad {
 		t.Errorf("message %q kind %d", f.a.message, f.a.messageKind)
+	}
+}
+
+func TestOnlyOneFileDialogIsOpenAtATime(t *testing.T) {
+	f := newFixture(t)
+	release := make(chan struct{})
+	calls := make(chan struct{}, 4)
+	f.a.opts.PickFiles = func() ([]string, error) {
+		calls <- struct{}{}
+		<-release
+		return nil, nil // the user cancelled
+	}
+	f.start()
+	f.key('o', platform.Ctrl)
+	f.key('o', platform.Ctrl) // while the first is still open
+	f.a.toolbarAction(widget.Action{Kind: widget.ActionButton, Index: int(widget.ButtonOpen)})
+	<-calls
+	close(release)
+	f.drain()
+	select {
+	case <-calls:
+		t.Error("a second dialog was opened while the first was open")
+	default:
+	}
+	// Once it has closed, another can be opened.
+	f.a.opts.PickFiles = func() ([]string, error) { return nil, nil }
+	f.key('o', platform.Ctrl)
+	f.drain()
+}
+
+func TestControlQQuits(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("a.pdf", 1))
+	if !f.a.Handle(platform.KeyEvent{Rune: 'q', Down: true, Mods: platform.Ctrl}) {
+		t.Error("Ctrl+Q did not quit")
+	}
+	if f.a.Handle(platform.KeyEvent{Rune: 'q', Down: true}) {
+		t.Error("a plain q quit")
+	}
+	if f.a.Handle(platform.KeyEvent{Rune: 'q', Mods: platform.Ctrl}) {
+		t.Error("releasing Ctrl+Q quit")
 	}
 }
 

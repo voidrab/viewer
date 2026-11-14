@@ -94,7 +94,8 @@ type App struct {
 	messageKind  widget.MessageKind
 	messageUntil time.Time
 
-	inbox chan func() // work finished off the event loop, run on it
+	picking bool        // a file dialog is open
+	inbox   chan func() // work finished off the event loop, run on it
 }
 
 // New returns an App for win.
@@ -193,7 +194,7 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 			a.win.Invalidate()
 		}
 	case platform.KeyEvent:
-		a.key(ev)
+		return a.key(ev)
 	}
 	return false
 }
@@ -357,12 +358,23 @@ func (a *App) pick() {
 		a.say(widget.MessageWarn, "No file dialog yet: give the files on the command line")
 		return
 	}
-	paths, err := a.opts.PickFiles()
-	if err != nil {
-		a.say(widget.MessageBad, err.Error())
-		return
+	if a.picking {
+		return // a dialog is already open
 	}
-	a.Open(paths...)
+	a.picking = true
+	// The dialog is modal and slow: ask for it off the event loop, which keeps
+	// repainting meanwhile, and open what it returns back on it.
+	go func() {
+		paths, err := a.opts.PickFiles()
+		a.inbox <- func() {
+			a.picking = false
+			if err != nil {
+				a.say(widget.MessageBad, err.Error())
+				return
+			}
+			a.Open(paths...)
+		}
+	}()
 }
 
 // verify checks the active document against PDF/A-1b in the background and

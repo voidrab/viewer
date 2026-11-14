@@ -142,39 +142,43 @@ func (a *App) selectTab(i int) {
 	}
 }
 
-// key handles shortcuts, passing everything else to the active view.
-func (a *App) key(ev platform.KeyEvent) {
+// key handles shortcuts, passing everything else to the active view. It
+// reports whether the shortcut asks to quit.
+func (a *App) key(ev platform.KeyEvent) (quit bool) {
 	if !ev.Down {
-		return
+		return false
 	}
 	if ev.Mods&platform.Ctrl != 0 {
 		switch {
+		case ev.Rune == 'q':
+			return true
 		case ev.Rune == 'o' || ev.Rune == 't':
 			a.pick()
-			return
+			return false
 		case ev.Rune == 'w':
 			a.closeTab(a.active)
-			return
+			return false
 		case ev.Rune == 'n':
 			a.say(widget.MessageWarn, "Several windows are not available yet")
-			return
+			return false
 		case ev.Rune == 'f':
 			a.say(widget.MessageWarn, "Find is not available yet")
-			return
+			return false
 		case ev.Rune >= '1' && ev.Rune <= '9':
 			if i := int(ev.Rune - '1'); i < len(a.docs) {
 				a.selectTab(i)
 			}
-			return
+			return false
 		case ev.Key == platform.KeyTab && ev.Mods&platform.Shift != 0, ev.Key == platform.KeyPageUp:
 			a.selectTab(a.active - 1)
-			return
+			return false
 		case ev.Key == platform.KeyTab, ev.Key == platform.KeyPageDown:
 			a.selectTab(a.active + 1)
-			return
+			return false
 		}
 	}
 	if d := a.current(); d != nil && d.view.HandleEvent(ev) {
 		a.win.Invalidate()
 	}
+	return false
 }
