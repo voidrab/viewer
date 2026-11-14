@@ -1,0 +1,388 @@
+// Package app is the viewer's window: it owns the open documents and wires the
+// toolbar, tab bar, page view and status bar to one platform window.
+package app
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/voidrab/gopdfrab"
+
+	"viewer/internal/pdfa"
+	"viewer/internal/ui/pageview"
+	"viewer/internal/ui/paint"
+	"viewer/internal/ui/platform"
+	"viewer/internal/ui/text"
+	"viewer/internal/ui/theme"
+	"viewer/internal/ui/widget"
+)
+
+// messageTime is how long a status message stays up.
+const messageTime = 4 * time.Second
+
+// Options configures an App. The zero value is usable; the function fields
+// exist so tests can replace the parts that touch the system.
+type Options struct {
+	// Palette is the colour scheme; the zero value means the light one.
+	Palette theme.Palette
+	// PickFiles asks the user for files to open. Nil means the platform has no
+	// file dialog yet.
+	PickFiles func() ([]string, error)
+	// Verify and Inspect default to the pdfa package's.
+	Verify  func(ctx context.Context, path, profile string) (pdfa.Report, error)
+	Inspect func(path string) (pdfa.Info, error)
+	// Now and AfterFunc default to the time package's.
+	Now       func() time.Time
+	AfterFunc func(d time.Duration, f func())
+}
+
+// newFace and newView are replaced by tests to force their failures.
+var (
+	newFace = func(size float64) (*text.Face, error) { return text.Mono().Face(size, false) }
+	newView = pageview.New
+)
+
+// document is one open PDF, shown in one tab.
+type document struct {
+	path, name string
+	bytes      int64
+	claimed    string
+	doc        *gopdfrab.Document
+	view       *pageview.View
+}
+
+// section is the part of the window the pointer works on.
+type section int
+
+const (
+	sectionNone section = iota
+	sectionToolbar
+	sectionTabs
+	sectionContent
+)
+
+// App is the viewer's single window.
+type App struct {
+	win  platform.Window
+	opts Options
+
+	palette theme.Palette
+	face    *text.Face
+
+	toolbar *widget.Toolbar
+	tabs    *widget.TabBar
+	status  *widget.StatusBar
+
+	docs   []*document
+	active int
+
+	size    platform.Size
+	canvas  *paint.Canvas
+	pending []string // files to open once the window has a size
+
+	capture section // the section a pressed pointer button belongs to
+	hover   section
+
+	title        string // the window title last set
+	message      string
+	messageKind  widget.MessageKind
+	messageUntil time.Time
+
+	inbox chan func() // work finished off the event loop, run on it
+}
+
+// New returns an App for win.
+func New(win platform.Window, opts Options) (*App, error) {
+	if opts.Palette == (theme.Palette{}) {
+		opts.Palette = theme.Light()
+	}
+	if opts.Verify == nil {
+		opts.Verify = pdfa.Verify
+	}
+	if opts.Inspect == nil {
+		opts.Inspect = pdfa.Inspect
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
+	if opts.AfterFunc == nil {
+		opts.AfterFunc = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
+	}
+	face, err := newFace(theme.FontSize)
+	if err != nil {
+		return nil, err
+	}
+	small, err := newFace(theme.SmallFontSize)
+	if err != nil {
+		return nil, err
+	}
+	a := &App{win: win, opts: opts, palette: opts.Palette, face: face, active: -1, inbox: make(chan func(), 16)}
+	a.toolbar = widget.NewToolbar(a.palette, face)
+	a.tabs = widget.NewTabBar(a.palette, face)
+	a.status = widget.NewStatusBar(a.palette, small)
+	return a, nil
+}
+
+// Run shows paths in a new App on win and handles events until the window
+// closes. It returns after closing every document.
+func Run(win platform.Window, paths []string, opts Options) error {
+	a, err := New(win, opts)
+	if err != nil {
+		win.Close()
+		return err
+	}
+	defer a.closeAll()
+	defer win.Close()
+	a.pending = append(a.pending, paths...)
+	events := win.Events()
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok || a.Handle(ev) {
+				return nil
+			}
+		case f := <-a.inbox:
+			f()
+			win.Invalidate()
+		}
+	}
+}
+
+// layout returns the rectangles of the parts of the window as it is now.
+func (a *App) layout() (toolbar, tabs, content, status image.Rectangle) {
+	return a.layoutFor(len(a.docs) > 0)
+}
+
+// layoutFor returns the rectangles of the parts of the window, with the tab
+// bar present or not. The tab bar appears with the first document.
+func (a *App) layoutFor(tabBar bool) (toolbar, tabs, content, status image.Rectangle) {
+	w, h := a.size.W, a.size.H
+	y := theme.ToolbarHeight
+	toolbar = image.Rect(0, 0, w, y)
+	if tabBar {
+		tabs = image.Rect(0, y, w, y+theme.TabBarHeight)
+		y += theme.TabBarHeight
+	}
+	// In a window too small for the chrome the content area is empty and the
+	// status line is squeezed out, rather than the rectangles inverting.
+	bottom := max(y, h-theme.StatusHeight)
+	content = image.Rect(0, y, w, bottom)
+	status = image.Rect(0, bottom, w, max(bottom, h))
+	return
+}
+
+// Handle applies one event and reports whether the application should quit.
+func (a *App) Handle(ev platform.Event) (quit bool) {
+	switch ev := ev.(type) {
+	case platform.CloseEvent:
+		return true
+	case platform.ResizeEvent:
+		a.resize(ev.Size)
+	case platform.FrameEvent:
+		a.draw()
+	case platform.PointerEvent:
+		a.pointer(ev)
+	case platform.ScrollEvent:
+		if d := a.current(); d != nil && d.view.HandleEvent(ev) {
+			a.win.Invalidate()
+		}
+	case platform.KeyEvent:
+		a.key(ev)
+	}
+	return false
+}
+
+// current returns the active document, or nil.
+func (a *App) current() *document {
+	if a.active < 0 || a.active >= len(a.docs) {
+		return nil
+	}
+	return a.docs[a.active]
+}
+
+func (a *App) resize(size platform.Size) {
+	a.size = size
+	a.canvas = paint.New(size.W, size.H)
+	a.toolbar.Layout(size.W)
+	a.tabs.Layout(size.W)
+	if len(a.pending) > 0 {
+		paths := a.pending
+		a.pending = nil
+		a.Open(paths...)
+	}
+	_, _, content, _ := a.layout()
+	for _, d := range a.docs {
+		d.view.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: content.Dx(), H: content.Dy()}, Scale: 1})
+	}
+	a.win.Invalidate()
+}
+
+// Open opens each file in its own tab, or switches to the tab already showing
+// it. Files that cannot be opened are reported in the status line.
+func (a *App) Open(paths ...string) {
+	if a.size == (platform.Size{}) {
+		a.pending = append(a.pending, paths...)
+		return
+	}
+	for _, p := range paths {
+		abs, _ := filepath.Abs(p)
+		abs = cmp.Or(abs, p) // Abs fails only when the working directory is gone
+		if i := a.find(abs); i >= 0 {
+			a.active = i
+			continue
+		}
+		d, err := a.load(abs)
+		if err != nil {
+			a.say(widget.MessageBad, fmt.Sprintf("Could not open %s: %v", filepath.Base(p), err))
+			continue
+		}
+		a.docs = append(a.docs, d)
+		a.active = len(a.docs) - 1
+	}
+	a.afterChange()
+}
+
+func (a *App) find(path string) int {
+	for i, d := range a.docs {
+		if d.path == path {
+			return i
+		}
+	}
+	return -1
+}
+
+// load opens path and builds its view.
+func (a *App) load(path string) (*document, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, errors.Unwrap(err)
+	}
+	doc, err := gopdfrab.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	// The document brings the tab bar with it, so its space is counted.
+	_, _, content, _ := a.layoutFor(true)
+	view, err := newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{}, a.win.Invalidate)
+	if err != nil {
+		doc.Close()
+		return nil, err
+	}
+	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc, view: view}
+	if info, err := a.opts.Inspect(path); err == nil {
+		d.claimed = info.Claimed
+	}
+	return d, nil
+}
+
+// closeTab closes the document in tab i.
+func (a *App) closeTab(i int) {
+	if i < 0 || i >= len(a.docs) {
+		return
+	}
+	d := a.docs[i]
+	d.view.Close()
+	d.doc.Close()
+	a.docs = append(a.docs[:i], a.docs[i+1:]...)
+	switch {
+	case len(a.docs) == 0:
+		a.active = -1
+	case a.active > i, a.active >= len(a.docs):
+		a.active = min(a.active-btoi(a.active > i), len(a.docs)-1)
+	}
+	a.afterChange()
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// closeAll closes every document.
+func (a *App) closeAll() {
+	for _, d := range a.docs {
+		d.view.Close()
+		d.doc.Close()
+	}
+	a.docs, a.active = nil, -1
+}
+
+// afterChange relays out what a change of tabs affects and asks for a frame.
+func (a *App) afterChange() {
+	a.tabs.Layout(a.size.W)
+	_, _, content, _ := a.layout()
+	for _, d := range a.docs {
+		d.view.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: content.Dx(), H: content.Dy()}, Scale: 1})
+	}
+	a.win.Invalidate()
+}
+
+// say shows a message in the status line for a few seconds.
+func (a *App) say(kind widget.MessageKind, msg string) {
+	a.message, a.messageKind = msg, kind
+	a.messageUntil = a.opts.Now().Add(messageTime)
+	a.opts.AfterFunc(messageTime, a.win.Invalidate)
+	a.win.Invalidate()
+}
+
+// move reorders the tabs: the tab at from goes to position to.
+func (a *App) move(from, to int) {
+	if from < 0 || from >= len(a.docs) || to < 0 || to >= len(a.docs) || from == to {
+		return
+	}
+	d := a.docs[from]
+	cur := a.current()
+	a.docs = append(a.docs[:from], a.docs[from+1:]...)
+	a.docs = append(a.docs[:to], append([]*document{d}, a.docs[to:]...)...)
+	for i, x := range a.docs {
+		if x == cur {
+			a.active = i
+		}
+	}
+	a.afterChange()
+}
+
+// pick asks for files to open and opens them.
+func (a *App) pick() {
+	if a.opts.PickFiles == nil {
+		a.say(widget.MessageWarn, "No file dialog yet: give the files on the command line")
+		return
+	}
+	paths, err := a.opts.PickFiles()
+	if err != nil {
+		a.say(widget.MessageBad, err.Error())
+		return
+	}
+	a.Open(paths...)
+}
+
+// verify checks the active document against PDF/A-1b in the background and
+// reports the outcome in the status line.
+func (a *App) verify() {
+	d := a.current()
+	if d == nil {
+		return
+	}
+	a.say(widget.MessageInfo, "Verifying "+d.name+" against PDF/A-1b…")
+	go func() {
+		report, err := a.opts.Verify(context.Background(), d.path, "pdfa1b")
+		a.inbox <- func() {
+			switch {
+			case err != nil:
+				a.say(widget.MessageBad, err.Error())
+			case report.Valid:
+				a.say(widget.MessageOK, "PDF/A-1b: no issues found")
+			default:
+				a.say(widget.MessageBad, fmt.Sprintf("PDF/A-1b: %d issues in %d checks", report.Total, len(report.Issues)))
+			}
+		}
+	}()
+}

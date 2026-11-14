@@ -248,3 +248,14 @@ func TestToolbarLaysOutOnDemandAndFitsLongText(t *testing.T) {
 		t.Error("the page text of a one-page document is not dimmed")
 	}
 }
+
+func TestToolbarButtonRect(t *testing.T) {
+	tb := newToolbar(t)
+	if tb.ButtonRect(ButtonNext) != tb.rects[ButtonNext] {
+		t.Error("ButtonRect disagrees with the layout")
+	}
+	fresh := NewToolbar(palette, tb.Face)
+	if fresh.ButtonRect(ButtonOpen).Empty() {
+		t.Error("an unlaid toolbar has no button rectangle")
+	}
+}

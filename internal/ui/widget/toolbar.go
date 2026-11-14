@@ -180,3 +180,11 @@ func (t *Toolbar) drawCentred(c *paint.Canvas, r image.Rectangle, s string, col 
 	s = t.Face.Fit(s, r.Dx())
 	t.Face.Draw(c, r.Min.X+(r.Dx()-t.Face.Width(s))/2, r.Min.Y+(r.Dy()-t.Face.Height())/2, s, col)
 }
+
+// ButtonRect returns where button id is, in the toolbar's own coordinates.
+func (t *Toolbar) ButtonRect(id ButtonID) image.Rectangle {
+	if !t.laid {
+		t.Layout(t.width)
+	}
+	return t.rects[id]
+}

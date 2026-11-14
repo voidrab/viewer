@@ -325,3 +325,15 @@ func TestDrawWashesTheHoveredNewTabButton(t *testing.T) {
 		t.Errorf("the hovered + button looks like the idle one: %v", got)
 	}
 }
+
+func TestTabBarRectangles(t *testing.T) {
+	b := newBar(t, 800, "one.pdf", "two.pdf")
+	if b.TabRect(1) != b.tabs[1] || b.NewTabRect() != b.newTab || b.CloseRect(0) != closeRect(b.tabs[0]) {
+		t.Error("the accessors disagree with the layout")
+	}
+	for _, i := range []int{-1, 2} {
+		if !b.TabRect(i).Empty() || !b.CloseRect(i).Empty() {
+			t.Errorf("rectangles for tab %d, which does not exist", i)
+		}
+	}
+}

@@ -252,3 +252,24 @@ func (b *TabBar) drawGlyph(c *paint.Canvas, r image.Rectangle, s string, col col
 	y := r.Min.Y + (r.Dy()-b.Face.Height())/2
 	b.Face.Draw(c, x, y, s, col)
 }
+
+// TabRect returns where tab i is, in the bar's own coordinates, or the empty
+// rectangle for an index outside the tabs.
+func (b *TabBar) TabRect(i int) image.Rectangle {
+	if i < 0 || i >= len(b.tabs) {
+		return image.Rectangle{}
+	}
+	return b.tabs[i]
+}
+
+// CloseRect returns where the close button of tab i is, or the empty
+// rectangle for an index outside the tabs.
+func (b *TabBar) CloseRect(i int) image.Rectangle {
+	if i < 0 || i >= len(b.tabs) {
+		return image.Rectangle{}
+	}
+	return closeRect(b.tabs[i])
+}
+
+// NewTabRect returns where the new-tab button is.
+func (b *TabBar) NewTabRect() image.Rectangle { return b.newTab }
