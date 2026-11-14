@@ -439,8 +439,8 @@ func TestBackendCloseEndsWindowsAndIgnoresUnknownEvents(t *testing.T) {
 	f.mu.Unlock()
 	srv.send(xdg, 9, nil) // an xdg_surface event this client does not know
 	srv.send(wm, 9, nil)
-	// Events are handled in order, so once this close request has arrived the
-	// unknown ones before it have been dispatched.
+	// Events are dispatched in the order they arrive, so receiving the close
+	// event means the unknown events sent before it have been dispatched.
 	srv.send(top, toplevelClose, nil)
 	if ev := next(t, win); ev != (platform.CloseEvent{}) {
 		t.Fatalf("event = %#v", ev)
