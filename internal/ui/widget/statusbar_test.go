@@ -19,8 +19,8 @@ func newStatus(t *testing.T) *StatusBar {
 	return NewStatusBar(palette, face)
 }
 
-// colourBounds returns the rectangle of pixels in rect that are col or a
-// blend of it with the chrome: anything that is not the background or border.
+// inkIn returns the rectangle of pixels in rect that exactly match col. The
+// background, the border and fully transparent pixels are ignored.
 func inkIn(c *paint.Canvas, rect image.Rectangle, col color.NRGBA) image.Rectangle {
 	var out image.Rectangle
 	for y := rect.Min.Y; y < rect.Max.Y; y++ {
@@ -121,7 +121,8 @@ func TestStatusBarShortensWhatDoesNotFit(t *testing.T) {
 	width := 260
 	c := paint.New(width, s.Height())
 	s.Draw(c, image.Rect(0, 0, width, s.Height()))
-	// The right-hand values keep their room: the leftmost starts where it should.
+	// The info is shortened so that it stops short of the right-hand values,
+	// which keep their full width.
 	rightW := s.Face.Width("PDF/A-1b") + statusGap + s.Face.Width("100%")
 	rightStart := width - statusPad - rightW
 	if left := anyInk(c, image.Rect(0, 1, rightStart-statusGap/2, s.Height())); left.Max.X > rightStart-statusGap+2 {
@@ -130,7 +131,8 @@ func TestStatusBarShortensWhatDoesNotFit(t *testing.T) {
 	if anyInk(c, image.Rect(rightStart-2, 1, width, s.Height())).Empty() {
 		t.Error("the right-hand values were squeezed out")
 	}
-	// With no room for the info, even the message is left out without a crash.
+	// A bar too narrow for its content must draw without panicking. The
+	// message is skipped when no room is left after the info.
 	narrow := paint.New(60, s.Height())
 	s.Draw(narrow, image.Rect(0, 0, 60, s.Height()))
 	s.Info, s.Right = "", []string{"x"}

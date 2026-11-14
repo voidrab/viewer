@@ -73,8 +73,9 @@ func (s *StatusBar) Draw(c *paint.Canvas, r image.Rectangle) {
 	defer c.PopClip()
 
 	y := r.Min.Y + (r.Dy()-s.Face.Height())/2
-	// limit is where the left-hand content must end: the left edge of the
-	// right-hand values, less a gap.
+	// limit is the x coordinate where the left-hand content must end. It
+	// starts at the right padding and moves left past each right-hand value
+	// and the gap after it.
 	limit := r.Max.X - statusPad
 	for i := len(s.Right) - 1; i >= 0; i-- {
 		limit -= s.Face.Width(s.Right[i])
