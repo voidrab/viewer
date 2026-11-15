@@ -38,6 +38,7 @@ type fakeX struct {
 	atoms     map[string]uint32
 	atomNames map[uint32]string
 	props     map[[2]uint32]property
+	owners    map[uint32]uint32 // selection -> owner
 	log       []request
 	logCh     chan request // if set, every request is also sent here
 
@@ -128,7 +129,7 @@ func newFakeX(t *testing.T, opts setupOpts) (*fakeX, *net.UnixConn) {
 	f := &fakeX{
 		t: t, sock: server,
 		atoms: map[string]uint32{}, atomNames: map[uint32]string{},
-		props: map[[2]uint32]property{},
+		props: map[[2]uint32]property{}, owners: map[uint32]uint32{},
 		exts: map[string]extension{
 			"MIT-SHM": {present: true, major: 130, firstEvent: 65},
 			"SHAPE":   {present: true, major: 129, firstEvent: 64},
@@ -434,6 +435,15 @@ func (f *fakeX) answer(r request) {
 		f.reply(r, byte(per), append(make([]byte, 24), codes...))
 	case opGetInputFocus:
 		f.reply(r, 0, nil)
+	case opSetSelectionOwner:
+		f.mu.Lock()
+		f.owners[r.u32(4)] = r.u32(0)
+		f.mu.Unlock()
+	case opGetSelectionOwner:
+		f.mu.Lock()
+		owner := f.owners[r.u32(0)]
+		f.mu.Unlock()
+		f.reply(r, 0, propU32(owner))
 	case opTranslateCoordinates:
 		x, y, child := int(int16(r.u16(8))), int(int16(r.u16(10))), uint32(0)
 		f.mu.Lock()

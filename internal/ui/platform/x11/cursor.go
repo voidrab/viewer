@@ -24,35 +24,23 @@ const (
 // database.
 const atomResourceManager = 23
 
-// cursorNames lists the names each cursor goes by in cursor themes, the CSS
-// name first. cursorGlyphs gives the glyph of each cursor in the core cursor
-// font.
-var (
-	cursorNames = map[platform.Cursor][]string{
-		platform.CursorDefault:  {"default", "left_ptr"},
-		platform.CursorPointer:  {"pointer", "hand2", "hand1"},
-		platform.CursorResizeN:  {"n-resize", "top_side"},
-		platform.CursorResizeS:  {"s-resize", "bottom_side"},
-		platform.CursorResizeW:  {"w-resize", "left_side"},
-		platform.CursorResizeE:  {"e-resize", "right_side"},
-		platform.CursorResizeNW: {"nw-resize", "top_left_corner"},
-		platform.CursorResizeNE: {"ne-resize", "top_right_corner"},
-		platform.CursorResizeSW: {"sw-resize", "bottom_left_corner"},
-		platform.CursorResizeSE: {"se-resize", "bottom_right_corner"},
-	}
-	cursorGlyphs = map[platform.Cursor]uint16{
-		platform.CursorDefault:  68,
-		platform.CursorPointer:  60,
-		platform.CursorResizeN:  138,
-		platform.CursorResizeS:  16,
-		platform.CursorResizeW:  70,
-		platform.CursorResizeE:  96,
-		platform.CursorResizeNW: 134,
-		platform.CursorResizeNE: 136,
-		platform.CursorResizeSW: 12,
-		platform.CursorResizeSE: 14,
-	}
-)
+// cursorShapes gives, for each cursor, the names it goes by in cursor
+// themes, the CSS name first, and its glyph in the core cursor font.
+var cursorShapes = map[platform.Cursor]struct {
+	names []string
+	glyph uint16
+}{
+	platform.CursorDefault:  {[]string{"default", "left_ptr"}, 68},
+	platform.CursorPointer:  {[]string{"pointer", "hand2", "hand1"}, 60},
+	platform.CursorResizeN:  {[]string{"n-resize", "top_side"}, 138},
+	platform.CursorResizeS:  {[]string{"s-resize", "bottom_side"}, 16},
+	platform.CursorResizeW:  {[]string{"w-resize", "left_side"}, 70},
+	platform.CursorResizeE:  {[]string{"e-resize", "right_side"}, 96},
+	platform.CursorResizeNW: {[]string{"nw-resize", "top_left_corner"}, 134},
+	platform.CursorResizeNE: {[]string{"ne-resize", "top_right_corner"}, 136},
+	platform.CursorResizeSW: {[]string{"sw-resize", "bottom_left_corner"}, 12},
+	platform.CursorResizeSE: {[]string{"se-resize", "bottom_right_corner"}, 14},
+}
 
 // cursors are the pointer images, made the first time each is shown: from
 // the user's cursor theme with RENDER, or else from the core cursor font.
@@ -114,7 +102,7 @@ func (cs *cursors) get(b *Backend, c platform.Cursor) uint32 {
 
 // fromFont makes c from the core cursor font. The caller holds cs.mu.
 func (cs *cursors) fromFont(b *Backend, c platform.Cursor) uint32 {
-	glyph, ok := cursorGlyphs[c]
+	shape, ok := cursorShapes[c]
 	if !ok {
 		return 0
 	}
@@ -130,7 +118,7 @@ func (cs *cursors) fromFont(b *Backend, c platform.Cursor) uint32 {
 	}
 	id := b.c.NewID()
 	// Black on white, as the font's cursors are drawn.
-	b.c.Send(newReq(opCreateGlyphCursor, 0).u32(id).u32(cs.font).u32(cs.font).u16(glyph).u16(glyph + 1).
+	b.c.Send(newReq(opCreateGlyphCursor, 0).u32(id).u32(cs.font).u32(cs.font).u16(shape.glyph).u16(shape.glyph + 1).
 		u16(0).u16(0).u16(0).u16(0xffff).u16(0xffff).u16(0xffff))
 	return id
 }
@@ -141,7 +129,7 @@ func (cs *cursors) fromTheme(b *Backend, c platform.Cursor) uint32 {
 	if !b.render.present {
 		return 0
 	}
-	for _, name := range cursorNames[c] {
+	for _, name := range cursorShapes[c].names {
 		if f := findCursorFile(cs.theme, name); f != "" {
 			if img, ok := loadXcursor(f, cs.size); ok {
 				return b.uploadCursor(img)

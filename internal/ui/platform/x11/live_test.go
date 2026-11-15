@@ -278,9 +278,9 @@ func TestLiveCursors(t *testing.T) {
 	b := liveBackend(t)
 	w := liveWindow(t, b, "live cursors")
 	t.Logf("cursor theme %q size %d", b.cursors.theme, b.cursors.size)
-	for c := range cursorGlyphs {
+	for c := range cursorShapes {
 		w.SetCursor(c)
-		if b.cursors.made[c] == 0 {
+		if b.cursors.get(b, c) == 0 {
 			t.Errorf("cursor %d not made", c)
 		}
 	}
@@ -288,7 +288,7 @@ func TestLiveCursors(t *testing.T) {
 	// The core font, as a theme-less server would give.
 	b.cursors.made = map[platform.Cursor]uint32{}
 	b.render.present = false
-	for c := range cursorGlyphs {
+	for c := range cursorShapes {
 		if b.cursors.get(b, c) == 0 {
 			t.Errorf("font cursor %d not made", c)
 		}

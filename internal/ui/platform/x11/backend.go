@@ -214,15 +214,13 @@ func (b *Backend) pickVisual() error {
 
 // queryExtensions looks up the extensions the backend can use.
 func (b *Backend) queryExtensions() error {
-	var err error
-	if b.shm, err = b.c.queryExtension("MIT-SHM"); err != nil {
+	exts, err := b.c.queryExtensions("MIT-SHM", "SHAPE", "RENDER", "XKEYBOARD")
+	if err != nil {
 		return err
 	}
-	if b.shape, err = b.c.queryExtension("SHAPE"); err != nil {
-		return err
-	}
-	if b.render, err = b.c.queryExtension("RENDER"); err != nil {
-		return err
+	b.shm, b.shape, b.render = exts[0], exts[1], exts[2]
+	if exts[3].present {
+		b.detectableRepeat(exts[3].major)
 	}
 	// Shared memory segments are passed as file descriptors, which needs
 	// MIT-SHM 1.2 or later and a Unix socket.
@@ -234,6 +232,26 @@ func (b *Backend) queryExtensions() error {
 		b.render.present = b.argbPict != 0
 	}
 	return nil
+}
+
+// XKB minor opcodes, and the per-client flag that has the server report a
+// held key's repeats as presses alone, without a release before each.
+const (
+	xkbUseExtension     = 0
+	xkbPerClientFlags   = 21
+	xkbUseCoreKeyboard  = 0x100
+	xkbDetectableRepeat = 1
+)
+
+// detectableRepeat asks XKB to report a held key's repeats as presses
+// alone. Where the server refuses, onKey drops the extra releases itself.
+func (b *Backend) detectableRepeat(major byte) {
+	rep, err := b.c.Call(newReq(major, xkbUseExtension).u16(1).u16(0))
+	if err != nil || rep[1] == 0 {
+		return
+	}
+	b.c.Call(newReq(major, xkbPerClientFlags).u16(xkbUseCoreKeyboard).pad(2).
+		u32(xkbDetectableRepeat).u32(xkbDetectableRepeat).u32(0).u32(0).u32(0))
 }
 
 // shmFDs reports whether MIT-SHM is at least version 1.2.

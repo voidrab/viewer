@@ -18,6 +18,7 @@ const (
 	opDeleteProperty        = 19
 	opGetProperty           = 20
 	opSetSelectionOwner     = 22
+	opGetSelectionOwner     = 23
 	opConvertSelection      = 24
 	opSendEvent             = 25
 	opGrabPointer           = 26
@@ -223,13 +224,24 @@ type extension struct {
 	firstEvent byte
 }
 
-// queryExtension asks whether the server has the extension called name.
-func (c *Conn) queryExtension(name string) (extension, error) {
-	rep, err := c.Call(newReq(opQueryExtension, 0).u16(uint16(len(name))).pad(2).bytes([]byte(name)))
-	if err != nil {
-		return extension{}, err
+// queryExtensions asks whether the server has the extensions named, with
+// every request in flight at once.
+func (c *Conn) queryExtensions(names ...string) ([]extension, error) {
+	waits := make([]func() ([]byte, error), len(names))
+	for i, n := range names {
+		waits[i] = c.Start(newReq(opQueryExtension, 0).u16(uint16(len(n))).pad(2).bytes([]byte(n)))
 	}
-	return extension{present: rep[8] != 0, major: rep[9], firstEvent: rep[10]}, nil
+	out := make([]extension, len(names))
+	var errs []error
+	for i, wait := range waits {
+		rep, err := wait()
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		out[i] = extension{present: rep[8] != 0, major: rep[9], firstEvent: rep[10]}
+	}
+	return out, errors.Join(errs...)
 }
 
 // translate returns where (x, y) in src is in dst, and the child of dst

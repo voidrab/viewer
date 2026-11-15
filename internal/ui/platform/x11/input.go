@@ -16,6 +16,10 @@ const (
 // ScrollEvent: what Wayland compositors report for a click.
 const scrollStep = 10
 
+// wheelSteps maps the buttons a wheel clicks, up, down, left and right, to
+// the scroll each click makes.
+var wheelSteps = map[byte][2]float64{4: {0, -scrollStep}, 5: {0, scrollStep}, 6: {-scrollStep, 0}, 7: {scrollStep, 0}}
+
 // Button state bits of the core modifier state.
 const stateButtons = 0x1f00
 
@@ -40,9 +44,9 @@ func (b *Backend) onKey(ev []byte) {
 		return
 	}
 	if !down {
-		// The server reports a repeat of a held key as a release and a press
-		// with the same time. The release is dropped, so that the repeat is
-		// reported only as a press.
+		// Without XKB's detectable repeat, the server reports a repeat of a
+		// held key as a release and a press with the same time. The release
+		// is dropped, so that the repeat is reported only as a press.
 		if next, ok := b.c.Peek(); ok && next[0]&0x7f == evKeyPress && next[1] == code && u32At(next, 4) == t {
 			return
 		}
@@ -78,18 +82,8 @@ func (b *Backend) onPointer(ev []byte) {
 	case evMotionNotify:
 		w.emit(platform.PointerEvent{Kind: platform.Move, X: fx, Y: fy, Mods: mods})
 	case evButtonPress:
-		if button >= 4 && button <= 7 {
-			s := platform.ScrollEvent{X: fx, Y: fy, Mods: mods}
-			switch button {
-			case 4:
-				s.DY = -scrollStep
-			case 5:
-				s.DY = scrollStep
-			case 6:
-				s.DX = -scrollStep
-			case 7:
-				s.DX = scrollStep
-			}
+		if d, ok := wheelSteps[button]; ok {
+			s := platform.ScrollEvent{DX: d[0], DY: d[1], X: fx, Y: fy, Mods: mods}
 			w.emit(s)
 			return
 		}
@@ -98,7 +92,7 @@ func (b *Backend) onPointer(ev []byte) {
 		in.mu.Unlock()
 		w.emit(platform.PointerEvent{Kind: platform.Press, Button: mapButton(button), X: fx, Y: fy, Mods: mods})
 	case evButtonRelease:
-		if button >= 4 && button <= 7 {
+		if _, ok := wheelSteps[button]; ok {
 			return
 		}
 		w.emit(platform.PointerEvent{Kind: platform.Release, Button: mapButton(button), X: fx, Y: fy, Mods: mods})
