@@ -44,7 +44,7 @@ type fakeX struct {
 
 	// What the server reports.
 	exts     map[string]extension
-	keysyms  []uint32 // per keysyms for each code from minKeycode
+	keysyms  []uint32 // keysyms for the key codes from minKeycode, per code
 	per      int
 	modmap   [8][]byte
 	fontless bool // ListFonts finds no cursor font

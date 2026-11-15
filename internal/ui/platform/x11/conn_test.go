@@ -253,7 +253,8 @@ func TestEventsQueueInOrderAndPeekDoesNotTake(t *testing.T) {
 
 func TestSequenceNumbersSurviveWrapping(t *testing.T) {
 	_, c := startFake(t, defaultSetup())
-	// More requests without replies than 16 bits can count: syncs slip in.
+	// The sequence numbers wrap around 16 bits, so syncs are sent between the
+	// requests.
 	for range 3 * syncEvery {
 		if err := c.Send(newReq(opMapWindow, 0).u32(1)); err != nil {
 			t.Fatal(err)

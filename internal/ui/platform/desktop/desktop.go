@@ -10,11 +10,12 @@ import (
 	"time"
 )
 
-// URIListMime is the format files are dragged in: a list of URIs, one a line.
+// URIListMime is the format files are dragged in: a list of URIs, one per
+// line.
 const URIListMime = "text/uri-list"
 
 // MaxPaste bounds how much clipboard text, or dropped data, is read, and
-// PasteTimeout how long the program that holds it has to supply it.
+// PasteTimeout bounds how long the program that holds it has to supply it.
 const (
 	MaxPaste     = 8 << 20
 	PasteTimeout = 2 * time.Second
@@ -41,10 +42,10 @@ func ParseURIList(list, host string) []string {
 	return paths
 }
 
-// CopyBGRA converts src, premultiplied RGBA, into dst as blue, green, red
-// and alpha bytes, Wayland's ARGB8888 and X11's usual 32-bit pixel on a
-// little-endian host, which only needs the red and blue bytes swapped. dst
-// must hold the whole image and stride is its row length in bytes.
+// CopyBGRA copies src, premultiplied RGBA, into dst in the blue, green, red,
+// alpha byte order of Wayland's ARGB8888 and of the usual 32-bit X11 pixel on
+// little-endian hosts. dst must hold the whole image, and stride is the length
+// of a row of dst in bytes.
 func CopyBGRA(dst []byte, stride int, src *image.RGBA) {
 	w, h := src.Rect.Dx(), src.Rect.Dy()
 	for y := range h {

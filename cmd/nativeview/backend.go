@@ -29,8 +29,8 @@ var (
 // WAYLAND_DISPLAY is set or DISPLAY is not, and X11 when DISPLAY is set. X11
 // also serves a Wayland desktop through Xwayland.
 //
-// A Wayland session that cannot be used, but whose Xwayland can, is reported
-// on warn, since the window then runs through Xwayland.
+// When Wayland fails and X11 then connects, the Wayland error is written to
+// warn, since the window then runs through Xwayland.
 func openBackend(getenv func(string) string, warn io.Writer) (backend, error) {
 	switch name := strings.ToLower(getenv("VIEWER_BACKEND")); name {
 	case "wayland":

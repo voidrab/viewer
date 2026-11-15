@@ -343,9 +343,9 @@ func (w *window) Close() {
 	c.Send(newReq(opDestroyWindow, 0).u32(w.id))
 }
 
-// shutdown ends the window's event stream and frees its frame memory, or
-// leaves that to the frame in flight. It reports false if the window had
-// already closed.
+// shutdown ends the window's event stream and frees its frame memory, unless
+// a frame is in flight, which frees it when it completes. It reports whether
+// the window was open.
 func (w *window) shutdown() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

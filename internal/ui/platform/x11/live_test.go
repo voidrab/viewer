@@ -4,6 +4,7 @@
 // briefly, so they run only when asked for:
 //
 //	go test -tags xlive -run Live ./internal/ui/platform/x11/
+
 package x11
 
 import (
@@ -71,7 +72,7 @@ func waitFor[E platform.Event](t *testing.T, w *window) E {
 	}
 }
 
-// present fills w with c, answering a frame request.
+// present fills w with the colour c and presents the frame.
 func present(w *window, c color.RGBA) {
 	w.mu.Lock()
 	size := w.size

@@ -258,9 +258,9 @@ type Window interface {
 	// ready for a frame may be answered by a single FrameEvent.
 	Invalidate()
 	SetTitle(title string)
-	// Activate asks the compositor to bring the window to the front, citing
-	// token, the activation token of the user action behind the request: a
-	// Wayland activation token or an X11 startup notification ID. Where the
+	// Activate asks the compositor to bring the window to the front. token is
+	// the activation token of the user action behind the request: a Wayland
+	// activation token or an X11 startup notification ID. Where the
 	// desktop requires a token, as Wayland does, it does nothing without one;
 	// it also does nothing where the compositor offers no way to ask.
 	Activate(token string)

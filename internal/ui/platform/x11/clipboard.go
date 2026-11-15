@@ -51,8 +51,9 @@ func (b *Backend) setClipboard(text string) {
 	b.mu.Lock()
 	b.clip.owned, b.clip.text = true, text
 	b.mu.Unlock()
-	// The server ignores a claim older than the current owner's, which the
-	// time of the latest event here can be; the current time then claims it.
+	// The server ignores a claim timed before the current owner's claim. The
+	// time of the latest event can be that early, so the claim is retried
+	// with CurrentTime, 0, unless GetSelectionOwner reports this window.
 	clip := b.atom("CLIPBOARD")
 	for _, t := range []uint32{b.in.now(), 0} {
 		b.c.Send(newReq(opSetSelectionOwner, 0).u32(b.selWin).u32(clip).u32(t))
