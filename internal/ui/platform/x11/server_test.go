@@ -40,6 +40,7 @@ type fakeX struct {
 	atomNames map[uint32]string
 	props     map[[2]uint32]property
 	owners    map[uint32]uint32 // selection -> owner
+	parents   map[uint32]uint32 // window -> parent, the root if not listed
 	log       []request
 	logCh     chan request // if set, every request is also sent here
 
@@ -130,7 +131,7 @@ func newFakeX(t *testing.T, opts setupOpts) (*fakeX, *net.UnixConn) {
 	f := &fakeX{
 		t: t, sock: server,
 		atoms: map[string]uint32{}, atomNames: map[uint32]string{},
-		props: map[[2]uint32]property{}, owners: map[uint32]uint32{},
+		props: map[[2]uint32]property{}, owners: map[uint32]uint32{}, parents: map[uint32]uint32{},
 		exts: map[string]extension{
 			"MIT-SHM": {present: true, major: 130, firstEvent: 65},
 			"SHAPE":   {present: true, major: 129, firstEvent: 64},
@@ -455,6 +456,14 @@ func (f *fakeX) answer(r request) {
 		f.mu.Lock()
 		f.owners[r.u32(4)] = r.u32(0)
 		f.mu.Unlock()
+	case opQueryTree:
+		f.mu.Lock()
+		parent, ok := f.parents[r.u32(0)]
+		f.mu.Unlock()
+		if !ok {
+			parent = fakeRoot
+		}
+		f.reply(r, 0, propU32(fakeRoot, parent))
 	case opGetSelectionOwner:
 		f.mu.Lock()
 		owner := f.owners[r.u32(0)]
