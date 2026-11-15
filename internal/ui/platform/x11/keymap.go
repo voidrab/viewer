@@ -3,6 +3,7 @@ package x11
 import (
 	"sync"
 	"unicode"
+	"viewer/internal/ui/platform/desktop"
 
 	"viewer/internal/ui/platform"
 )
@@ -123,8 +124,8 @@ func (km *keymap) lookup(code byte, state uint16) (platform.Key, rune) {
 	sym0, sym1 := col(base[group][0]), col(base[group][1])
 	if sym1 == 0 {
 		// A key with one keysym has its case pair as the second level.
-		if r := keysymRune(sym0); unicode.IsLower(r) {
-			sym1 = runeKeysym(unicode.ToUpper(r))
+		if r := desktop.KeysymRune(sym0); unicode.IsLower(r) {
+			sym1 = desktop.RuneKeysym(unicode.ToUpper(r))
 		} else {
 			sym1 = sym0
 		}
@@ -139,7 +140,7 @@ func (km *keymap) lookup(code byte, state uint16) (platform.Key, rune) {
 	}
 	if state&stateLock != 0 {
 		// Caps Lock shifts letters only.
-		if r := keysymRune(sym0); unicode.IsLetter(r) && unicode.ToUpper(r) != r {
+		if r := desktop.KeysymRune(sym0); unicode.IsLetter(r) && unicode.ToUpper(r) != r {
 			level ^= 1
 		}
 	}
@@ -157,7 +158,7 @@ func (km *keymap) lookup(code byte, state uint16) (platform.Key, rune) {
 			sym = col(base[group][level-2])
 		}
 	}
-	return resolveKeysym(sym)
+	return desktop.ResolveKeysym(sym)
 }
 
 // isKeypad reports whether s is a keypad keysym.

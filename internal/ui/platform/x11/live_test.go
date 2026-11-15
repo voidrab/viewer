@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"viewer/internal/ui/platform/desktop"
 
 	"viewer/internal/ui/platform"
 )
@@ -201,7 +202,7 @@ func TestLiveXdndDrop(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer src.Close()
-	atoms, _ := src.internAtoms([]string{"XdndEnter", "XdndPosition", "XdndDrop", "XdndStatus", "XdndFinished", "XdndSelection", uriListMime, "XdndActionCopy"})
+	atoms, _ := src.internAtoms([]string{"XdndEnter", "XdndPosition", "XdndDrop", "XdndStatus", "XdndFinished", "XdndSelection", desktop.URIListMime, "XdndActionCopy"})
 	sw := src.NewID()
 	root := src.Setup.Screens[0].Root
 	src.Send(newReq(opCreateWindow, 0).u32(sw).u32(root).i16(-10).i16(-10).u16(1).u16(1).u16(0).u16(2).u32(0).u32(0))
@@ -211,7 +212,7 @@ func TestLiveXdndDrop(t *testing.T) {
 	}
 	// Where the window is on the root, to drop at (40, 50) in it.
 	ox, oy, _, _ := src.translate(w.id, root, 0, 0)
-	msg("XdndEnter", sw, 5<<24, atoms[uriListMime])
+	msg("XdndEnter", sw, 5<<24, atoms[desktop.URIListMime])
 	msg("XdndPosition", sw, 0, uint32(ox+40)<<16|uint32(oy+50), 0, atoms["XdndActionCopy"])
 	if d := waitFor[platform.DragEvent](t, w); d.Kind != platform.DragEnter || d.X != 40 || d.Y != 50 || d.Own {
 		t.Errorf("drag = %+v", d)

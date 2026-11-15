@@ -3,15 +3,9 @@ package x11
 import (
 	"time"
 	"unicode/utf8"
+	"viewer/internal/ui/platform/desktop"
 
 	"viewer/internal/ui/platform"
-)
-
-// maxPaste bounds how much clipboard text is read, and pasteTimeout how long
-// the program that holds it has to supply it.
-const (
-	maxPaste     = 8 << 20
-	pasteTimeout = 2 * time.Second
 )
 
 // after is replaced by tests.
@@ -190,7 +184,7 @@ func (b *Backend) clipProperty(window, prop uint32, deleted bool) {
 			b.c.Send(changeAttrs(window, (&windowAttrs{}).set(cwEventMask, 0)))
 		}
 	case p != nil && p.incr && !deleted && window == b.selWin && prop == b.atom("VIEWER_SELECTION"):
-		v, err := b.c.getProperty(b.selWin, prop, true, maxPaste)
+		v, err := b.c.getProperty(b.selWin, prop, true, desktop.MaxPaste)
 		if err != nil {
 			b.endPaste(p, nil)
 			return
@@ -199,8 +193,8 @@ func (b *Backend) clipProperty(window, prop uint32, deleted bool) {
 			b.endPaste(p, p.data)
 			return
 		}
-		p.timer.Reset(pasteTimeout)
-		if len(p.data)+len(v.value) <= maxPaste {
+		p.timer.Reset(desktop.PasteTimeout)
+		if len(p.data)+len(v.value) <= desktop.MaxPaste {
 			p.data = append(p.data, v.value...)
 		}
 	}
@@ -224,7 +218,7 @@ func (b *Backend) requestPaste(w *window) {
 	p := &paste{w: w, target: b.atom("UTF8_STRING")}
 	b.mu.Lock()
 	b.clip.paste = p
-	p.timer = after(pasteTimeout, func() { b.endPaste(p, nil) })
+	p.timer = after(desktop.PasteTimeout, func() { b.endPaste(p, nil) })
 	b.mu.Unlock()
 	b.convert(p.target)
 }
@@ -279,7 +273,7 @@ func (b *Backend) onSelectionNotify(ev []byte) {
 		b.endPaste(p, nil)
 		return
 	}
-	v, err := b.c.getProperty(b.selWin, prop, true, maxPaste)
+	v, err := b.c.getProperty(b.selWin, prop, true, desktop.MaxPaste)
 	switch {
 	case err != nil:
 		b.endPaste(p, nil)

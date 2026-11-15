@@ -168,7 +168,7 @@ func TestResolve(t *testing.T) {
 		{"0x20", platform.KeyNone, ' '}, {"0xfc", platform.KeyNone, 'ü'},
 		{"0xffb7", platform.KeyNone, '7'}, {"0xffab", platform.KeyNone, '+'},
 		{"0x20ac", platform.KeyNone, '€'}, {"0x10020ac", platform.KeyNone, '€'},
-		{"0xffe1", platform.KeyNone, 0}, {"0x1f0", platform.KeyNone, 0},
+		{"0xffe1", platform.KeyNone, 0}, {"0x1f0", platform.KeyNone, 'đ'}, {"0x8fb", platform.KeyNone, 0},
 		{"0xzz", platform.KeyNone, 0}, {"0x1000000", platform.KeyNone, 0},
 	} {
 		if k, r := resolve(tc.name); k != tc.key || r != tc.r {

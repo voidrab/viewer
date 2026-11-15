@@ -1,4 +1,4 @@
-package x11
+package desktop
 
 import (
 	"unicode"
@@ -6,17 +6,17 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// resolveKeysym turns a keysym into a navigation key or a typed rune. Both
+// ResolveKeysym turns a keysym into a navigation key or a typed rune. Both
 // are zero for a keysym that is neither, such as a modifier.
-func resolveKeysym(v uint32) (platform.Key, rune) {
+func ResolveKeysym(v uint32) (platform.Key, rune) {
 	if k, ok := keysymKeys[v]; ok {
 		return k, 0
 	}
-	return platform.KeyNone, keysymRune(v)
+	return platform.KeyNone, KeysymRune(v)
 }
 
-// keysymRune returns the rune a keysym types, or zero.
-func keysymRune(v uint32) rune {
+// KeysymRune returns the rune a keysym types, or zero.
+func KeysymRune(v uint32) rune {
 	switch {
 	case v >= 0x20 && v <= 0x7e, v >= 0xa0 && v <= 0xff: // Latin-1 keysyms are their code points
 		return rune(v)
@@ -30,8 +30,8 @@ func keysymRune(v uint32) rune {
 	return keysymRunes[v]
 }
 
-// runeKeysym returns the keysym that types r.
-func runeKeysym(r rune) uint32 {
+// RuneKeysym returns the keysym that types r.
+func RuneKeysym(r rune) uint32 {
 	if r >= 0x20 && r <= 0x7e || r >= 0xa0 && r <= 0xff {
 		return uint32(r)
 	}

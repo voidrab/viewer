@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"viewer/internal/ui/platform"
+	"viewer/internal/ui/platform/desktop"
 )
 
 // Opcodes and event numbers of the interfaces a window uses.
@@ -428,7 +429,7 @@ func (w *window) Present(img *image.RGBA) {
 		}
 		return
 	}
-	copyARGB(buf.mem.data, buf.stride, img)
+	desktop.CopyBGRA(buf.mem.data, buf.stride, img)
 	buf.busy = true
 	c := w.b.c
 	c.Send(w.surface, surfaceAttach, func(e *Encoder) { e.Uint(buf.id).Int(0).Int(0) })

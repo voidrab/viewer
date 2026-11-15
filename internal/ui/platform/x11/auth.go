@@ -73,6 +73,12 @@ func authFile() string {
 // hostname is replaced by tests.
 var hostname = os.Hostname
 
+// host returns the name of this host, or an empty string.
+func host() string {
+	h, _ := hostname()
+	return h
+}
+
 // findAuth returns the MIT-MAGIC-COOKIE-1 for display number on the local
 // host, from the Xauthority file at path. It returns an empty name and no
 // data when there is none, in which case the client connects without

@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"viewer/internal/ui/platform/desktop"
 
 	"viewer/internal/ui/platform"
 )
@@ -44,7 +45,7 @@ var atomNames = []string{
 	"CLIPBOARD", "TARGETS", "TEXT", "INCR", "text/plain;charset=utf-8", "text/plain",
 	"VIEWER_SELECTION", "XdndAware", "XdndEnter", "XdndPosition", "XdndStatus", "XdndLeave",
 	"XdndDrop", "XdndFinished", "XdndSelection", "XdndTypeList", "XdndActionCopy",
-	uriListMime,
+	desktop.URIListMime,
 }
 
 // eventQueue is how many events a window buffers before it starts dropping

@@ -2,18 +2,13 @@ package x11
 
 import (
 	"image"
-	"net/url"
 	"slices"
-	"strings"
 	"sync"
 	"time"
+	"viewer/internal/ui/platform/desktop"
 
 	"viewer/internal/ui/platform"
 )
-
-// uriListMime is the format files are dragged in: a list of URIs, one per
-// line.
-const uriListMime = "text/uri-list"
 
 // xdndTarget is the state of a drag from another program over one of the
 // program's windows, under the XDND protocol. The dragging program sends
@@ -56,7 +51,7 @@ func (t *xdndTarget) onMessage(b *Backend, w *window, typ uint32, data func(int)
 		t.mu.Lock()
 		t.reset()
 		t.source, t.w = data(0), w
-		t.accept = slices.Contains(types, b.atom(uriListMime))
+		t.accept = slices.Contains(types, b.atom(desktop.URIListMime))
 		t.mu.Unlock()
 	case b.atom("XdndPosition"):
 		t.onPosition(b, w, data(0), int(data(2)>>16), int(data(2)&0xffff))
@@ -151,7 +146,7 @@ func (t *xdndTarget) onDrop(b *Backend, w *window, source, time uint32) {
 		return
 	}
 	t.dropping = true
-	t.timer = after(pasteTimeout, func() {
+	t.timer = after(desktop.PasteTimeout, func() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		if t.dropping && t.source == source {
@@ -160,7 +155,7 @@ func (t *xdndTarget) onDrop(b *Backend, w *window, source, time uint32) {
 			b.xdndFinish(source, w.id, false)
 		}
 	})
-	b.c.Send(newReq(opConvertSelection, 0).u32(w.id).u32(b.atom("XdndSelection")).u32(b.atom(uriListMime)).
+	b.c.Send(newReq(opConvertSelection, 0).u32(w.id).u32(b.atom("XdndSelection")).u32(b.atom(desktop.URIListMime)).
 		u32(b.atom("XdndSelection")).u32(time))
 }
 
@@ -176,8 +171,8 @@ func (t *xdndTarget) onSelection(b *Backend, requestor, prop uint32) {
 	t.mu.Unlock()
 	var paths []string
 	if prop != atomNone {
-		if v, err := b.c.getProperty(requestor, prop, true, maxPaste); err == nil {
-			paths = parseURIList(string(v.value))
+		if v, err := b.c.getProperty(requestor, prop, true, desktop.MaxPaste); err == nil {
+			paths = desktop.ParseURIList(string(v.value), host())
 		}
 	}
 	b.xdndFinish(source, w.id, len(paths) > 0)
@@ -186,28 +181,6 @@ func (t *xdndTarget) onSelection(b *Backend, requestor, prop uint32) {
 	} else {
 		w.emit(platform.DragEvent{Kind: platform.DragLeave, X: x, Y: y})
 	}
-}
-
-// parseURIList returns the local paths of the file URIs in list, a
-// text/uri-list: comments, other schemes and files on other hosts are left
-// out.
-func parseURIList(list string) []string {
-	host, _ := hostname()
-	var paths []string
-	for _, line := range strings.Split(list, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		u, err := url.Parse(line)
-		if err != nil || u.Scheme != "file" || u.Path == "" {
-			continue
-		}
-		if u.Host == "" || u.Host == "localhost" || u.Host == host {
-			paths = append(paths, u.Path)
-		}
-	}
-	return paths
 }
 
 // drag is a drag the program began, of its own tabs. The windows it can

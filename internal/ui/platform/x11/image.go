@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math/bits"
+	"viewer/internal/ui/platform/desktop"
 
 	"golang.org/x/sys/unix"
 )
@@ -61,13 +62,7 @@ func (f pixelFormat) bgrx() bool {
 func (f pixelFormat) convert(dst []byte, stride int, src *image.RGBA) {
 	w, h := src.Rect.Dx(), src.Rect.Dy()
 	if f.bgrx() {
-		for y := range h {
-			s := src.Pix[y*src.Stride:][:4*w]
-			d := dst[y*stride:][:4*w]
-			for i := 0; i < len(s); i += 4 {
-				d[i], d[i+1], d[i+2], d[i+3] = s[i+2], s[i+1], s[i], s[i+3]
-			}
-		}
+		desktop.CopyBGRA(dst, stride, src)
 		return
 	}
 	for y := range h {

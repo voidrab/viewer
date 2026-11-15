@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"net/url"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"viewer/internal/ui/platform"
+	"viewer/internal/ui/platform/desktop"
 )
 
 // Opcodes and events of drag and drop on wl_data_device, wl_data_source and
@@ -36,8 +35,8 @@ const (
 	actionAsk  = 4
 )
 
-// uriListMime is the format files are dragged in: a list of URIs, one a line.
-const uriListMime = "text/uri-list"
+// uriListMime is the format files are dragged in.
+const uriListMime = desktop.URIListMime
 
 // ownMime marks the drags the program begins. The process ID tells them from
 // those of another copy of the program, whose windows cannot take them.
@@ -109,7 +108,7 @@ func (b *Backend) startDrag(w *window, icon *image.RGBA, hotspot image.Point) bo
 	// Attaching the buffer at minus the hotspot puts the hotspot there instead.
 	size := platform.Size{W: icon.Rect.Dx(), H: icon.Rect.Dy()}
 	if g.iconBuf = b.newBuffer(size, func() {}); g.iconBuf != nil {
-		copyARGB(g.iconBuf.mem.data, g.iconBuf.stride, icon)
+		desktop.CopyBGRA(g.iconBuf.mem.data, g.iconBuf.stride, icon)
 		c.Send(surface, surfaceAttach, func(e *Encoder) {
 			e.Uint(g.iconBuf.id).Int(int32(-hotspot.X)).Int(int32(-hotspot.Y))
 		})
@@ -285,33 +284,12 @@ func (b *Backend) receiveFiles(w *window, offer, action uint32, x, y float64) {
 	wr.Close()
 	go func() {
 		defer r.Close()
-		r.SetReadDeadline(now().Add(pasteTimeout))
-		data, err := io.ReadAll(io.LimitReader(r, maxPaste))
+		r.SetReadDeadline(now().Add(desktop.PasteTimeout))
+		data, err := io.ReadAll(io.LimitReader(r, desktop.MaxPaste))
 		b.finishOffer(offer, action)
-		if paths := parseURIList(string(data)); err == nil && len(paths) > 0 {
+		host, _ := hostname()
+		if paths := desktop.ParseURIList(string(data), host); err == nil && len(paths) > 0 {
 			w.emit(platform.DropEvent{X: x, Y: y, Paths: paths})
 		}
 	}()
-}
-
-// parseURIList returns the local paths of the file URIs in list, a
-// text/uri-list: comments, other schemes and files on other hosts are left
-// out.
-func parseURIList(list string) []string {
-	host, _ := hostname()
-	var paths []string
-	for _, line := range strings.Split(list, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		u, err := url.Parse(line)
-		if err != nil || u.Scheme != "file" || u.Path == "" {
-			continue
-		}
-		if u.Host == "" || u.Host == "localhost" || u.Host == host {
-			paths = append(paths, u.Path)
-		}
-	}
-	return paths
 }
