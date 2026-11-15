@@ -42,7 +42,8 @@ func TestLookupUnknown(t *testing.T) {
 	}
 }
 
-// inspect opens the document at path and inspects it.
+// inspect opens the document at path, returns its Info, and closes the
+// document.
 func inspect(t *testing.T, path string) Info {
 	t.Helper()
 	doc, err := gopdfrab.Open(path)

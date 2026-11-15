@@ -469,8 +469,8 @@ func (a *App) load(path string) (*document, error) {
 	pal := a.opts.Palette
 	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc}
 	d.owner.Store(a)
-	// The properties are read before the view exists, and with it any render
-	// that could use the document at the same time.
+	// Inspect runs before newView, so the properties are read before any
+	// render of doc starts.
 	info := a.opts.Inspect(doc)
 	d.version, d.claimed = info.Version, info.Claimed
 	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
