@@ -238,8 +238,8 @@ type WindowOptions struct {
 	// AppID names the application to the desktop: the Wayland app ID, and on
 	// X11 the window's class.
 	AppID string
-	// Icon, if not nil, is the window's icon where the desktop takes it from
-	// the window rather than from the application's desktop entry, as on X11.
+	// Icon, if not nil, is the window's icon on desktops that take it from the
+	// window, as X11 does, rather than from the application's desktop entry.
 	Icon image.Image
 }
 

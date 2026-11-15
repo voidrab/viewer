@@ -27,9 +27,9 @@ type authEntry struct {
 	data    []byte
 }
 
-// readAuthEntries parses an Xauthority file, a sequence of records whose
-// fields are each a big-endian 16-bit length and that many bytes. A
-// truncated last record ends the list.
+// readAuthEntries parses an Xauthority file. Each record is a big-endian
+// 16-bit family followed by four fields, each a big-endian 16-bit length and
+// that many bytes. A truncated last record ends the list.
 func readAuthEntries(r io.Reader) []authEntry {
 	br := bufio.NewReader(r)
 	field := func() ([]byte, bool) {

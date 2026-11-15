@@ -58,8 +58,8 @@ func (w *window) Resize(edges platform.Edge) {
 	}
 }
 
-// ShowMenu implements platform.Window with _GTK_SHOW_WINDOW_MENU, which
-// takes the point on the root.
+// ShowMenu implements platform.Window with _GTK_SHOW_WINDOW_MENU. The point
+// (x, y) is relative to the window and is sent in root coordinates.
 func (w *window) ShowMenu(x, y int) {
 	b := w.b
 	if !b.supports("_GTK_SHOW_WINDOW_MENU") {

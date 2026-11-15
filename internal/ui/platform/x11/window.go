@@ -41,9 +41,9 @@ type window struct {
 
 	// Frame pacing: a FrameEvent goes out only when the server has drawn the
 	// last frame and frameInterval has passed, and at most one at a time.
-	// busy is set while the last frame is outstanding; frameQueued from
-	// sending a FrameEvent until Present answers it; frameWanted records a
-	// frame asked for meanwhile.
+	// busy is set while the last frame is outstanding. frameQueued is set
+	// from when a FrameEvent is sent until Present answers it. frameWanted
+	// records a frame asked for meanwhile.
 	busy, frameQueued, frameWanted bool
 
 	// The frame's pixels: in shared memory, or else in pix, sent with
@@ -67,7 +67,7 @@ func (b *Backend) NewWindow(opts platform.WindowOptions) (platform.Window, error
 	if err := c.Send(r); err != nil {
 		return nil, err
 	}
-	// The GC draws images; graphics exposures would only bring NoExpose events.
+	// The GC is used only for PutImage, so graphics exposures are turned off.
 	err := errors.Join(
 		c.Send(newReq(opCreateGC, 0).u32(w.gc).u32(w.id).u32(1<<16).u32(0)),
 		w.setProperties(opts),
@@ -302,9 +302,8 @@ func (w *window) Present(img *image.RGBA) {
 	}()
 }
 
-// buffer makes sure the frame's memory fits size, reporting false if it
-// cannot be had. Shared memory that cannot be made is given up for good, in
-// favour of PutImage. The caller holds w.mu.
+// buffer makes sure the frame's memory fits size. Shared memory that cannot
+// be made is given up for good, in favour of PutImage. The caller holds w.mu.
 func (w *window) buffer(size platform.Size) bool {
 	if w.pixSize == size && (w.seg != nil || w.pix != nil) {
 		return true

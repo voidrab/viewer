@@ -72,7 +72,7 @@ const (
 	maskPropertyChange      = 1 << 22
 )
 
-// Property modes and formats.
+// Property change modes.
 const (
 	propReplace = 0
 	propAppend  = 2
@@ -124,8 +124,8 @@ func changeAttrs(window uint32, a *windowAttrs) *req {
 	return r
 }
 
-// changeProperty replaces or appends to a property. data holds whole units
-// of format bits.
+// changeProperty replaces or appends to a property. data holds whole units of
+// format bits each, that is, format/8 bytes per unit.
 func changeProperty(mode byte, window, prop, typ uint32, format byte, data []byte) *req {
 	return newReq(opChangeProperty, mode).u32(window).u32(prop).u32(typ).u8(format).pad(3).
 		u32(uint32(len(data) / int(format/8))).bytes(data)
@@ -141,7 +141,7 @@ func propU32(vs ...uint32) []byte {
 }
 
 // clientMessage builds the 32 bytes of a ClientMessage event for window,
-// of type typ, with five 32-bit values.
+// of type typ, with up to five 32-bit values.
 func clientMessage(window, typ uint32, data ...uint32) []byte {
 	ev := make([]byte, 32)
 	ev[0], ev[1] = evClientMessage, 32

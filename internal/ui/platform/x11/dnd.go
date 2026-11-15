@@ -11,13 +11,14 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// uriListMime is the format files are dragged in: a list of URIs, one a line.
+// uriListMime is the format files are dragged in: a list of URIs, one per
+// line.
 const uriListMime = "text/uri-list"
 
 // xdndTarget is the state of a drag from another program over one of the
-// program's windows, by the XDND protocol: the program that drags sends
+// program's windows, under the XDND protocol. The dragging program sends
 // client messages as the pointer enters, moves over, leaves or drops on the
-// window, which answers whether it takes the drop.
+// window, and the window answers whether it takes the drop.
 type xdndTarget struct {
 	mu      sync.Mutex
 	source  uint32  // the dragging program's window, or zero
@@ -111,7 +112,7 @@ func (t *xdndTarget) onPosition(b *Backend, w *window, source uint32, rootX, roo
 	b.c.Send(sendEvent(source, 0, clientMessage(source, b.atom("XdndStatus"), w.id, flags, 0, 0, action)))
 }
 
-// finish tells the source the drop is over, and whether it was taken.
+// xdndFinish tells the source the drop is over, and whether it was taken.
 func (b *Backend) xdndFinish(source, window uint32, taken bool) {
 	ok, action := uint32(0), uint32(0)
 	if taken {
@@ -206,7 +207,8 @@ type drag struct {
 	x, y    float64 // where in it
 }
 
-// SHAPE's request and its parts.
+// SHAPE's ShapeRectangles request code, with its Set operation and Input
+// region kind.
 const (
 	shapeRectangles = 1
 	shapeSet        = 0
@@ -262,7 +264,8 @@ func (b *Backend) pointerRoot() (int, int) {
 }
 
 // dragIcon shows img in an unmanaged window at (x, y) on the root, with
-// alpha where the server offers it, which pointer input passes through.
+// alpha where the server offers it. When SHAPE is present, the window has an
+// empty input region, so pointer input passes through it.
 func (b *Backend) dragIcon(img *image.RGBA, x, y int) uint32 {
 	c := b.c
 	id, gc := c.NewID(), c.NewID()

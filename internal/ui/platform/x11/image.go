@@ -49,8 +49,9 @@ func newPixelFormat(v Visual, byteOrder byte) (pixelFormat, bool) {
 	return pf, ok1 && ok2 && ok3
 }
 
-// bgrx reports whether the format is blue, green, red and a spare byte in
-// memory order, which a plain swap of red and blue produces.
+// bgrx reports whether the format stores blue, green, red, then alpha or a
+// spare byte, in memory order. For such a format, convert needs only to swap
+// the red and blue bytes.
 func (f pixelFormat) bgrx() bool {
 	return !f.msb && f.r == 16 && f.g == 8 && f.b == 0 && (!f.alpha || f.a == 24)
 }

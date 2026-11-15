@@ -40,8 +40,9 @@ func (b *Backend) onKey(ev []byte) {
 		return
 	}
 	if !down {
-		// The server repeats a held key as a release and a press at the same
-		// time. Only the presses are reported, as a held key's repeats.
+		// The server reports a repeat of a held key as a release and a press
+		// with the same time. The release is dropped, so that the repeat is
+		// reported only as a press.
 		if next, ok := b.c.Peek(); ok && next[0]&0x7f == evKeyPress && next[1] == code && u32At(next, 4) == t {
 			return
 		}
@@ -101,8 +102,8 @@ func (b *Backend) onPointer(ev []byte) {
 			return
 		}
 		w.emit(platform.PointerEvent{Kind: platform.Release, Button: mapButton(button), X: fx, Y: fy, Mods: mods})
-		// The pointer left while a button held it; with the last button up,
-		// it is gone.
+		// The pointer left while a button held it. It counts as having left
+		// once the last button is up.
 		in.mu.Lock()
 		left := in.heldLeave == w && state&stateButtons&^(0x80<<button) == 0
 		if left {
@@ -131,10 +132,10 @@ func mapButton(n byte) platform.Button {
 	return platform.None
 }
 
-// onCrossing handles the pointer entering or leaving a window. The window
-// manager taking the pointer, to move the window say, counts as leaving, and
-// giving it back as entering. As on Wayland, the pointer leaves only once
-// no button holds it in the window.
+// onCrossing handles the pointer entering or leaving a window. A window
+// manager taking the pointer, for a move for example, counts as a leave, and
+// giving it back counts as an enter. As on Wayland, the pointer leaves only
+// once no button holds it in the window.
 func (b *Backend) onCrossing(ev []byte) {
 	detail, t, id, mode := ev[1], u32At(ev, 4), u32At(ev, 12), ev[30]
 	x, y, state := float64(i16At(ev, 24)), float64(i16At(ev, 26)), u16At(ev, 28)

@@ -322,7 +322,8 @@ func (c *Conn) send(r *req, ck *cookie) error {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if ck == nil && c.seq-c.syncSeq >= syncEvery {
-		// GetInputFocus, whose reply is discarded, keeps the count in step.
+		// Send a GetInputFocus, whose reply is discarded, so that a request
+		// with a reply is sent before the count can wrap.
 		if err := c.write(newReq(43, 0), &cookie{}); err != nil {
 			return err
 		}

@@ -33,7 +33,7 @@ const (
 	evMappingNotify    = 34
 )
 
-// atomNames are the atoms the backend interns on starting.
+// atomNames are the atoms the backend interns when it starts.
 var atomNames = []string{
 	"WM_PROTOCOLS", "WM_DELETE_WINDOW", "WM_CHANGE_STATE", "WM_CLIENT_MACHINE",
 	"UTF8_STRING", "_NET_WM_NAME", "_NET_WM_PID", "_NET_WM_PING", "_NET_WM_ICON",
@@ -106,8 +106,8 @@ type Backend struct {
 // with: 24-bit TrueColor at 32 bits per pixel.
 var ErrVisual = errors.New("x11: the screen has no 24-bit TrueColor visual")
 
-// Open starts a backend on conn and begins dispatching events. Close ends
-// it.
+// Open starts a backend on conn and begins dispatching events. Backend.Close
+// ends it.
 func Open(conn *Conn) (*Backend, error) {
 	b := &Backend{c: conn, screen: conn.Setup.Screens[0], windows: map[uint32]*window{}, done: make(chan struct{})}
 	b.root = b.screen.Root
@@ -167,8 +167,8 @@ func (b *Backend) atom(name string) uint32 { return b.atoms[name] }
 const visualTrueColor = 4
 
 // pickVisual chooses the visual windows are made with: the root's if it is
-// 24-bit TrueColor, as it nearly always is, or else another that is. It also
-// looks for a 32-bit visual with alpha for the drag icon.
+// 24-bit TrueColor, or else another 24-bit TrueColor visual. It also looks for
+// a 32-bit visual with alpha for the drag icon.
 func (b *Backend) pickVisual() error {
 	bpp := map[byte]byte{}
 	for _, f := range b.c.Setup.Formats {
@@ -224,8 +224,8 @@ func (b *Backend) queryExtensions() error {
 	if b.render, err = b.c.queryExtension("RENDER"); err != nil {
 		return err
 	}
-	// Shared memory is handed over as a descriptor, which takes version 1.2
-	// and a local socket.
+	// Shared memory segments are passed as file descriptors, which needs
+	// MIT-SHM 1.2 or later and a Unix socket.
 	if _, local := b.c.sock.(*net.UnixConn); b.shm.present && (!local || !b.shmFDs()) {
 		b.shm.present = false
 	}

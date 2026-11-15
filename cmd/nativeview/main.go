@@ -1,7 +1,6 @@
 // Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
-// on Wayland or X11. Every argument opens in its own
-// tab, in the window last used of the instance already running if there is
-// one.
+// on Wayland or X11. Every argument opens in its own tab, in the window last
+// used by the instance already running if there is one.
 package main
 
 import (

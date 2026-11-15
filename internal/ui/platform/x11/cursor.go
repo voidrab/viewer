@@ -24,8 +24,9 @@ const (
 // database.
 const atomResourceManager = 23
 
-// cursorNames lists the names each cursor goes by in cursor themes, the
-// CSS name first, and cursorGlyphs its glyph in the core cursor font.
+// cursorNames lists the names each cursor goes by in cursor themes, the CSS
+// name first. cursorGlyphs gives the glyph of each cursor in the core cursor
+// font.
 var (
 	cursorNames = map[platform.Cursor][]string{
 		platform.CursorDefault:  {"default", "left_ptr"},

@@ -24,9 +24,9 @@ var (
 )
 
 // openBackend connects to the desktop's windowing system. VIEWER_BACKEND
-// names one, "wayland" or "x11"; otherwise Wayland is tried first, where a
-// Wayland session offers it, and then X11, which also serves a Wayland
-// desktop through Xwayland.
+// names one, "wayland" or "x11". Otherwise Wayland is tried when
+// WAYLAND_DISPLAY is set or DISPLAY is not, and X11 when DISPLAY is set. X11
+// also serves a Wayland desktop through Xwayland.
 func openBackend(getenv func(string) string) (backend, error) {
 	switch name := strings.ToLower(getenv("VIEWER_BACKEND")); name {
 	case "wayland":

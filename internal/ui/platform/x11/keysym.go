@@ -43,7 +43,7 @@ func runeKeysym(r rune) uint32 {
 	return 0x01000000 + uint32(r)
 }
 
-// keysymKeys maps the keysyms of the keys the viewer knows to them.
+// keysymKeys maps the keysyms of navigation and editing keys to platform keys.
 var keysymKeys = map[uint32]platform.Key{
 	0xff0d: platform.KeyEnter, 0xff8d: platform.KeyEnter, 0xfe34: platform.KeyEnter,
 	0xff1b: platform.KeyEscape, 0xff09: platform.KeyTab, 0xfe20: platform.KeyTab,

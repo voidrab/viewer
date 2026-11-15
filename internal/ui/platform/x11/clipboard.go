@@ -70,8 +70,9 @@ func (b *Backend) onSelectionClear(ev []byte) {
 	b.mu.Unlock()
 }
 
-// notifySelection tells requestor how its request for selection as target
-// went: the text is in prop, or, with prop zero, it was refused.
+// notifySelection tells requestor the outcome of its request for target from
+// selection: the data is in prop, or, when prop is zero, the request was
+// refused.
 func (b *Backend) notifySelection(t, requestor, selection, target, prop uint32) {
 	ev := make([]byte, 32)
 	ev[0] = evSelectionNotify
