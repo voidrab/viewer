@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // fakeWM is a compositor that implements just enough of wl_compositor,

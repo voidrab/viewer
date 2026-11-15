@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/textlayer"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/textlayer"
 )
 
 // findState is a search in progress or done. The pages are searched on a

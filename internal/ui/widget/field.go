@@ -5,10 +5,10 @@ import (
 	"image/color"
 	"unicode"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
 )
 
 // Field is the editable text of a one-line input: the text, the caret, and

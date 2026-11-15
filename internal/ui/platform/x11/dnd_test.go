@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // xdnd delivers the XDND message typ to w, with data as its values.

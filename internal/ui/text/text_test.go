@@ -10,7 +10,7 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 
-	"viewer/internal/ui/paint"
+	"viewrab/internal/ui/paint"
 )
 
 var black = color.NRGBA{0, 0, 0, 255}

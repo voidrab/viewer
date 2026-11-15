@@ -4,10 +4,10 @@ import (
 	"image"
 	"testing"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
 )
 
 func newFind(t *testing.T) *FindBar {

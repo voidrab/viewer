@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // seatSetup holds a configured 100x100 window and the seat objects of a

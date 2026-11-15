@@ -1,10 +1,10 @@
-# Viewer: build, test and install. Plain go; no cgo.
+# Viewrab: build, test and install. Plain go; no cgo.
 
-BIN      ?= bin/viewer
+BIN      ?= bin/viewrab
 PREFIX   ?= /usr/local
 # The command name the binary is installed under.
-NAME     ?= viewer
-APP_ID   := com.voidrab.gopdfrab.Viewer
+NAME     ?= viewrab
+APP_ID   := com.voidrab.gopdfrab.Viewrab
 
 APPS_DIR  = $(DESTDIR)$(PREFIX)/share/applications
 ICONS_DIR = $(DESTDIR)$(PREFIX)/share/icons/hicolor
@@ -37,7 +37,7 @@ cover: test
 install:
 	@test -x $(BIN) || { echo "$(BIN) is missing: run 'make build' first, without sudo"; exit 1; }
 	install -Dm755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(NAME)
-	sed 's|^Exec=viewer %f|Exec=$(NAME) %f|' build/linux/$(APP_ID).desktop \
+	sed 's|^Exec=viewrab %f|Exec=$(NAME) %f|' build/linux/$(APP_ID).desktop \
 		| install -Dm644 /dev/stdin $(APPS_DIR)/$(APP_ID).desktop
 	install -Dm644 build/appicon.png $(ICONS_DIR)/256x256/apps/$(APP_ID).png
 	@if [ -z "$(DESTDIR)" ]; then \
@@ -50,7 +50,7 @@ uninstall:
 		$(ICONS_DIR)/256x256/apps/$(APP_ID).png
 	@if [ -z "$(DESTDIR)" ]; then update-desktop-database -q $(APPS_DIR) 2>/dev/null || true; fi
 
-## default: make Viewer your default PDF application (run as yourself, not root)
+## default: make Viewrab your default PDF application (run as yourself, not root)
 default:
 	xdg-mime default $(APP_ID).desktop application/pdf
 	@echo "default for application/pdf: $$(xdg-mime query default application/pdf)"

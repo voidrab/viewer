@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strings"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // Dragging tabs: a tab dragged along the tab bar reorders the tabs, as the tab

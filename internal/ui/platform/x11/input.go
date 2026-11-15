@@ -1,6 +1,6 @@
 package x11
 
-import "viewer/internal/ui/platform"
+import "viewrab/internal/ui/platform"
 
 // Crossing and focus details and modes.
 const (

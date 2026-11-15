@@ -16,9 +16,9 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // liveBackend opens a backend on the real server and fails the test on any
@@ -42,7 +42,7 @@ func liveBackend(t *testing.T) *Backend {
 // liveWindow opens a window and waits for its first frame request.
 func liveWindow(t *testing.T, b *Backend, title string) *window {
 	t.Helper()
-	pw, err := b.NewWindow(platform.WindowOptions{Title: title, AppID: "viewer.livetest", Size: platform.Size{W: 320, H: 200}, MinSize: platform.Size{W: 100, H: 80}})
+	pw, err := b.NewWindow(platform.WindowOptions{Title: title, AppID: "viewrab.livetest", Size: platform.Size{W: 320, H: 200}, MinSize: platform.Size{W: 100, H: 80}})
 	if err != nil {
 		t.Fatalf("NewWindow: %v", err)
 	}
@@ -367,26 +367,26 @@ func TestLiveKeymapDump(t *testing.T) {
 }
 
 // TestLiveDriveApp sends synthetic input to the running viewer's window,
-// whose hexadecimal ID is in VIEWER_WIN: Ctrl+F, the keys of VIEWER_TYPE,
-// then a click at the "x,y" point in VIEWER_MAX, which should be on the
+// whose hexadecimal ID is in VIEWRAB_WIN: Ctrl+F, the keys of VIEWRAB_TYPE,
+// then a click at the "x,y" point in VIEWRAB_MAX, which should be on the
 // maximise button.
 func TestLiveDriveApp(t *testing.T) {
 	var win uint32
-	if _, err := fmt.Sscanf(os.Getenv("VIEWER_WIN"), "0x%x", &win); err != nil {
-		t.Skip("VIEWER_WIN not set")
+	if _, err := fmt.Sscanf(os.Getenv("VIEWRAB_WIN"), "0x%x", &win); err != nil {
+		t.Skip("VIEWRAB_WIN not set")
 	}
 	b := liveBackend(t)
 	w := &window{b: b, id: win}
 	ctrlF := keycodeFor(t, b, 'f')
 	synth(b, w, evKeyPress, ctrlF, stateControl, 0, 0)
 	synth(b, w, evKeyRelease, ctrlF, stateControl, 0, 0)
-	for _, r := range os.Getenv("VIEWER_TYPE") {
+	for _, r := range os.Getenv("VIEWRAB_TYPE") {
 		code := keycodeFor(t, b, r)
 		synth(b, w, evKeyPress, code, 0, 0, 0)
 		synth(b, w, evKeyRelease, code, 0, 0, 0)
 	}
 	var x, y int
-	if _, err := fmt.Sscanf(os.Getenv("VIEWER_MAX"), "%d,%d", &x, &y); err == nil {
+	if _, err := fmt.Sscanf(os.Getenv("VIEWRAB_MAX"), "%d,%d", &x, &y); err == nil {
 		synth(b, w, evMotionNotify, 0, 0, x, y)
 		synth(b, w, evButtonPress, 1, 0, x, y)
 		synth(b, w, evButtonRelease, 1, 0x100, x, y)

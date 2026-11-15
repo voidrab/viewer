@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // dndSetup is a clipSetup whose compositor also records the requests of drag

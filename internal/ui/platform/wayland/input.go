@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // Opcodes, events and constants of wl_seat, wl_pointer and wl_keyboard.

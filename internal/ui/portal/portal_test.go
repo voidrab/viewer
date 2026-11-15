@@ -197,10 +197,10 @@ func TestFilePaths(t *testing.T) {
 
 func TestNewTokenIsFreshAndWellFormed(t *testing.T) {
 	a, b := newToken(), newToken()
-	if a == b || len(a) != len("viewer")+16 || a[:6] != "viewer" {
+	if a == b || len(a) != len("viewrab")+16 || a[:7] != "viewrab" {
 		t.Errorf("tokens %q %q", a, b)
 	}
-	for _, c := range a[6:] {
+	for _, c := range a[7:] {
 		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
 			t.Fatalf("token %q has a non-hex character", a)
 		}

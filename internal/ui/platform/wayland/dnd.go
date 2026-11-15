@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/platform/desktop"
 )
 
 // Opcodes and events of drag and drop on wl_data_device, wl_data_source and
@@ -40,7 +40,7 @@ const uriListMime = desktop.URIListMime
 
 // ownMime marks the drags the program begins. The process ID tells them from
 // those of another copy of the program, whose windows cannot take them.
-var ownMime = fmt.Sprintf("application/x-viewer-drag;pid=%d", os.Getpid())
+var ownMime = fmt.Sprintf("application/x-viewrab-drag;pid=%d", os.Getpid())
 
 // leaveGrace is how soon after a drag left a window a cancel still counts as
 // ending over that window. Compositors report the leave of a cancelled drag

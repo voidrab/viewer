@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/testpdf"
-	"viewer/internal/ui/instance"
-	"viewer/internal/ui/pageview"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/testpdf"
+	"viewrab/internal/ui/instance"
+	"viewrab/internal/ui/pageview"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // fixture wraps an App on a fake window of a known size, with its time and
@@ -184,7 +184,7 @@ func TestDrawPresentsTheWholeWindow(t *testing.T) {
 	if got := px(winW-5, winH-10); got != want([3]uint8{pal.Chrome.R, pal.Chrome.G, pal.Chrome.B}) {
 		t.Errorf("status background = %v", got)
 	}
-	if f.win.Title() != "doc.pdf — Viewer" {
+	if f.win.Title() != "doc.pdf — Viewrab" {
 		t.Errorf("title = %q", f.win.Title())
 	}
 	// The status line shows the file's name, pages, size and version on the
@@ -229,7 +229,7 @@ func TestNoDocumentShowsAHintAndDisablesTheToolbar(t *testing.T) {
 	if !f.a.toolbar.NoDocument {
 		t.Error("the toolbar shows the document controls with nothing open")
 	}
-	if f.win.Title() != "Viewer" {
+	if f.win.Title() != "Viewrab" {
 		t.Errorf("title = %q", f.win.Title())
 	}
 	// Buttons that need a document do nothing without one.
@@ -737,7 +737,7 @@ func TestRunDrivesTheWindow(t *testing.T) {
 		}
 		return false
 	})
-	if fw.Title() != "run.pdf — Viewer" {
+	if fw.Title() != "run.pdf — Viewrab" {
 		t.Errorf("title = %q", fw.Title())
 	}
 
@@ -903,7 +903,7 @@ func TestLaterLaunchesOpenTabsAndRaiseTheWindow(t *testing.T) {
 		t.Errorf("activated with %q", got)
 	}
 	waitFor(t, "both tabs", func() bool {
-		return fw.Title() == "second.pdf — Viewer"
+		return fw.Title() == "second.pdf — Viewrab"
 	})
 	// The window keeps working after the request channel is closed.
 	close(requests)

@@ -5,8 +5,8 @@ import (
 	"image/color"
 	"testing"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 func ptr(kind platform.PointerKind, b platform.Button, x, y int) platform.PointerEvent {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // rootMessages returns the client messages of type typ sent to the root, as

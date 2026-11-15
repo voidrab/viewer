@@ -3,11 +3,11 @@ package widget
 import (
 	"image"
 
-	"viewer/internal/ui/icon"
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/icon"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
 )
 
 // Menu geometry, in pixels.

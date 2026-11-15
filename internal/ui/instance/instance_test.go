@@ -177,11 +177,11 @@ func TestSendFailsAgainstAnImpostor(t *testing.T) {
 
 func TestDefaultPath(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
-	if got := DefaultPath("viewer"); got != "/run/user/1000/viewer.sock" {
+	if got := DefaultPath("viewrab"); got != "/run/user/1000/viewrab.sock" {
 		t.Errorf("path = %q", got)
 	}
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	if got := DefaultPath("viewer"); filepath.Dir(got) != os.TempDir() || filepath.Ext(got) != ".sock" {
+	if got := DefaultPath("viewrab"); filepath.Dir(got) != os.TempDir() || filepath.Ext(got) != ".sock" {
 		t.Errorf("fallback path = %q", got)
 	}
 }

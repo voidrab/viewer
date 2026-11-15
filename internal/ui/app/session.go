@@ -7,10 +7,10 @@ import (
 	"slices"
 	"sync"
 
-	"viewer/internal/ui/instance"
-	"viewer/internal/ui/pageview"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/instance"
+	"viewrab/internal/ui/pageview"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/theme"
 )
 
 // errNoWindows is reported when the platform cannot open another window.

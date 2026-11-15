@@ -10,8 +10,8 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/textlayer"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/textlayer"
 )
 
 // pageData is the text and the links of one page.

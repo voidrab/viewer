@@ -4,8 +4,8 @@ import (
 	"image"
 	"testing"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 func TestFieldSelectAllIsReplacedByTyping(t *testing.T) {

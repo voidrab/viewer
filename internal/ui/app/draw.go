@@ -5,13 +5,13 @@ import (
 	"image"
 	"strings"
 
-	"viewer/internal/ui/icon"
-	"viewer/internal/ui/pageview"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/icon"
+	"viewrab/internal/ui/pageview"
+	"viewrab/internal/ui/theme"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 // humanSize formats a byte count for display, with one decimal below 10:
@@ -64,7 +64,7 @@ func (a *App) chrome() {
 		a.menu.Close()
 		tb.Page, tb.Pages, tb.ZoomText = 0, 0, pageview.ZoomPresets[0].Label
 		a.status.Info, a.status.Claimed, a.status.Right = "", "", nil
-		a.setTitle("Viewer")
+		a.setTitle("Viewrab")
 	} else {
 		page, pages := d.view.Page(), d.view.Pages()
 		tb.Page, tb.Pages = page+1, pages
@@ -73,7 +73,7 @@ func (a *App) chrome() {
 		tb.Disabled[widget.ButtonNext] = page >= pages-1
 		a.status.Info, a.status.Claimed = statusInfo(d), d.claimed
 		a.status.Right = append(a.status.Right[:0], d.view.ZoomPercent())
-		a.setTitle(d.name + " — Viewer")
+		a.setTitle(d.name + " — Viewrab")
 	}
 	if a.findBar.Open && a.findDoc != d {
 		a.closeFind() // A search belongs to the tab it began in.

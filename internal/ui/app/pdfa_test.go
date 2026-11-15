@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 // panelClick clicks the panel's control that asks for act.

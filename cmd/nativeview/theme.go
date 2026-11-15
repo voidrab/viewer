@@ -43,7 +43,7 @@ type themes struct {
 func newThemes(dir string) *themes {
 	t := &themes{}
 	if dir != "" {
-		t.path = filepath.Join(dir, "viewer", themeFileName)
+		t.path = filepath.Join(dir, "viewrab", themeFileName)
 	}
 	return t
 }

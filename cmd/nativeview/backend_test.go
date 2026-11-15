@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // fakeBackend stands in for a connected backend.
@@ -44,9 +44,9 @@ func TestOpenBackendPicksBySessionAndOverride(t *testing.T) {
 		{env: map[string]string{"DISPLAY": ":0"}, waylandOK: true, x11OK: true, want: "x11"},
 		{env: map[string]string{}, waylandOK: true, want: "wayland"},
 		{env: map[string]string{"WAYLAND_DISPLAY": "w", "DISPLAY": ":0"}, err: x11Err},
-		{env: map[string]string{"VIEWER_BACKEND": "X11", "WAYLAND_DISPLAY": "w"}, waylandOK: true, x11OK: true, want: "x11"},
-		{env: map[string]string{"VIEWER_BACKEND": "wayland", "DISPLAY": ":0"}, waylandOK: true, x11OK: true, want: "wayland"},
-		{env: map[string]string{"VIEWER_BACKEND": "mir"}, err: errors.New("unknown")},
+		{env: map[string]string{"VIEWRAB_BACKEND": "X11", "WAYLAND_DISPLAY": "w"}, waylandOK: true, x11OK: true, want: "x11"},
+		{env: map[string]string{"VIEWRAB_BACKEND": "wayland", "DISPLAY": ":0"}, waylandOK: true, x11OK: true, want: "wayland"},
+		{env: map[string]string{"VIEWRAB_BACKEND": "mir"}, err: errors.New("unknown")},
 	} {
 		waylandOK, x11OK = tc.waylandOK, tc.x11OK
 		var warn strings.Builder

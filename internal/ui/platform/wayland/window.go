@@ -5,8 +5,8 @@ import (
 	"image"
 	"sync"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/platform/desktop"
 )
 
 // Opcodes and event numbers of the interfaces a window uses.

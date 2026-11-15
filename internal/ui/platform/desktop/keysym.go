@@ -3,7 +3,7 @@ package desktop
 import (
 	"unicode"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // ResolveKeysym turns a keysym into a navigation key or a typed rune. Both

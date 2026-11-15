@@ -8,10 +8,10 @@ import (
 	"os"
 	"runtime/debug"
 
-	"viewer/internal/ui/app"
-	"viewer/internal/ui/icon"
-	"viewer/internal/ui/instance"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/app"
+	"viewrab/internal/ui/icon"
+	"viewrab/internal/ui/instance"
+	"viewrab/internal/ui/platform"
 )
 
 func main() {
@@ -50,7 +50,7 @@ func run(paths []string) error {
 	// A second launch hands its files to the running window and ends. Without
 	// a usable socket the program simply runs on its own.
 	var requests <-chan instance.Request
-	srv, forwarded, err := instance.Claim(instance.DefaultPath("viewer-native"), instance.Request{
+	srv, forwarded, err := instance.Claim(instance.DefaultPath("viewrab-native"), instance.Request{
 		Paths: paths,
 		Token: activationToken(),
 	})
@@ -75,8 +75,8 @@ func run(paths []string) error {
 	defer be.Close()
 	newWindow := func() (platform.Window, error) {
 		return be.NewWindow(platform.WindowOptions{
-			Title: "Viewer",
-			AppID: "com.voidrab.gopdfrab.Viewer",
+			Title: "Viewrab",
+			AppID: "com.voidrab.gopdfrab.Viewrab",
 			Size:  platform.Size{W: 1100, H: 800},
 			// Wide enough for the toolbar and its window controls.
 			MinSize: platform.Size{W: 600, H: 360},

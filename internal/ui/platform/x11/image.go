@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"math/bits"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
 	"golang.org/x/sys/unix"
 )
@@ -94,7 +94,7 @@ type shmSeg struct {
 // newShmSeg creates size bytes of shared memory and attaches them to the
 // server. The descriptor is closed once the server holds it.
 func (b *Backend) newShmSeg(size int) (*shmSeg, error) {
-	fd, err := memfdCreate("viewer-shm", unix.MFD_CLOEXEC)
+	fd, err := memfdCreate("viewrab-shm", unix.MFD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("x11: memfd_create: %w", err)
 	}

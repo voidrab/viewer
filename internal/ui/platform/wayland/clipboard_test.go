@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // clipSetup is a window on a compositor with a seat and a data device manager,

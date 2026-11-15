@@ -4,8 +4,8 @@ import (
 	"image"
 	"time"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 // frameBorder and frameCorner set the window frame's geometry, in pixels, for

@@ -59,7 +59,7 @@ type Filter struct {
 var newToken = func() string {
 	var b [8]byte
 	rand.Read(b[:]) // crypto/rand.Read never returns an error.
-	return "viewer" + hex.EncodeToString(b[:])
+	return "viewrab" + hex.EncodeToString(b[:])
 }
 
 // requestPath returns the object path the portal gives the request that

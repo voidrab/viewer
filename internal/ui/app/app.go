@@ -15,14 +15,14 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/ui/instance"
-	"viewer/internal/ui/pageview"
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/ui/instance"
+	"viewrab/internal/ui/pageview"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // messageTime is how long a status message stays up.

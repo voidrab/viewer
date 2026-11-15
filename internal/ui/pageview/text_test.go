@@ -11,8 +11,8 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 // line lays out s as glyphs 6 wide and 12 tall from (x, y) points; a space

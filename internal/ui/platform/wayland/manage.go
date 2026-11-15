@@ -1,6 +1,6 @@
 package wayland
 
-import "viewer/internal/ui/platform"
+import "viewrab/internal/ui/platform"
 
 // Opcodes of wp_cursor_shape_manager_v1 and wp_cursor_shape_device_v1.
 const (

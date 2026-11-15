@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // selRequest builds a SelectionRequest from requestor for selection as
@@ -249,7 +249,7 @@ func TestPaste(t *testing.T) {
 func TestPasteInPieces(t *testing.T) {
 	f, b := startBackend(t, nil)
 	w := openWindow(t, f, b, platform.WindowOptions{})
-	prop := f.atom("VIEWER_SELECTION")
+	prop := f.atom("VIEWRAB_SELECTION")
 	pasteServer(f, func(uint32) (uint32, []byte, bool) { return f.atom("INCR"), propU32(10), true })
 	w.RequestPaste()
 	// Once the announcement is read, and so deleted, the pieces come, each
@@ -308,7 +308,7 @@ func countConversions(f *fakeX) int { return len(f.requests(opConvertSelection))
 func TestPasteFailures(t *testing.T) {
 	f, b := startBackend(t, nil)
 	w := openWindow(t, f, b, platform.WindowOptions{})
-	prop := f.atom("VIEWER_SELECTION")
+	prop := f.atom("VIEWRAB_SELECTION")
 	failReads := func(after int) {
 		reads := 0
 		f.set(func(f *fakeX) {

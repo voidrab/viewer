@@ -8,7 +8,7 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/ui/paint"
+	"viewrab/internal/ui/paint"
 )
 
 // found waits for the search to finish and returns its status.

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 func TestOpenWithoutAnARGBVisual(t *testing.T) {
