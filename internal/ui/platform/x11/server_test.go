@@ -2,6 +2,7 @@ package x11
 
 import (
 	"bytes"
+	"slices"
 	"errors"
 	"io"
 	"net"
@@ -372,13 +373,13 @@ func (f *fakeX) waitRequest(ok func(request) bool) request {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		f.mu.Lock()
-		for _, r := range f.log {
+		log := slices.Clone(f.log)
+		f.mu.Unlock()
+		for _, r := range log {
 			if ok(r) {
-				f.mu.Unlock()
 				return r
 			}
 		}
-		f.mu.Unlock()
 		time.Sleep(time.Millisecond)
 	}
 	f.t.Fatal("timed out waiting for a request")
