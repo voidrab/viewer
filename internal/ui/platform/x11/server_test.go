@@ -2,11 +2,11 @@ package x11
 
 import (
 	"bytes"
-	"slices"
 	"errors"
 	"io"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"syscall"
 	"testing"
