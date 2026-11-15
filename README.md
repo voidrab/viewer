@@ -32,9 +32,7 @@ xdg-desktop-portal. Wayland is used where the session offers it, X11
 otherwise; `VIEWRAB_BACKEND=x11` or `VIEWRAB_BACKEND=wayland` picks one.
 
 On Windows 10 1803 or later it runs as a plain Win32 program with the common
-Open and Save dialogs and follows the system's app mode for its theme. Later
-launches find the running one through a unix socket, which Wine lacks: under
-Wine each launch opens its own window.
+Open and Save dialogs and follows the system's app mode for its theme.
 
 ## Usage
 
@@ -45,8 +43,7 @@ make test-windows               # the Win32 backend's tests, under Wine
 sudo make install               # with desktop entry and icon
 make default                    # make Viewrab your default PDF application
 make test                       # Go tests; fails below 100% coverage
-go test -tags xlive -run Live ./internal/ui/platform/x11/  # against $DISPLAY
-viewrab a.pdf b.pdf              # each file opens in its own tab
+viewrab a.pdf b.pdf             # each file opens in its own tab
 ```
 
 | Shortcut                  | Action                          |
