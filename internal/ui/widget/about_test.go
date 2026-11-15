@@ -92,8 +92,8 @@ func TestAboutShowsTheVersion(t *testing.T) {
 		"v":                 "Development build (v)",
 		"vnext":             "Development build (vnext)",
 	} {
-		if got := versionText(v); got != want {
-			t.Errorf("versionText(%q) = %q, want %q", v, got, want)
+		if got := VersionText(v); got != want {
+			t.Errorf("VersionText(%q) = %q, want %q", v, got, want)
 		}
 	}
 }

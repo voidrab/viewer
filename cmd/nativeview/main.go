@@ -12,9 +12,14 @@ import (
 	"viewrab/internal/ui/icon"
 	"viewrab/internal/ui/instance"
 	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println("Viewrab", widget.VersionText(appVersion()))
+		return
+	}
 	tuneGC()
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "nativeview:", err)

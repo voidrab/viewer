@@ -109,7 +109,7 @@ func (a *About) OverLink() bool { return a.Open && a.hover >= 0 }
 func (a *About) rows() []aboutRow {
 	return []aboutRow{
 		{16, []aboutSpan{{"Viewrab", aboutTitle, ""}}},
-		{10, []aboutSpan{{versionText(a.Version), aboutBody, ""}}},
+		{10, []aboutSpan{{VersionText(a.Version), aboutBody, ""}}},
 		{10, []aboutSpan{{"A fast, small and simple PDF viewer", aboutBody, ""}}},
 		{2, []aboutSpan{{"with PDF/A validation", aboutBody, ""}}},
 		{12, []aboutSpan{{"Website", aboutLink, WebsiteURL}}},
@@ -123,11 +123,11 @@ func (a *About) rows() []aboutRow {
 	}
 }
 
-// versionText returns the version line of the About dialog. A release
-// version, which begins with "v" and a digit, is shown as "Version v1.2.0".
-// Any other value, such as the commit of a build from an untagged tree, is
-// shown as a development build.
-func versionText(version string) string {
+// VersionText returns the version line of the About dialog and of
+// --version. A release version, which begins with "v" and a digit, is shown
+// as "Version v1.2.0". Any other value, such as the commit of a build from an
+// untagged tree, is shown as a development build.
+func VersionText(version string) string {
 	switch {
 	case version == "":
 		return "Development build"
