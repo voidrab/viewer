@@ -20,12 +20,21 @@ const uriListMime = "text/uri-list"
 // client messages as the pointer enters, moves over, leaves or drops on the
 // window, and the window answers whether it takes the drop.
 type xdndTarget struct {
-	mu      sync.Mutex
+	mu sync.Mutex
+	xdndDrag
+}
+
+// xdndDrag is the state of one drag from another program.
+type xdndDrag struct {
 	source  uint32  // the dragging program's window, or zero
 	w       *window // the window it is over
 	accept  bool    // the drag carries files
 	entered bool    // a DragEnter has gone out
 	x, y    float64
+	// origin is where the window is on the root, worked out at the first
+	// move; the window stays put while something is dragged over it.
+	origin      image.Point
+	originKnown bool
 	// dropping is set from a drop until its files arrive, and timer bounds
 	// how long they may take.
 	dropping bool
@@ -68,7 +77,7 @@ func (t *xdndTarget) reset() {
 	if t.timer != nil {
 		t.timer.Stop()
 	}
-	t.source, t.w, t.accept, t.entered, t.x, t.y, t.dropping, t.timer = 0, nil, false, false, 0, 0, false, nil
+	t.xdndDrag = xdndDrag{}
 }
 
 // leave tells the window the drag has left it. The caller holds t.mu.
@@ -83,15 +92,22 @@ func (t *xdndTarget) leave() {
 func (t *xdndTarget) onPosition(b *Backend, w *window, source uint32, rootX, rootY int) {
 	t.mu.Lock()
 	ok := source == t.source && t.w == w && !t.dropping
-	accept := t.accept
+	accept, origin, known := t.accept, t.origin, t.originKnown
 	t.mu.Unlock()
 	if !ok {
 		return
 	}
-	x, y, _, err := b.c.translate(b.root, w.id, rootX, rootY)
-	if err != nil {
-		return
+	if !known {
+		ox, oy, _, err := b.c.translate(w.id, b.root, 0, 0)
+		if err != nil {
+			return
+		}
+		origin = image.Pt(ox, oy)
+		t.mu.Lock()
+		t.origin, t.originKnown = origin, true
+		t.mu.Unlock()
 	}
+	x, y := rootX-origin.X, rootY-origin.Y
 	action := uint32(0)
 	if accept {
 		action = b.atom("XdndActionCopy")
@@ -205,6 +221,7 @@ type drag struct {
 	hotspot image.Point
 	over    *window // the window under the pointer, or nil
 	x, y    float64 // where in it
+	spots   map[uint32]dropSpot
 }
 
 // SHAPE's ShapeRectangles request code, with its Set operation and Input
@@ -245,7 +262,7 @@ func (w *window) StartDrag(icon *image.RGBA, hotspot image.Point) bool {
 	// The keyboard is grabbed for Escape, which cancels; without it, the drag
 	// still works.
 	b.c.Send(newReq(opGrabKeyboard, 0).u32(w.id).u32(t).u8(grabModeAsync).u8(grabModeAsync).pad(2))
-	g.on, g.from, g.hotspot, g.over = true, w, hotspot, nil
+	g.on, g.from, g.hotspot, g.over, g.spots = true, w, hotspot, nil, b.dropSpots()
 	rootX, rootY := b.pointerRoot()
 	if icon != nil {
 		g.icon = b.dragIcon(icon, rootX-hotspot.X, rootY-hotspot.Y)
@@ -293,25 +310,63 @@ func (b *Backend) dragIcon(img *image.RGBA, x, y int) uint32 {
 	return id
 }
 
-// windowAt returns the program's window under (rootX, rootY), and where the
-// point is in it, by descending from the root through the windows that hold
-// the point: a window manager's frame, then the window it frames.
-func (b *Backend) windowAt(rootX, rootY int) (*window, float64, float64) {
-	parent := b.root
-	for range 8 {
-		x, y, child, err := b.c.translate(b.root, parent, rootX, rootY)
-		if err != nil {
-			return nil, 0, 0
-		}
-		if w := b.windowFor(parent); w != nil {
-			return w, float64(x), float64(y)
-		}
-		if child == 0 {
-			return nil, 0, 0
-		}
-		parent = child
+// dropSpot is one of the program's windows as a drag sees it: the window,
+// and where its origin is on the root.
+type dropSpot struct {
+	w      *window
+	ox, oy int
+}
+
+// dropSpots maps the top-level window that holds each of the program's
+// windows, a window manager's frame or the window itself, to the window and
+// its origin. Windows stay put during a drag, so this is worked out once, as
+// the drag begins, with the round trips of all windows in flight together.
+func (b *Backend) dropSpots() map[uint32]dropSpot {
+	b.mu.Lock()
+	ws := make([]*window, 0, len(b.windows))
+	for _, w := range b.windows {
+		ws = append(ws, w)
 	}
-	return nil, 0, 0
+	b.mu.Unlock()
+	origins := make([]func() ([]byte, error), len(ws))
+	for i, w := range ws {
+		origins[i] = b.c.Start(newReq(opTranslateCoordinates, 0).u32(w.id).u32(b.root).i16(0).i16(0))
+	}
+	spots := map[uint32]dropSpot{}
+	for i, w := range ws {
+		rep, err := origins[i]()
+		if top := b.topLevel(w.id); err == nil && top != 0 {
+			spots[top] = dropSpot{w: w, ox: i16At(rep, 12), oy: i16At(rep, 14)}
+		}
+	}
+	return spots
+}
+
+// topLevel returns the child of the root that holds window, or zero.
+func (b *Backend) topLevel(window uint32) uint32 {
+	for range 8 {
+		rep, err := b.c.Call(newReq(opQueryTree, 0).u32(window))
+		if err != nil {
+			return 0
+		}
+		if parent := u32At(rep, 12); parent != b.root {
+			window = parent
+			continue
+		}
+		return window
+	}
+	return 0
+}
+
+// windowAt returns the program's window under (rootX, rootY), and where the
+// point is in it: the top-level window under the point, looked up in spots.
+func (b *Backend) windowAt(spots map[uint32]dropSpot, rootX, rootY int) (*window, float64, float64) {
+	_, _, top, err := b.c.translate(b.root, b.root, rootX, rootY)
+	s, ok := spots[top]
+	if err != nil || !ok {
+		return nil, 0, 0
+	}
+	return s.w, float64(rootX - s.ox), float64(rootY - s.oy)
 }
 
 // update follows the pointer to (rootX, rootY): the icon moves with it, and
@@ -321,7 +376,7 @@ func (g *drag) update(b *Backend, rootX, rootY int) {
 		b.c.Send(newReq(opConfigureWindow, 0).u32(g.icon).u16(1 | 2).pad(2).
 			u32(uint32(int32(rootX - g.hotspot.X))).u32(uint32(int32(rootY - g.hotspot.Y))))
 	}
-	w, x, y := b.windowAt(rootX, rootY)
+	w, x, y := b.windowAt(g.spots, rootX, rootY)
 	switch {
 	case w != g.over:
 		if g.over != nil {

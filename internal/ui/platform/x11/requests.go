@@ -12,6 +12,7 @@ const (
 	opDestroyWindow         = 4
 	opMapWindow             = 8
 	opConfigureWindow       = 12
+	opQueryTree             = 15
 	opInternAtom            = 16
 	opChangeProperty        = 18
 	opDeleteProperty        = 19
