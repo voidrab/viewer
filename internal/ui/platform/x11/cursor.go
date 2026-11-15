@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // RENDER minor opcodes.

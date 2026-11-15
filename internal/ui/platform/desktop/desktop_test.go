@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 func TestParseURIList(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/ui/widget"
 )
 
 // panelScrollSpeed multiplies wheel distances over the PDF/A panel, as the page

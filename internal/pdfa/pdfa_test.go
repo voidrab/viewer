@@ -12,7 +12,7 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/testpdf"
+	"viewrab/internal/testpdf"
 )
 
 func sample(t *testing.T) string { return testpdf.Sample(t, "doc.pdf") }

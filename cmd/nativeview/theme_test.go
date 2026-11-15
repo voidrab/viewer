@@ -28,7 +28,7 @@ func TestThemesFollowTheDesktopUntilTheUserChooses(t *testing.T) {
 	if err := th.save(true); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(filepath.Join(dir, "viewer", "theme")); err != nil || string(b) != "dark\n" {
+	if b, err := os.ReadFile(filepath.Join(dir, "viewrab", "theme")); err != nil || string(b) != "dark\n" {
 		t.Errorf("kept %q, %v", b, err)
 	}
 	if !th.dark() || th.systemChanged(false) {
@@ -50,7 +50,7 @@ func TestThemesFollowTheDesktopUntilTheUserChooses(t *testing.T) {
 	if err := th.save(true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "viewer", "theme")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "viewrab", "theme")); !os.IsNotExist(err) {
 		t.Errorf("the choice was not forgotten: %v", err)
 	}
 	if !th.systemChanged(true) {
@@ -71,7 +71,7 @@ func TestThemesWithNowhereToKeepTheChoice(t *testing.T) {
 func TestThemesIgnoreAnUnreadableChoice(t *testing.T) {
 	dir := t.TempDir()
 	th := newThemes(dir)
-	path := filepath.Join(dir, "viewer", "theme")
+	path := filepath.Join(dir, "viewrab", "theme")
 	os.MkdirAll(filepath.Dir(path), 0o755)
 	os.WriteFile(path, []byte("purple"), 0o644)
 	if _, ok := th.chosen(); ok {
@@ -84,7 +84,7 @@ func TestThemesIgnoreAnUnreadableChoice(t *testing.T) {
 	}
 	// A choice that cannot be removed reports the error too.
 	ro := newThemes(dir)
-	ro.path = filepath.Join(dir, "viewer") // a directory that is not empty
+	ro.path = filepath.Join(dir, "viewrab") // a directory that is not empty
 	ro.setSystem(true, true)
 	if err := ro.save(true); err == nil {
 		t.Error("forgetting a choice that cannot be removed did not fail")

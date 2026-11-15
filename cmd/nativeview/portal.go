@@ -8,7 +8,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"viewer/internal/ui/portal"
+	"viewrab/internal/ui/portal"
 )
 
 const (

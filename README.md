@@ -1,4 +1,4 @@
-# Viewer
+# Viewrab
 
 A fast, small and simple PDF viewer with built-in PDF/A validation and
 conversion. Pure Go: no cgo or Node. It renders with
@@ -23,23 +23,23 @@ Wayland or X11 directly.
   read by byte range
 - Console-style UI with the toolbar as the title bar, Adwaita Mono type, and a
   light/dark theme that follows the desktop until you pick one (kept in
-  `~/.config/viewer/theme`)
+  `~/.config/viewrab/theme`)
 
 ## Requirements
 
 Go 1.24+, a Wayland or X11 session and, for the Open/Save dialogs,
 xdg-desktop-portal. Wayland is used where the session offers it, X11
-otherwise; `VIEWER_BACKEND=x11` or `VIEWER_BACKEND=wayland` picks one.
+otherwise; `VIEWRAB_BACKEND=x11` or `VIEWRAB_BACKEND=wayland` picks one.
 
 ## Usage
 
 ```sh
-make build                      # bin/viewer, a static binary
+make build                      # bin/viewrab, a static binary
 sudo make install               # with desktop entry and icon
-make default                    # make Viewer your default PDF application
+make default                    # make Viewrab your default PDF application
 make test                       # Go tests; fails below 100% coverage
 go test -tags xlive -run Live ./internal/ui/platform/x11/  # against $DISPLAY
-viewer a.pdf b.pdf              # each file opens in its own tab
+viewrab a.pdf b.pdf              # each file opens in its own tab
 ```
 
 | Shortcut                  | Action                          |

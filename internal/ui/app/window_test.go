@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/testpdf"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/testpdf"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 // calls returns the window management calls made since the last call to it.

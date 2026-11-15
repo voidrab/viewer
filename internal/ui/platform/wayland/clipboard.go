@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/platform/desktop"
 )
 
 // Opcodes and events of wl_data_device_manager, wl_data_device, wl_data_source

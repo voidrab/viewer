@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"testing"
 
-	"viewer/internal/ui/paint"
+	"viewrab/internal/ui/paint"
 )
 
 var black = color.NRGBA{0, 0, 0, 255}

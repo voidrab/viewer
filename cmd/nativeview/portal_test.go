@@ -6,7 +6,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"viewer/internal/ui/portal"
+	"viewrab/internal/ui/portal"
 )
 
 func TestParseResponse(t *testing.T) {

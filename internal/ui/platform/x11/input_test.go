@@ -3,7 +3,7 @@ package x11
 import (
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 func TestKeymapLookup(t *testing.T) {

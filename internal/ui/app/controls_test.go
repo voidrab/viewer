@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/pageview"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/ui/pageview"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // typeKeys types s, rune by rune.

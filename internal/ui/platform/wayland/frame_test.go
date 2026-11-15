@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // frameDone signals the frame callback the client asked for last.

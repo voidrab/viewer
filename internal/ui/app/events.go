@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"viewer/internal/ui/pageview"
+	"viewrab/internal/ui/pageview"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/widget"
 )
 
 // hit returns the section at p. The window's frame lies over the edges of the

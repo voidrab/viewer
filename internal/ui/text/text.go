@@ -13,7 +13,7 @@ import (
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
-	"viewer/internal/ui/paint"
+	"viewrab/internal/ui/paint"
 )
 
 // The embedded Adwaita Mono fonts, subset to Latin, Greek, Cyrillic and common

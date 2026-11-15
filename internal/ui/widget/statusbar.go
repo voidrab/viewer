@@ -4,9 +4,9 @@ import (
 	"image"
 	"image/color"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
 )
 
 // MessageKind selects the colour of a status message.

@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // withWM makes the fake server look managed by a window manager that

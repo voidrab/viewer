@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // xcursorFile encodes an Xcursor file with one image of each nominal size,

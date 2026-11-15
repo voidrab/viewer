@@ -3,9 +3,9 @@ package x11
 import (
 	"time"
 	"unicode/utf8"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // after is replaced by tests.
@@ -184,7 +184,7 @@ func (b *Backend) clipProperty(window, prop uint32, deleted bool) {
 			b.mu.Unlock()
 			b.c.Send(changeAttrs(window, (&windowAttrs{}).set(cwEventMask, 0)))
 		}
-	case p != nil && p.incr && !deleted && window == b.selWin && prop == b.atom("VIEWER_SELECTION"):
+	case p != nil && p.incr && !deleted && window == b.selWin && prop == b.atom("VIEWRAB_SELECTION"):
 		v, err := b.c.getProperty(b.selWin, prop, true, desktop.MaxPaste)
 		if err != nil {
 			b.endPaste(p, nil)
@@ -227,7 +227,7 @@ func (b *Backend) requestPaste(w *window) {
 // convert asks the clipboard's owner for its text as target.
 func (b *Backend) convert(target uint32) {
 	b.c.Send(newReq(opConvertSelection, 0).u32(b.selWin).u32(b.atom("CLIPBOARD")).u32(target).
-		u32(b.atom("VIEWER_SELECTION")).u32(b.in.now()))
+		u32(b.atom("VIEWRAB_SELECTION")).u32(b.in.now()))
 }
 
 // endPaste ends paste p, delivering data as its text unless it is empty.

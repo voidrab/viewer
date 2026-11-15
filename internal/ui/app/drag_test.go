@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // barPoint returns the window coordinates of the tab bar's gap before tab i,

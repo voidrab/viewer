@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 func TestWindowManagementRequestsFollowTheLatestPress(t *testing.T) {

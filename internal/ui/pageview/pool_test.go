@@ -12,9 +12,9 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/testpdf"
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/testpdf"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 // tracker records which parts of pages are rendered, in which order, and lets a

@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/ui/icon"
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/ui/icon"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
 )
 
 // PanelWidth is the width of the PDF/A panel in a window wide enough for it.

@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/image/vector"
 
-	"viewer/internal/ui/paint"
+	"viewrab/internal/ui/paint"
 )
 
 // Grid is the side of the square the icons are drawn on.

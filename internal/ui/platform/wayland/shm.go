@@ -22,7 +22,7 @@ type shmMem struct {
 
 // newShmMem creates size bytes of shared memory.
 func newShmMem(size int) (*shmMem, error) {
-	fd, err := memfdCreate("viewer-shm", unix.MFD_CLOEXEC)
+	fd, err := memfdCreate("viewrab-shm", unix.MFD_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("wayland: memfd_create: %w", err)
 	}

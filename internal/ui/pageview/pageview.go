@@ -14,9 +14,9 @@ import (
 
 	"github.com/voidrab/gopdfrab"
 
-	"viewer/internal/ui/layout"
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/layout"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 // Options tunes a View. The zero value is usable.

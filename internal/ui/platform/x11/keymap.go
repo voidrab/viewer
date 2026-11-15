@@ -3,9 +3,9 @@ package x11
 import (
 	"sync"
 	"unicode"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // Keysyms that the modifier mapping is searched for.

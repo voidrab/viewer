@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 var decorationGlobals = append(append([]Global(nil), wmGlobals...), Global{Name: 9, Interface: "zxdg_decoration_manager_v1", Version: 1})

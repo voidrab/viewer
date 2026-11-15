@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Viewer
+Name=Viewrab
 GenericName=PDF Viewer
 Comment=Fast, simple PDF viewer with PDF/A validation
-Exec=viewer %f
-Icon=com.voidrab.gopdfrab.Viewer
+Exec=viewrab %f
+Icon=com.voidrab.gopdfrab.Viewrab
 Terminal=false
 StartupNotify=true
-StartupWMClass=com.voidrab.gopdfrab.Viewer
+StartupWMClass=com.voidrab.gopdfrab.Viewrab
 Categories=Office;Viewer;
 Keywords=pdf;document;pdfa;
 MimeType=application/pdf;

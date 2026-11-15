@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/platform/desktop"
 )
 
 // The bits of the XKB modifier mask have fixed positions.

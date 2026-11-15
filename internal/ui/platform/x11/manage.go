@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // _NET_WM_MOVERESIZE directions, and the source of a request made by an

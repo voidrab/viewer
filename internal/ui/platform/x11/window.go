@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // frameInterval is the shortest time between two frames. The server gives

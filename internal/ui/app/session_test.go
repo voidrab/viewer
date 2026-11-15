@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"viewer/internal/pdfa"
-	"viewer/internal/testpdf"
-	"viewer/internal/ui/instance"
-	"viewer/internal/ui/platform"
-	"viewer/internal/ui/text"
-	"viewer/internal/ui/theme"
-	"viewer/internal/ui/widget"
+	"viewrab/internal/pdfa"
+	"viewrab/internal/testpdf"
+	"viewrab/internal/ui/instance"
+	"viewrab/internal/ui/platform"
+	"viewrab/internal/ui/text"
+	"viewrab/internal/ui/theme"
+	"viewrab/internal/ui/widget"
 )
 
 // multi is a session of windows that run their own event loops on fake
@@ -233,7 +233,7 @@ func TestATabDraggedOutsideOpensInANewWindow(t *testing.T) {
 	second, sw := m.opened(2)
 	m.waitNames(second, "b.pdf")
 	m.waitNames(first, "a.pdf")
-	waitFor(t, "the new window's title", func() bool { return sw.Title() == "b.pdf — Viewer" })
+	waitFor(t, "the new window's title", func() bool { return sw.Title() == "b.pdf — Viewrab" })
 	// Its only tab dragged out too, the window moves to a new one and closes.
 	m.dragOut(second, sw, 0)
 	sw.Send(platform.DragEndEvent{Outside: true})

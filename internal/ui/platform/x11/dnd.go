@@ -5,9 +5,9 @@ import (
 	"slices"
 	"sync"
 	"time"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // xdndTarget is the state of a drag from another program over one of the

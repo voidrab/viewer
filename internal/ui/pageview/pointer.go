@@ -4,8 +4,8 @@ import (
 	"image"
 	"image/color"
 
-	"viewer/internal/ui/paint"
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/paint"
+	"viewrab/internal/ui/platform"
 )
 
 // barThin, barWide, barInset and minThumb size the scrollbars drawn over the

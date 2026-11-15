@@ -6,9 +6,9 @@ import (
 	"os"
 	"slices"
 	"sync"
-	"viewer/internal/ui/platform/desktop"
+	"viewrab/internal/ui/platform/desktop"
 
-	"viewer/internal/ui/platform"
+	"viewrab/internal/ui/platform"
 )
 
 // Event codes of the core protocol.
@@ -43,7 +43,7 @@ var atomNames = []string{
 	"_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DND", "_NET_STARTUP_ID",
 	"_NET_STARTUP_INFO_BEGIN", "_NET_STARTUP_INFO", "_MOTIF_WM_HINTS", "_GTK_SHOW_WINDOW_MENU",
 	"CLIPBOARD", "TARGETS", "TEXT", "INCR", "text/plain;charset=utf-8", "text/plain",
-	"VIEWER_SELECTION", "XdndAware", "XdndEnter", "XdndPosition", "XdndStatus", "XdndLeave",
+	"VIEWRAB_SELECTION", "XdndAware", "XdndEnter", "XdndPosition", "XdndStatus", "XdndLeave",
 	"XdndDrop", "XdndFinished", "XdndSelection", "XdndTypeList", "XdndActionCopy",
 	desktop.URIListMime,
 }
