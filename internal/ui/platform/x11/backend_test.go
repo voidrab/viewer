@@ -352,20 +352,25 @@ func TestNewWindowSetsPropertiesAndMaps(t *testing.T) {
 
 func TestNewWindowFails(t *testing.T) {
 	f, b := startBackend(t, nil)
-	f.set(func(f *fakeX) {
-		f.handle = func(f *fakeX, r request) bool {
-			if r.op == opCreateWindow {
-				f.sock.Close()
-				return true
-			}
-			return false
-		}
-	})
-	if _, err := b.NewWindow(platform.WindowOptions{}); err == nil {
-		t.Error("NewWindow succeeded on a closed connection")
+	// A CreateWindow too large for the server, then properties that are: an
+	// icon of 40 kB.
+	b.c.Setup.MaxRequest = 44
+	if _, err := b.NewWindow(platform.WindowOptions{}); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("window: %v", err)
 	}
-	if _, err := b.NewWindow(platform.WindowOptions{}); err == nil {
-		t.Error("second NewWindow succeeded")
+	b.c.Setup.MaxRequest = 1000
+	icon := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	if _, err := b.NewWindow(platform.WindowOptions{Icon: icon}); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("icon: %v", err)
+	}
+	b.c.Sync()
+	if n := len(f.requests(opDestroyWindow)); n != 1 {
+		t.Errorf("windows destroyed: %d", n)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.windows) != 0 {
+		t.Errorf("windows kept: %d", len(b.windows))
 	}
 }
 
