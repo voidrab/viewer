@@ -1,6 +1,6 @@
 // Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
-// on Wayland or X11. Every argument opens in its own tab, in the window last
-// used by the instance already running if there is one.
+// on Wayland, X11 or Windows. Every argument opens in its own tab, in the
+// window last used by the instance already running if there is one.
 package main
 
 import (
@@ -50,6 +50,7 @@ func run(paths []string) error {
 	// A second launch hands its files to the running window and ends. Without
 	// a usable socket the program simply runs on its own.
 	var requests <-chan instance.Request
+	allowActivation()
 	srv, forwarded, err := instance.Claim(instance.DefaultPath("viewrab-native"), instance.Request{
 		Paths: paths,
 		Token: activationToken(),

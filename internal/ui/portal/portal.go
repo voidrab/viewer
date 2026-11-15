@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package portal asks the desktop's file chooser, through the
 // xdg-desktop-portal D-Bus service, for files to open and where to save one.
 // It holds the protocol logic; the D-Bus connection itself is supplied as a

@@ -1,4 +1,4 @@
-//go:build xlive
+//go:build xlive && !windows
 
 // Live tests against the X server named by $DISPLAY. They open real windows
 // briefly, so they run only when asked for:

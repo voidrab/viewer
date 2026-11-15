@@ -1,3 +1,5 @@
+//go:build !windows
+
 package x11
 
 import (

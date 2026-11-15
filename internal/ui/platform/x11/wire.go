@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package x11 is a pure-Go X11 client: the core protocol over a unix or TCP
 // socket, the MIT-SHM, SHAPE and RENDER extensions, and the window manager
 // conventions (ICCCM, EWMH, XDND) a software-rendered window needs.

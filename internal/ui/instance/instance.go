@@ -6,13 +6,11 @@ package instance
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -22,15 +20,6 @@ import (
 type Request struct {
 	Paths []string `json:"paths"`
 	Token string   `json:"token,omitempty"`
-}
-
-// DefaultPath returns where the socket of the program called name lives: in
-// the user's runtime directory, or the temporary directory without one.
-func DefaultPath(name string) string {
-	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
-		return filepath.Join(dir, name+".sock")
-	}
-	return filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d.sock", name, os.Getuid()))
 }
 
 // ioTimeout bounds how long either end waits on the other.
@@ -58,7 +47,7 @@ func Claim(path string, req Request) (srv *Server, forwarded bool, err error) {
 	}
 	req.Paths = abs
 	ln, err := net.Listen("unix", path)
-	if errors.Is(err, syscall.EADDRINUSE) {
+	if addrInUse(err) {
 		// A live instance holds the socket, or an earlier one died without
 		// removing it.
 		if send(path, req) == nil {

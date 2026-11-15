@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/godbus/dbus/v5"
 )
 
 func TestThemesFollowTheDesktopUntilTheUserChooses(t *testing.T) {
@@ -88,24 +86,5 @@ func TestThemesIgnoreAnUnreadableChoice(t *testing.T) {
 	ro.setSystem(true, true)
 	if err := ro.save(true); err == nil {
 		t.Error("forgetting a choice that cannot be removed did not fail")
-	}
-}
-
-func TestSchemeIsDark(t *testing.T) {
-	for _, tc := range []struct {
-		v        any
-		dark, ok bool
-	}{
-		{uint32(1), true, true},
-		{uint32(2), false, true},
-		{uint32(0), false, true},
-		{dbus.MakeVariant(uint32(1)), true, true},
-		{dbus.MakeVariant(dbus.MakeVariant(uint32(1))), true, true},
-		{dbus.MakeVariant("dark"), false, false},
-		{nil, false, false},
-	} {
-		if dark, ok := schemeIsDark(tc.v); dark != tc.dark || ok != tc.ok {
-			t.Errorf("schemeIsDark(%v) = %v, %v", tc.v, dark, ok)
-		}
 	}
 }

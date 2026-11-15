@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -69,7 +70,7 @@ func (m *multi) pdf(name string) string {
 func names(paths []string) []string {
 	var out []string
 	for _, p := range paths {
-		out = append(out, p[strings.LastIndexByte(p, '/')+1:])
+		out = append(out, filepath.Base(p))
 	}
 	return out
 }
