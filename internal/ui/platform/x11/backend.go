@@ -2,7 +2,6 @@ package x11
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"slices"
@@ -38,14 +37,14 @@ var atomNames = []string{
 	"WM_PROTOCOLS", "WM_DELETE_WINDOW", "WM_CHANGE_STATE", "WM_CLIENT_MACHINE",
 	"UTF8_STRING", "_NET_WM_NAME", "_NET_WM_PID", "_NET_WM_PING", "_NET_WM_ICON",
 	"_NET_WM_STATE", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ",
-	"_NET_WM_STATE_FULLSCREEN", "_NET_WM_STATE_HIDDEN", "_NET_WM_MOVERESIZE", "_NET_ACTIVE_WINDOW",
+	"_NET_WM_STATE_FULLSCREEN", "_NET_WM_MOVERESIZE", "_NET_ACTIVE_WINDOW",
 	"_NET_SUPPORTED", "_NET_SUPPORTING_WM_CHECK", "_NET_WM_WINDOW_TYPE",
 	"_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DND", "_NET_STARTUP_ID",
 	"_NET_STARTUP_INFO_BEGIN", "_NET_STARTUP_INFO", "_MOTIF_WM_HINTS", "_GTK_SHOW_WINDOW_MENU",
 	"CLIPBOARD", "TARGETS", "TEXT", "INCR", "text/plain;charset=utf-8", "text/plain",
 	"VIEWER_SELECTION", "XdndAware", "XdndEnter", "XdndPosition", "XdndStatus", "XdndLeave",
 	"XdndDrop", "XdndFinished", "XdndSelection", "XdndTypeList", "XdndActionCopy",
-	"XdndActionPrivate", uriListMime, "_XSETTINGS_S0",
+	uriListMime,
 }
 
 // eventQueue is how many events a window buffers before it starts dropping
@@ -70,6 +69,7 @@ type Backend struct {
 	// colormap; zero when the server has none.
 	argb         uint32
 	argbColormap uint32
+	argbPixels   pixelFormat
 
 	shm    extension // MIT-SHM, usable only with descriptor passing
 	shape  extension
@@ -202,8 +202,8 @@ func (b *Backend) pickVisual() error {
 	}
 	for _, v := range b.screen.Visuals {
 		if v.Class == visualTrueColor && v.Depth == 32 && bpp[32] == 32 {
-			if _, ok := newPixelFormat(v, b.c.Setup.ImageByteOrder); ok {
-				b.argb = v.ID
+			if pf, ok := newPixelFormat(v, b.c.Setup.ImageByteOrder); ok {
+				b.argb, b.argbPixels = v.ID, pf
 				b.argbColormap = b.c.NewID()
 				return b.c.Send(newReq(opCreateColormap, 0).u32(b.argbColormap).u32(b.root).u32(v.ID))
 			}
@@ -373,12 +373,9 @@ func (b *Backend) onClientMessage(ev []byte) {
 		case b.atom("_NET_WM_PING"):
 			reply := slices.Clone(ev)
 			order.PutUint32(reply[4:], b.root)
-			b.c.Send(sendEvent(b.root, maskSubstructureNotify|maskSubstructureRedirct, reply))
+			b.c.Send(sendEvent(b.root, maskSubstructureNotify|maskSubstructureRedirect, reply))
 		}
 	default:
 		b.drop.onMessage(b, w, typ, data)
 	}
 }
-
-// fail reports an error of the backend's own making.
-func fail(format string, args ...any) error { return fmt.Errorf("x11: "+format, args...) }

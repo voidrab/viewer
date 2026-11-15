@@ -27,7 +27,6 @@ const (
 	opTranslateCoordinates  = 40
 	opGetInputFocus         = 43
 	opOpenFont              = 45
-	opCloseFont             = 46
 	opListFonts             = 49
 	opCreatePixmap          = 53
 	opFreePixmap            = 54
@@ -35,9 +34,7 @@ const (
 	opFreeGC                = 60
 	opPutImage              = 72
 	opCreateColormap        = 78
-	opFreeColormap          = 79
 	opCreateGlyphCursor     = 94
-	opFreeCursor            = 95
 	opQueryExtension        = 98
 	opGetKeyboardMapping    = 101
 	opGetModifierMapping    = 119
@@ -57,19 +54,19 @@ const (
 
 // Event mask bits.
 const (
-	maskKeyPress            = 1 << 0
-	maskKeyRelease          = 1 << 1
-	maskButtonPress         = 1 << 2
-	maskButtonRelease       = 1 << 3
-	maskEnterWindow         = 1 << 4
-	maskLeaveWindow         = 1 << 5
-	maskPointerMotion       = 1 << 6
-	maskExposure            = 1 << 15
-	maskStructureNotify     = 1 << 17
-	maskSubstructureNotify  = 1 << 19
-	maskSubstructureRedirct = 1 << 20
-	maskFocusChange         = 1 << 21
-	maskPropertyChange      = 1 << 22
+	maskKeyPress             = 1 << 0
+	maskKeyRelease           = 1 << 1
+	maskButtonPress          = 1 << 2
+	maskButtonRelease        = 1 << 3
+	maskEnterWindow          = 1 << 4
+	maskLeaveWindow          = 1 << 5
+	maskPointerMotion        = 1 << 6
+	maskExposure             = 1 << 15
+	maskStructureNotify      = 1 << 17
+	maskSubstructureNotify   = 1 << 19
+	maskSubstructureRedirect = 1 << 20
+	maskFocusChange          = 1 << 21
+	maskPropertyChange       = 1 << 22
 )
 
 // Property change modes.
@@ -84,7 +81,6 @@ const (
 	atomAtom      = 4
 	atomCardinal  = 6
 	atomString    = 31
-	atomWindow    = 33
 	atomWMHints   = 35
 	atomWMName    = 39
 	atomWMNormal  = 40

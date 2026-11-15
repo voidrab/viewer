@@ -48,7 +48,7 @@ type paste struct {
 }
 
 // textTargets are the formats offered for the clipboard's text, best first.
-var textTargets = []string{"UTF8_STRING", "text/plain;charset=utf-8", "STRING", "TEXT", "text/plain"}
+var textTargets = []string{"UTF8_STRING", "text/plain;charset=utf-8", "TEXT", "text/plain"}
 
 // SetClipboard implements platform.Window.
 func (w *window) SetClipboard(text string) { w.b.setClipboard(text) }
@@ -104,14 +104,14 @@ func (b *Backend) onSelectionRequest(ev []byte) {
 	switch target {
 	case b.atom("TARGETS"):
 		typ, format = atomAtom, 32
-		atoms := []uint32{b.atom("TARGETS")}
+		atoms := []uint32{b.atom("TARGETS"), atomString}
 		for _, n := range textTargets {
 			atoms = append(atoms, b.atom(n))
 		}
 		data = propU32(atoms...)
 	case b.atom("UTF8_STRING"), b.atom("text/plain;charset=utf-8"):
 		typ, data = target, []byte(text)
-	case b.atom("STRING"), b.atom("TEXT"), b.atom("text/plain"):
+	case atomString, b.atom("TEXT"), b.atom("text/plain"):
 		typ, data = atomString, latin1(text)
 	default:
 		b.notifySelection(t, requestor, selection, target, atomNone)

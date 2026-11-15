@@ -29,7 +29,17 @@ var moveResizeDirs = map[platform.Edge]uint32{
 
 // toRoot sends a client message about window to the window manager.
 func (b *Backend) toRoot(window uint32, typ string, data ...uint32) {
-	b.c.Send(sendEvent(b.root, maskSubstructureNotify|maskSubstructureRedirct, clientMessage(window, b.atom(typ), data...)))
+	b.c.Send(sendEvent(b.root, maskSubstructureNotify|maskSubstructureRedirect, clientMessage(window, b.atom(typ), data...)))
+}
+
+// releaseToWM frees the pointer, which the latest button press holds for the
+// window, so the window manager can take it, and returns that press.
+func (b *Backend) releaseToWM() press {
+	b.in.mu.Lock()
+	p := b.in.press
+	b.in.mu.Unlock()
+	b.c.Send(newReq(opUngrabPointer, 0).u32(b.in.now()))
+	return p
 }
 
 // moveResize hands the pointer to the window manager, which moves or
@@ -40,11 +50,7 @@ func (w *window) moveResize(dir uint32) {
 	if !b.supports("_NET_WM_MOVERESIZE") {
 		return
 	}
-	b.in.mu.Lock()
-	p := b.in.press
-	b.in.mu.Unlock()
-	// The press holds the pointer for the window; the manager needs it free.
-	b.c.Send(newReq(opUngrabPointer, 0).u32(b.in.now()))
+	p := b.releaseToWM()
 	b.toRoot(w.id, "_NET_WM_MOVERESIZE", uint32(p.rootX), uint32(p.rootY), dir, uint32(p.button), sourceApp)
 }
 
@@ -65,10 +71,7 @@ func (w *window) ShowMenu(x, y int) {
 	if !b.supports("_GTK_SHOW_WINDOW_MENU") {
 		return
 	}
-	b.in.mu.Lock()
-	p := b.in.press
-	b.in.mu.Unlock()
-	b.c.Send(newReq(opUngrabPointer, 0).u32(b.in.now()))
+	p := b.releaseToWM()
 	b.toRoot(w.id, "_GTK_SHOW_WINDOW_MENU", 0, uint32(p.rootX-p.x+x), uint32(p.rootY-p.y+y))
 }
 
@@ -96,7 +99,7 @@ func (w *window) Activate(token string) {
 	b := w.b
 	t := b.in.now()
 	if token != "" {
-		b.sendStartup("remove: ID=" + quoteStartup(token))
+		b.removeStartup(token)
 		if i := strings.LastIndex(token, "_TIME"); i >= 0 {
 			if n, err := strconv.ParseUint(token[i+5:], 10, 32); err == nil {
 				t = uint32(n)
@@ -114,9 +117,12 @@ func (b *Backend) endStartup() {
 	b.startupID = ""
 	b.startupMu.Unlock()
 	if id != "" {
-		b.sendStartup("remove: ID=" + quoteStartup(id))
+		b.removeStartup(id)
 	}
 }
+
+// removeStartup ends the startup notification id.
+func (b *Backend) removeStartup(id string) { b.sendStartup("remove: ID=" + quoteStartup(id)) }
 
 // quoteStartup quotes a value of a startup notification message.
 func quoteStartup(s string) string {

@@ -202,11 +202,7 @@ func themeInherits(path string) []string {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		if k, v, ok := strings.Cut(sc.Text(), "="); ok && strings.TrimSpace(k) == "Inherits" {
-			var out []string
-			for _, t := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
-				out = append(out, t)
-			}
-			return out
+			return strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' || r == ' ' })
 		}
 	}
 	return nil

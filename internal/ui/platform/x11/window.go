@@ -140,15 +140,8 @@ func iconData(img image.Image) []byte {
 // setTitle sets both the legacy Latin-1 and the UTF-8 title.
 func (w *window) setTitle(title string) error {
 	b := w.b
-	latin := make([]byte, 0, len(title))
-	for _, r := range title {
-		if r > 0xff {
-			r = '?'
-		}
-		latin = append(latin, byte(r))
-	}
 	return errors.Join(
-		b.c.Send(changeProperty(propReplace, w.id, atomWMName, atomString, 8, latin)),
+		b.c.Send(changeProperty(propReplace, w.id, atomWMName, atomString, 8, latin1(title))),
 		b.c.Send(changeProperty(propReplace, w.id, b.atom("_NET_WM_NAME"), b.atom("UTF8_STRING"), 8, []byte(title))),
 	)
 }
@@ -268,26 +261,30 @@ func (w *window) Invalidate() {
 func (w *window) Present(img *image.RGBA) {
 	size := platform.Size{W: img.Rect.Dx(), H: img.Rect.Dy()}
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.frameQueued = false
 	if w.closed || !w.mapped || w.busy || size != w.size || size.W == 0 || size.H == 0 || !w.buffer(size) {
 		if w.frameWanted {
 			w.requestFrame()
 		}
+		w.mu.Unlock()
 		return
 	}
+	// busy keeps the buffer from being replaced or freed meanwhile, so the
+	// frame is converted and sent without holding up event dispatch.
+	w.busy = true
+	seg, pix := w.seg, w.pix
+	w.mu.Unlock()
 	b := w.b
-	if w.seg != nil {
-		b.pixels.convert(w.seg.data, 4*size.W, img)
+	start := time.Now()
+	if seg != nil {
+		b.pixels.convert(seg.data, 4*size.W, img)
 		b.c.Send(newReq(b.shm.major, shmPutImage).u32(w.id).u32(w.gc).
 			u16(uint16(size.W)).u16(uint16(size.H)).u16(0).u16(0).u16(uint16(size.W)).u16(uint16(size.H)).
-			i16(0).i16(0).u8(b.depth).u8(imageFormatZPixmap).u8(0).pad(1).u32(w.seg.id).u32(0))
+			i16(0).i16(0).u8(b.depth).u8(imageFormatZPixmap).u8(0).pad(1).u32(seg.id).u32(0))
 	} else {
-		b.pixels.convert(w.pix, 4*size.W, img)
-		b.putImage(w.id, w.gc, b.depth, size.W, size.H, w.pix)
+		b.pixels.convert(pix, 4*size.W, img)
+		b.putImage(w.id, w.gc, b.depth, size.W, size.H, pix)
 	}
-	w.busy = true
-	start := time.Now()
 	// Once the server has drawn the frame, and so is done with the memory,
 	// and the interval has passed, the next frame may come.
 	go func() {
@@ -296,6 +293,10 @@ func (w *window) Present(img *image.RGBA) {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		w.busy = false
+		if w.closed {
+			w.freeBuffer() // left to this moment by Close
+			return
+		}
 		if err == nil && w.frameWanted {
 			w.requestFrame()
 		}
@@ -334,29 +335,30 @@ func (w *window) freeBuffer() {
 // Close implements platform.Window: it destroys the window and closes the
 // Events channel.
 func (w *window) Close() {
-	w.mu.Lock()
-	if w.closed {
-		w.mu.Unlock()
+	if !w.shutdown() {
 		return
 	}
-	w.freeBuffer()
-	w.mu.Unlock()
 	c := w.b.c
 	c.Send(newReq(opFreeGC, 0).u32(w.gc))
 	c.Send(newReq(opDestroyWindow, 0).u32(w.id))
-	w.shutdown()
 }
 
-// shutdown ends the window's event stream.
-func (w *window) shutdown() {
+// shutdown ends the window's event stream and frees its frame memory, or
+// leaves that to the frame in flight. It reports false if the window had
+// already closed.
+func (w *window) shutdown() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		return
+		return false
 	}
 	w.closed = true
 	close(w.events)
+	if !w.busy {
+		w.freeBuffer()
+	}
 	w.b.mu.Lock()
 	delete(w.b.windows, w.id)
 	w.b.mu.Unlock()
+	return true
 }

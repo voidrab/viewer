@@ -399,13 +399,9 @@ func TestReaderReportsShortFields(t *testing.T) {
 	if d.err != ErrShortReply {
 		t.Errorf("err = %v", d.err)
 	}
-	d = &reader{b: []byte{0xff, 0xff, 'h', 'i'}}
-	if d.i16() != -1 || d.str(2) != "hi" {
-		t.Error("i16/str")
-	}
-	d.at(0)
-	if d.u8() != 0xff {
-		t.Error("at")
+	d = &reader{b: []byte{'h', 'i', 7}}
+	if d.str(2) != "hi" || d.u8() != 7 {
+		t.Error("str/u8")
 	}
 }
 

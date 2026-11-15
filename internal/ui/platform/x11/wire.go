@@ -80,9 +80,7 @@ func (d *reader) take(n int) []byte {
 func (d *reader) u8() byte    { return d.take(1)[0] }
 func (d *reader) u16() uint16 { return order.Uint16(d.take(2)) }
 func (d *reader) u32() uint32 { return order.Uint32(d.take(4)) }
-func (d *reader) i16() int    { return int(int16(d.u16())) }
 func (d *reader) skip(n int)  { d.take(n) }
-func (d *reader) at(off int)  { d.off = off }
 func (d *reader) str(n int) string {
 	return string(d.take(n))
 }

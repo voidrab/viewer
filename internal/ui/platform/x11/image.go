@@ -133,8 +133,10 @@ func (b *Backend) putImage(drawable, gc uint32, depth byte, w, h int, pix []byte
 	rows := max(1, (b.c.Setup.MaxRequest-header)/(4*w))
 	for y := 0; y < h; y += rows {
 		n := min(rows, h-y)
-		r := newReq(opPutImage, imageFormatZPixmap).u32(drawable).u32(gc).u16(uint16(w)).u16(uint16(n)).
-			i16(0).i16(y).u8(0).u8(depth).pad(2).bytes(pix[4*w*y : 4*w*(y+n)])
+		strip := pix[4*w*y : 4*w*(y+n)]
+		r := &req{b: append(make([]byte, 0, header+len(strip)), opPutImage, imageFormatZPixmap, 0, 0)}
+		r.u32(drawable).u32(gc).u16(uint16(w)).u16(uint16(n)).
+			i16(0).i16(y).u8(0).u8(depth).pad(2).bytes(strip)
 		if err := b.c.Send(r); err != nil {
 			return err
 		}

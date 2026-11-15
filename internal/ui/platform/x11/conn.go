@@ -1,6 +1,7 @@
 package x11
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -25,11 +26,10 @@ const (
 
 // Error is an error the server reported for a request.
 type Error struct {
-	Code   byte
-	Major  byte
-	Minor  uint16
-	Value  uint32
-	Serial uint64
+	Code  byte
+	Major byte
+	Minor uint16
+	Value uint32
 }
 
 func (e *Error) Error() string {
@@ -81,6 +81,7 @@ type Setup struct {
 // an event handler may itself wait for replies.
 type Conn struct {
 	sock  net.Conn
+	in    *bufio.Reader // buffers what sock receives, read by one goroutine
 	Setup Setup
 
 	wmu     sync.Mutex
@@ -222,7 +223,7 @@ func NewConn(sock net.Conn, authName string, authData []byte) (*Conn, error) {
 		}
 		return nil, fmt.Errorf("x11: the server refused the connection: %s", reason)
 	}
-	c := &Conn{sock: sock, done: make(chan struct{})}
+	c := &Conn{sock: sock, in: bufio.NewReaderSize(sock, 64<<10), done: make(chan struct{})}
 	c.cond = sync.NewCond(&c.mu)
 	if err := c.Setup.parse(body); err != nil {
 		return nil, err
@@ -316,16 +317,12 @@ func (c *Conn) NewID() uint32 {
 // send writes one request, registering ck, when it is not nil, to receive
 // its reply.
 func (c *Conn) send(r *req, ck *cookie) error {
-	b := r.finish()
-	if max := c.Setup.MaxRequest; max > 0 && len(b) > max {
-		return ErrTooLarge
-	}
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if ck == nil && c.seq-c.syncSeq >= syncEvery {
 		// Send a GetInputFocus, whose reply is discarded, so that a request
 		// with a reply is sent before the count can wrap.
-		if err := c.write(newReq(43, 0), &cookie{}); err != nil {
+		if err := c.write(newReq(opGetInputFocus, 0), &cookie{}); err != nil {
 			return err
 		}
 	}
@@ -335,6 +332,9 @@ func (c *Conn) send(r *req, ck *cookie) error {
 // write sends r and registers ck. The caller holds c.wmu.
 func (c *Conn) write(r *req, ck *cookie) error {
 	b := r.finish()
+	if max := c.Setup.MaxRequest; max > 0 && len(b) > max {
+		return ErrTooLarge
+	}
 	c.mu.Lock()
 	if c.err != nil {
 		c.mu.Unlock()
@@ -378,7 +378,7 @@ func (c *Conn) Start(r *req) func() ([]byte, error) {
 
 // Sync waits until the server has handled every request sent so far.
 func (c *Conn) Sync() error {
-	_, err := c.Call(newReq(43, 0))
+	_, err := c.Call(newReq(opGetInputFocus, 0))
 	return err
 }
 
@@ -407,16 +407,18 @@ func (c *Conn) read() {
 
 // readPacket reads one error, reply or event.
 func (c *Conn) readPacket() ([]byte, error) {
-	p := make([]byte, 32)
-	if _, err := io.ReadFull(c.sock, p); err != nil {
+	var head [32]byte
+	if _, err := io.ReadFull(c.in, head[:]); err != nil {
 		return nil, err
 	}
-	if p[0] == packetReply || p[0]&0x7f == genericEvent {
-		extra := make([]byte, 4*int(u32At(p, 4)))
-		if _, err := io.ReadFull(c.sock, extra); err != nil {
-			return nil, err
-		}
-		p = append(p, extra...)
+	extra := 0
+	if head[0] == packetReply || head[0]&0x7f == genericEvent {
+		extra = 4 * int(u32At(head[:], 4))
+	}
+	p := make([]byte, 32+extra)
+	copy(p, head[:])
+	if _, err := io.ReadFull(c.in, p[32:]); err != nil {
+		return nil, err
 	}
 	return p, nil
 }
@@ -451,7 +453,7 @@ func (c *Conn) route(p []byte) {
 	c.mu.Unlock()
 	var res result
 	if p[0] == packetError {
-		e := &Error{Code: p[1], Value: u32At(p, 4), Minor: u16At(p, 8), Major: p[10], Serial: seq}
+		e := &Error{Code: p[1], Value: u32At(p, 4), Minor: u16At(p, 8), Major: p[10]}
 		if ck == nil || ck.ch == nil {
 			if errs != nil {
 				errs(e)

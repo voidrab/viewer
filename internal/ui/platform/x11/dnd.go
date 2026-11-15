@@ -273,7 +273,7 @@ func (b *Backend) dragIcon(img *image.RGBA, x, y int) uint32 {
 	depth, visual, colormap, pf := b.depth, b.visual, b.colormap, b.pixels
 	if b.argb != 0 {
 		depth, visual, colormap = 32, b.argb, b.argbColormap
-		pf, _ = newPixelFormat(b.visualByID(b.argb), c.Setup.ImageByteOrder)
+		pf = b.argbPixels
 	}
 	a := (&windowAttrs{}).set(cwBackPixmap, 0).set(cwBorderPixel, 0).set(cwOverrideRedirect, 1).set(cwColormap, colormap)
 	r := newReq(opCreateWindow, depth).u32(id).u32(b.root).i16(x).i16(y).u16(uint16(w)).u16(uint16(h)).u16(0).u16(1).u32(visual)
@@ -291,16 +291,6 @@ func (b *Backend) dragIcon(img *image.RGBA, x, y int) uint32 {
 	b.putImage(id, gc, depth, w, h, pix)
 	c.Send(newReq(opFreeGC, 0).u32(gc))
 	return id
-}
-
-// visualByID returns the screen's visual with the given ID.
-func (b *Backend) visualByID(id uint32) Visual {
-	for _, v := range b.screen.Visuals {
-		if v.ID == id {
-			return v
-		}
-	}
-	return Visual{}
 }
 
 // windowAt returns the program's window under (rootX, rootY), and where the
