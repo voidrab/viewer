@@ -65,7 +65,7 @@ func (a *App) setCursor(c platform.Cursor) {
 // link.
 func (a *App) showLinkCursor(under section) {
 	c := platform.CursorDefault
-	if d := a.current(); d != nil && under == sectionContent && d.view.OverLink() {
+	if d := a.current(); d != nil && under == sectionContent && d.view.OverLink() || a.about.OverLink() {
 		c = platform.CursorPointer
 	}
 	a.setCursor(c)

@@ -636,14 +636,14 @@ func TestNewReportsFaceFailures(t *testing.T) {
 	defer func() { newFace = orig }()
 	var plat platform.Fake
 	w, _ := plat.NewWindow(platform.WindowOptions{Size: platform.Size{W: 100, H: 100}})
-	for fail := 1; fail <= 2; fail++ {
+	for fail := 1; fail <= 3; fail++ {
 		calls := 0
-		newFace = func(size float64) (*text.Face, error) {
+		newFace = func(size float64, bold bool) (*text.Face, error) {
 			calls++
 			if calls == fail {
 				return nil, boom
 			}
-			return orig(size)
+			return orig(size, bold)
 		}
 		if _, err := New(w, Options{}); !errors.Is(err, boom) {
 			t.Errorf("failure of face %d: %v", fail, err)
@@ -805,7 +805,7 @@ func TestRunReportsFailuresToCreateTheApp(t *testing.T) {
 	orig := newFace
 	defer func() { newFace = orig }()
 	boom := errors.New("no font")
-	newFace = func(float64) (*text.Face, error) { return nil, boom }
+	newFace = func(float64, bool) (*text.Face, error) { return nil, boom }
 	var plat platform.Fake
 	w, _ := plat.NewWindow(platform.WindowOptions{Size: platform.Size{W: 300, H: 200}})
 	if err := Run(w, nil, Options{}); !errors.Is(err, boom) {

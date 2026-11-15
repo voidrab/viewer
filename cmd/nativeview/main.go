@@ -91,5 +91,6 @@ func run(paths []string) error {
 	return app.Run(win, paths, app.Options{
 		PickFiles: pickFiles, SaveFile: saveFile, Requests: requests, OpenURI: openURI,
 		Dark: dark, Themes: themeChanges, SaveTheme: saveTheme(theme), NewWindow: newWindow,
+		Version: appVersion(),
 	})
 }

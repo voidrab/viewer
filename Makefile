@@ -9,7 +9,10 @@ APP_ID   := com.voidrab.gopdfrab.Viewrab
 APPS_DIR  = $(DESTDIR)$(PREFIX)/share/applications
 ICONS_DIR = $(DESTDIR)$(PREFIX)/share/icons/hicolor
 
-GO_FLAGS := -trimpath -ldflags "-s -w"
+# The version shown in the About dialog: the nearest tag, or the commit.
+VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null)
+LDFLAGS  := -s -w -X main.version=$(VERSION)
+GO_FLAGS := -trimpath -ldflags "$(LDFLAGS)"
 
 .PHONY: all build build-windows test test-windows cover install uninstall default clean
 
@@ -22,7 +25,7 @@ build:
 
 ## build-windows: bin/viewrab.exe, a Windows GUI program with no console
 build-windows:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui" -o $(BIN).exe ./cmd/nativeview
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS) -H windowsgui" -o $(BIN).exe ./cmd/nativeview
 	@ls -lh $(BIN).exe | awk '{print "built " $$9 " (" $$5 ")"}'
 
 ## test-windows: vet for Windows, then run the Win32 backend's tests, live
