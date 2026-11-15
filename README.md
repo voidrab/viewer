@@ -116,3 +116,10 @@ variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG` and
 project the artifact configurations `zips` (viewrab.exe inside each zip) and
 `installers` (each setup.exe). Unsigned, Windows SmartScreen warns before the
 first start.
+
+## Licensing
+
+Viewrab is licensed under GNU AGPL 3.0.
+
+It compiles in the fonts gopdfrab bundles;
+[build/licenses](build/licenses) gives their sources and licences.
