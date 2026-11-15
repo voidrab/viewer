@@ -68,7 +68,7 @@ func (t *xdndTarget) reset() {
 	if t.timer != nil {
 		t.timer.Stop()
 	}
-	*t = xdndTarget{}
+	t.source, t.w, t.accept, t.entered, t.x, t.y, t.dropping, t.timer = 0, nil, false, false, 0, 0, false, nil
 }
 
 // leave tells the window the drag has left it. The caller holds t.mu.

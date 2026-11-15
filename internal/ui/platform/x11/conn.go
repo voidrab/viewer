@@ -152,6 +152,7 @@ func ParseDisplay(s string) (Display, error) {
 		path := "/tmp/.X11-unix/X" + strconv.Itoa(num)
 		d.Network, d.Address, d.Abstract = "unix", path, "@"+path
 	default:
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]") // an IPv6 address
 		d.Network, d.Address = "tcp", net.JoinHostPort(host, strconv.Itoa(6000+num))
 	}
 	return d, nil
