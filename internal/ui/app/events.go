@@ -57,6 +57,15 @@ func (a *App) pointer(ev platform.PointerEvent) {
 		a.win.Invalidate()
 		return
 	}
+	// So does the About dialog, which opens the links clicked in it.
+	if uri, taken := a.about.HandlePointer(ev, a.bounds()); taken {
+		if uri != "" && a.opts.OpenURI != nil {
+			a.opts.OpenURI(uri)
+		}
+		a.showLinkCursor(sectionNone)
+		a.win.Invalidate()
+		return
+	}
 	p := image.Pt(int(ev.X), int(ev.Y))
 	// A press outside the page field ends the typing of a page number, which
 	// then goes to that page, as an input does when it loses the focus.
@@ -185,6 +194,10 @@ func (a *App) toolbarAction(act widget.Action) {
 	case widget.ButtonTheme:
 		a.toggleTheme()
 		return
+	case widget.ButtonMenu:
+		anchor := a.toolbar.ButtonRect(widget.ButtonMenu).Add(a.origin(sectionToolbar))
+		a.showMenu(menuApp, appMenu, -1, anchor)
+		return
 	}
 	d := a.current()
 	if d == nil {
@@ -212,14 +225,18 @@ type menuKind int
 const (
 	menuZoom    menuKind = iota // the zoom presets
 	menuProfile                 // the PDF/A panel's profiles
+	menuApp                     // the application menu
 )
+
+// appMenu is the application menu's items.
+var appMenu = []string{"About Viewrab"}
 
 // showMenu opens the menu of kind with items, checked at checked, below
 // anchor, in window coordinates.
 func (a *App) showMenu(kind menuKind, items []string, checked int, anchor image.Rectangle) {
 	a.menuKind = kind
 	a.menu.Items, a.menu.Checked = items, checked
-	a.menu.Show(anchor, image.Rect(0, 0, a.size.W, a.size.H))
+	a.menu.Show(anchor, a.bounds())
 }
 
 // openZoomMenu opens the zoom presets below the zoom drop-down.
@@ -240,6 +257,8 @@ func (a *App) choose(i int) {
 		}
 	case menuProfile:
 		a.panel.Profile = i
+	case menuApp:
+		a.about.Show()
 	}
 }
 
@@ -320,6 +339,11 @@ func (a *App) key(ev platform.KeyEvent) (quit bool) {
 	}
 	if a.menu.Open {
 		a.choose(a.menu.HandleKey(ev))
+		a.win.Invalidate()
+		return false
+	}
+	if a.about.Open {
+		a.about.HandleKey(ev)
 		a.win.Invalidate()
 		return false
 	}

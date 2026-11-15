@@ -250,9 +250,19 @@ func TestToolbarWindowControls(t *testing.T) {
 			t.Errorf("hidden control %d at %v", id, tb.rects[id])
 		}
 	}
-	if r := tb.rects[ButtonTheme]; r.Max.X != 900-winPad {
+	// The menu button is then rightmost, with the theme switch left of it.
+	if r := tb.rects[ButtonMenu]; r.Max.X != 900-winPad {
+		t.Errorf("menu button at %v", r)
+	}
+	if r := tb.rects[ButtonTheme]; r.Max.X != tb.rects[ButtonMenu].Min.X-toolGap {
 		t.Errorf("theme switch at %v", r)
 	}
+	// It needs no document.
+	tb.NoDocument = true
+	if !tb.shown(ButtonMenu) {
+		t.Error("the menu button is hidden with no document")
+	}
+	tb.NoDocument = false
 	// The space they left goes to the other controls on the right.
 	if tb.rects[ButtonPDFA].Min.X <= minimize.Min.X {
 		t.Errorf("PDF/A button at %v, left of where minimise was, %v", tb.rects[ButtonPDFA], minimize)
