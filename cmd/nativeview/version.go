@@ -45,4 +45,3 @@ func appVersion() string {
 	}
 	return rev + dirty
 }
-
