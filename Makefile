@@ -4,7 +4,7 @@ BIN      ?= bin/viewrab
 PREFIX   ?= /usr/local
 # The command name the binary is installed under.
 NAME     ?= viewrab
-APP_ID   := com.voidrab.gopdfrab.Viewrab
+APP_ID   := com.voidrab.Viewrab
 # The architecture to build for; build, build-windows and the dist targets
 # take it. Without Go, as when installing from a release archive, it is
 # empty, which install does not need.

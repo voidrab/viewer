@@ -34,8 +34,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq appstream desktop-file-utils
-          desktop-file-validate build/linux/com.voidrab.gopdfrab.Viewrab.desktop
-          appstreamcli validate --no-net build/linux/com.voidrab.gopdfrab.Viewrab.metainfo.xml
+          desktop-file-validate build/linux/com.voidrab.Viewrab.desktop
+          appstreamcli validate --no-net build/linux/com.voidrab.Viewrab.metainfo.xml
 
   test-windows:
     runs-on: windows-latest
