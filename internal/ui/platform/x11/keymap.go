@@ -154,8 +154,10 @@ func (km *keymap) lookup(code byte, state uint16) (platform.Key, rune) {
 	case 1:
 		sym = sym1
 	default:
+		// A missing third or fourth level falls back to the first or
+		// second level.
 		if sym = col(base[group][level]); sym == 0 {
-			sym = [2]uint32{sym0, sym1}[level-2] // a key without the level types its lower one
+			sym = [2]uint32{sym0, sym1}[level-2]
 		}
 	}
 	return desktop.ResolveKeysym(sym)

@@ -31,8 +31,8 @@ func selNotify(requestor, selection, target, prop uint32) []byte {
 	})
 }
 
-// notified returns the property of the latest SelectionNotify sent to
-// requestor, waiting for the n-th.
+// notified returns the property of the n-th SelectionNotify sent to
+// requestor, waiting until it is sent.
 func notified(t *testing.T, f *fakeX, requestor uint32, n int) uint32 {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
@@ -105,7 +105,8 @@ func TestClipboardClaimRetriesWithTheCurrentTime(t *testing.T) {
 	w := openWindow(t, f, b, platform.WindowOptions{})
 	f.event(inputEv(evKeyPress, 8, 99, w.id, 0, 0, 0, 0, 0))
 	want[platform.KeyEvent](t, w)
-	// The server ignores a claim with a time, as one older than the owner's.
+	// The fake server ignores a claim with a time, so the backend retries it
+	// with CurrentTime, 0.
 	f.set(func(f *fakeX) {
 		f.handle = func(f *fakeX, r request) bool { return r.op == opSetSelectionOwner && r.u32(8) != 0 }
 	})

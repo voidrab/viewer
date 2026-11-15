@@ -9,7 +9,7 @@ import (
 	"viewer/internal/ui/platform"
 )
 
-// xdnd sends w the XDND message typ from source.
+// xdnd delivers the XDND message typ to w, with data as its values.
 func xdnd(f *fakeX, w *window, typ string, data ...uint32) {
 	f.event(clientMessage(w.id, f.atom(typ), data...))
 }
@@ -30,9 +30,9 @@ func sourceMessages(f *fakeX, source uint32, typ string) [][5]uint32 {
 	return out
 }
 
-// dropServer has the fake server place w at (100, 200) on the root and
-// answer requests for dropped files with list, or refuse them when list is
-// empty.
+// dropServer has the fake server translate window positions to the root by
+// an offset of (100, 200), and answer requests for dropped files with list,
+// or refuse them when list is empty.
 func dropServer(f *fakeX, list string) {
 	f.set(func(f *fakeX) {
 		f.translate = func(src, dst uint32, x, y int) (int, int, uint32) {
@@ -155,7 +155,8 @@ func TestXdndRefusesOtherData(t *testing.T) {
 		t.Errorf("status %v", s)
 	}
 	quiet(t, f, w)
-	// A type list that cannot be read: the three in the message count.
+	// When the type list cannot be read, the three types in the message are
+	// used.
 	f.set(func(f *fakeX) {
 		f.handle = func(f *fakeX, r request) bool {
 			if r.op == opGetProperty && r.u32(4) == f.atom("XdndTypeList") {

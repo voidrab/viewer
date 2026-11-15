@@ -62,7 +62,8 @@ func TestRequestsOnAClosedConnection(t *testing.T) {
 	if _, err := c.Call(newReq(opGetInputFocus, 0)); !errors.Is(err, ErrClosed) {
 		t.Errorf("Call = %v", err)
 	}
-	// The sync slipped in before the count wraps fails too.
+	// Send also fails when it must first write the sync request that keeps
+	// the sequence count from wrapping.
 	c.seq += syncEvery
 	if err := c.Send(newReq(opMapWindow, 0)); !errors.Is(err, ErrClosed) {
 		t.Errorf("Send = %v", err)

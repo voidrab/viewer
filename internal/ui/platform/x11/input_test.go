@@ -7,7 +7,7 @@ import (
 )
 
 func TestKeymapLookup(t *testing.T) {
-	// Codes 8 to 13, four groups' worth of columns each: a letter with a
+	// Codes 8 to 13, six keysyms each: a letter with a
 	// third level, a single lower-case letter, a key with a second group, a
 	// keypad key, a Cyrillic letter given alone, and a code without keysyms.
 	km := &keymap{min: 8, per: 6, numLock: 0x10, modeSwitch: 0x20, level3: 0x80, alt: 0x8, super: 0x40, syms: []uint32{

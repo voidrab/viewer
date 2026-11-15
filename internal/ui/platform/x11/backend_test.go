@@ -29,8 +29,8 @@ func withWM(hints ...string) func(*fakeX) {
 	}
 }
 
-// atomWindow is the predefined WINDOW atom, which the fake window manager's
-// check property has.
+// atomWindow is the predefined WINDOW atom, the type of the check property
+// that withWM sets.
 const atomWindow = 33
 
 func TestOpenReadsTheServer(t *testing.T) {
@@ -86,8 +86,8 @@ func openWindowState(t *testing.T, f *fakeX, b *Backend) *window {
 }
 
 func TestWindowManagerCheck(t *testing.T) {
-	// A root check property naming a window that does not name itself is
-	// left over from a manager that has gone.
+	// A root check property naming a window that does not name itself
+	// means there is no manager.
 	_, b := startBackend(t, func(f *fakeX) {
 		check := f.atom("_NET_SUPPORTING_WM_CHECK")
 		f.setProp(fakeRoot, check, atomWindow, 32, propU32(0x777))
@@ -179,9 +179,10 @@ func TestOpenFailures(t *testing.T) {
 			t.Errorf("%s: Open succeeded", tc.name)
 		}
 	}
-	// Sends that fail: on a connection already closed, the colormap made for
-	// a visual other than the root's, or for the icon's; and a selection
-	// window too large for the server's requests.
+	// Open fails when a request cannot be sent on a closed connection, which
+	// covers the colormaps made for a visual other than the root's and for
+	// the icon's. A selection window too large for the server's requests
+	// also fails.
 	closedFirst := func(o setupOpts) error {
 		_, sock := newFakeX(t, o)
 		c, err := NewConn(sock, "", nil)
@@ -208,8 +209,8 @@ func TestOpenFailures(t *testing.T) {
 }
 
 func TestExtensionsTheBackendCannotUse(t *testing.T) {
-	// MIT-SHM below 1.2, RENDER without a 32-bit ARGB format, and requests
-	// for their versions refused.
+	// The backend does not use MIT-SHM below 1.2 or RENDER without a 32-bit
+	// ARGB format, and does not use either whose requests the server refuses.
 	_, b := startBackend(t, func(f *fakeX) {
 		f.shmMinor = 1
 		f.formats = []renderFormat{{id: 1, depth: 24}, {id: 2, depth: 32, shifts: [4]uint16{0, 8, 16, 24}, masks: [4]uint16{0xff, 0xff, 0xff, 0xff}}}
@@ -242,7 +243,7 @@ func TestExtensionsTheBackendCannotUse(t *testing.T) {
 	if b.render.present {
 		t.Error("render without formats")
 	}
-	// A TCP connection cannot pass descriptors.
+	// Over a Unix socket descriptors can be passed, so MIT-SHM stays in use.
 	_, b = startBackend(t, func(f *fakeX) {})
 	if !b.shm.present {
 		t.Fatal("shm missing")
@@ -352,8 +353,8 @@ func TestNewWindowSetsPropertiesAndMaps(t *testing.T) {
 
 func TestNewWindowFails(t *testing.T) {
 	f, b := startBackend(t, nil)
-	// A CreateWindow too large for the server, then properties that are: an
-	// icon of 40 kB.
+	// NewWindow fails when its CreateWindow is too large for the server, and
+	// when a property is, such as an icon of 40 kB.
 	b.c.Setup.MaxRequest = 44
 	if _, err := b.NewWindow(platform.WindowOptions{}); !errors.Is(err, ErrTooLarge) {
 		t.Errorf("window: %v", err)

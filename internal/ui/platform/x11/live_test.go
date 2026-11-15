@@ -10,8 +10,8 @@ package x11
 import (
 	"fmt"
 	"image"
-	"os"
 	"image/color"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -366,9 +366,10 @@ func TestLiveKeymapDump(t *testing.T) {
 	}
 }
 
-// TestLiveDriveApp sends synthetic input to a running viewer's window,
-// named by VIEWER_WIN, as a hexadecimal ID: Ctrl+F and a search, then a
-// click on the maximise button at VIEWER_MAX ("x,y").
+// TestLiveDriveApp sends synthetic input to the running viewer's window,
+// whose hexadecimal ID is in VIEWER_WIN: Ctrl+F, the keys of VIEWER_TYPE,
+// then a click at the "x,y" point in VIEWER_MAX, which should be on the
+// maximise button.
 func TestLiveDriveApp(t *testing.T) {
 	var win uint32
 	if _, err := fmt.Sscanf(os.Getenv("VIEWER_WIN"), "0x%x", &win); err != nil {
