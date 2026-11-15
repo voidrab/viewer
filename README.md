@@ -3,17 +3,17 @@
 A fast, small and simple PDF viewer with built-in PDF/A validation and
 conversion. Pure Go: no cgo or Node. It renders with
 [gopdfrab](https://github.com/voidrab/gopdfrab)'s rasterizer and talks to
-Wayland or X11 directly.
+Wayland, X11 or Win32 directly.
 
 ## TODO
 
-- Support for Windows and macOS
+- Support for macOS
 
 ## Features
 
 - Tabs, zoom (fit width/page, 50-300%), page field, text selection and copy,
   find, and links (highlighted, hand cursor on hover; external ones open with
-  `xdg-open`)
+  `xdg-open`, or the default program on Windows)
 - PDF/A panel: verify against PDF/A-1b, PDF/A-2b or plain PDF structure, jump
   to the pages an issue is on, and convert to a conformant copy
 - One process runs every window; later launches add a tab to the last-used
@@ -23,7 +23,7 @@ Wayland or X11 directly.
   read by byte range
 - Console-style UI with the toolbar as the title bar, Adwaita Mono type, and a
   light/dark theme that follows the desktop until you pick one (kept in
-  `~/.config/viewrab/theme`)
+  `~/.config/viewrab/theme`, or `%AppData%\viewrab\theme` on Windows)
 
 ## Requirements
 
@@ -31,15 +31,19 @@ Go 1.24+, a Wayland or X11 session and, for the Open/Save dialogs,
 xdg-desktop-portal. Wayland is used where the session offers it, X11
 otherwise; `VIEWRAB_BACKEND=x11` or `VIEWRAB_BACKEND=wayland` picks one.
 
+On Windows 10 1803 or later it runs as a plain Win32 program with the common
+Open and Save dialogs and follows the system's app mode for its theme.
+
 ## Usage
 
 ```sh
 make build                      # bin/viewrab, a static binary
+make build-windows              # bin/viewrab.exe, for Windows
+make test-windows               # the Win32 backend's tests, under Wine
 sudo make install               # with desktop entry and icon
 make default                    # make Viewrab your default PDF application
 make test                       # Go tests; fails below 100% coverage
-go test -tags xlive -run Live ./internal/ui/platform/x11/  # against $DISPLAY
-viewrab a.pdf b.pdf              # each file opens in its own tab
+viewrab a.pdf b.pdf             # each file opens in its own tab
 ```
 
 | Shortcut                  | Action                          |
@@ -62,7 +66,7 @@ Dragging on text selects it; elsewhere it pans, as does the middle button.
 ```
 cmd/nativeview          entry point: file dialogs (portal), theme, single instance
 internal/ui             app, widgets, page view, text layer
-internal/ui/platform    the window seam, with the wayland and x11 backends
+internal/ui/platform    the window seam, with the wayland, x11 and win32 backends
 internal/pdfa           gopdfrab adapter producing PDF/A reports
 internal/testpdf        builds small valid PDFs for tests
 build/                  app icon and Linux desktop entry

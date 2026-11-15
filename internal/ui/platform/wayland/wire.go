@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package wayland is a pure-Go Wayland client: the wire protocol over a unix
 // socket and the handful of interfaces a software-rendered window needs.
 package wayland

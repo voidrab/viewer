@@ -11,7 +11,7 @@ ICONS_DIR = $(DESTDIR)$(PREFIX)/share/icons/hicolor
 
 GO_FLAGS := -trimpath -ldflags "-s -w"
 
-.PHONY: all build test cover install uninstall default clean
+.PHONY: all build build-windows test test-windows cover install uninstall default clean
 
 all: test build
 
@@ -19,6 +19,19 @@ all: test build
 build:
 	CGO_ENABLED=0 go build $(GO_FLAGS) -o $(BIN) ./cmd/nativeview
 	@ls -lh $(BIN) | awk '{print "built " $$9 " (" $$5 ")"}'
+
+## build-windows: bin/viewrab.exe, a Windows GUI program with no console
+build-windows:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui" -o $(BIN).exe ./cmd/nativeview
+	@ls -lh $(BIN).exe | awk '{print "built " $$9 " (" $$5 ")"}'
+
+## test-windows: vet for Windows, then run the Win32 backend's tests, live
+##               ones included, under Wine (WINE=wine, or set it to a runner)
+WINE ?= wine
+test-windows:
+	GOOS=windows go vet ./...
+	GOOS=windows go test -c -o bin/win32.test.exe ./internal/ui/platform/win32
+	$(WINE) bin/win32.test.exe -test.v
 
 ## test: vet and test, held to 100% coverage
 test:

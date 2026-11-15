@@ -1,6 +1,7 @@
-// Package desktop holds what the windowing backends share of the Linux
-// desktop's conventions: keysyms, the text/uri-list format of dragged files,
-// the limits on clipboard transfers, and the BGRA pixel layout servers take.
+// Package desktop holds what the windowing backends share of desktop
+// conventions: keysyms, the text/uri-list format of dragged files, the limits
+// on clipboard transfers, and the BGRA pixel layout that display servers and
+// Windows bitmaps take.
 package desktop
 
 import (

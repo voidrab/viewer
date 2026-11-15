@@ -354,13 +354,22 @@ func TestPanelMetaListsWhatIsKnown(t *testing.T) {
 	}
 }
 
-// writeFile replaces the file at path with content by writing a new file and
-// renaming it over the old one. The rename leaves the old file intact for a
-// document still mapped from it.
+// writeFile replaces the file at path with content by writing path.tmp and
+// renaming it into place, as saving a converted copy does. The old file is
+// renamed to path.old before the new one is moved in, and removed afterwards.
+// Windows refuses to rename over a file that is open but allows it to be
+// renamed, which is why the old file is moved aside first. A document still
+// reading the old file keeps its contents.
 func writeFile(path, content string) error {
-	tmp := path + ".tmp"
+	tmp, old := path+".tmp", path+".old"
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(path, old); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	return os.Remove(old)
 }
