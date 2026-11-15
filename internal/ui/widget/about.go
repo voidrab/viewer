@@ -123,9 +123,10 @@ func (a *About) rows() []aboutRow {
 	}
 }
 
-// versionText describes version: a release, which begins with "v" and a
-// digit, as "Version v1.2.0", and anything else, such as the commit of a
-// build from an untagged tree, as a development build.
+// versionText returns the version line of the About dialog. A release
+// version, which begins with "v" and a digit, is shown as "Version v1.2.0".
+// Any other value, such as the commit of a build from an untagged tree, is
+// shown as a development build.
 func versionText(version string) string {
 	switch {
 	case version == "":
