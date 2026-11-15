@@ -141,9 +141,9 @@ func newFakeX(t *testing.T, opts setupOpts) (*fakeX, *net.UnixConn) {
 	}
 	// Key codes 8 to 15: a, b, Return, Escape, Shift_L, Num_Lock, KP_1, ISO_Level3_Shift.
 	f.keysyms = []uint32{'a', 'A', 'b', 'B', 0xff0d, 0, 0xff1b, 0, 0xffe1, 0, ksNumLock, 0, 0xff9c, 0xffb1, ksLevel3, 0}
-	f.modmap[0] = []byte{12}  // Shift
-	f.modmap[4] = []byte{13}  // Mod2: Num_Lock
-	f.modmap[7] = []byte{15}  // Mod5: ISO_Level3_Shift
+	f.modmap[0] = []byte{12} // Shift
+	f.modmap[4] = []byte{13} // Mod2: Num_Lock
+	f.modmap[7] = []byte{15} // Mod5: ISO_Level3_Shift
 	go f.serve(opts)
 	t.Cleanup(func() { server.Close(); <-f.done })
 	return f, client
@@ -208,14 +208,14 @@ func (f *fakeX) serve(opts setupOpts) {
 			f.seq++
 			r := request{op: buf[0], data: buf[1], body: bytes.Clone(buf[4:size]), seq: f.seq, fds: fds}
 			f.log = append(f.log, r)
-			ch := f.logCh
+			ch, handle := f.logCh, f.handle
 			f.mu.Unlock()
 			fds = nil
 			buf = buf[size:]
 			if ch != nil {
 				ch <- r
 			}
-			if f.handle == nil || !f.handle(f, r) {
+			if handle == nil || !handle(f, r) {
 				f.answer(r)
 			}
 		}
@@ -259,7 +259,7 @@ func setupReply(o setupOpts) []byte {
 		depths[v.Depth] = append(depths[v.Depth], v)
 	}
 	for s := range o.screens {
-		b.u32(fakeRoot+uint32(s)).u32(0x20).u32(0xffffff).u32(0).u32(0).u16(1920).u16(1080).u16(500).u16(300).
+		b.u32(fakeRoot + uint32(s)).u32(0x20).u32(0xffffff).u32(0).u32(0).u16(1920).u16(1080).u16(500).u16(300).
 			u16(1).u16(1).u32(o.rootVisual).u8(0).u8(0).u8(o.rootDepth).u8(byte(len(order_)))
 		for _, d := range order_ {
 			b.u8(d).pad(1).u16(uint16(len(depths[d]))).pad(4)
@@ -312,6 +312,13 @@ func (f *fakeX) event(ev []byte) {
 	ev = append(bytes.Clone(ev), make([]byte, max(0, 32-len(ev)))...)
 	order.PutUint16(ev[2:], seq)
 	f.write(ev)
+}
+
+// set changes the server's settings, such as handle, while it runs.
+func (f *fakeX) set(change func(f *fakeX)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	change(f)
 }
 
 // atom returns the atom for name, interning it.
@@ -429,19 +436,30 @@ func (f *fakeX) answer(r request) {
 		f.reply(r, 0, nil)
 	case opTranslateCoordinates:
 		x, y, child := int(int16(r.u16(8))), int(int16(r.u16(10))), uint32(0)
-		if f.translate != nil {
-			x, y, child = f.translate(r.u32(0), r.u32(4), x, y)
+		f.mu.Lock()
+		translate := f.translate
+		f.mu.Unlock()
+		if translate != nil {
+			x, y, child = translate(r.u32(0), r.u32(4), x, y)
 		}
 		f.reply(r, 1, (&req{}).u32(child).i16(x).i16(y).b)
 	case opQueryPointer:
-		f.reply(r, 1, (&req{}).u32(fakeRoot).u32(0).i16(int(f.pointer[0])).i16(int(f.pointer[1])).b)
+		f.mu.Lock()
+		pt := f.pointer
+		f.mu.Unlock()
+		f.reply(r, 1, (&req{}).u32(fakeRoot).u32(0).i16(int(pt[0])).i16(int(pt[1])).b)
 	case opGrabPointer, opGrabKeyboard:
-		f.reply(r, f.grab, nil)
+		f.mu.Lock()
+		grab := f.grab
+		f.mu.Unlock()
+		f.reply(r, grab, nil)
 	case opListFonts:
 		n := uint16(1)
+		f.mu.Lock()
 		if f.fontless {
 			n = 0
 		}
+		f.mu.Unlock()
 		f.reply(r, 0, (&req{}).u16(n).b)
 	case 73: // GetImage
 		f.reply(r, 24, nil)
@@ -484,7 +502,10 @@ func (f *fakeX) answerExtension(r request) {
 	f.mu.Unlock()
 	switch {
 	case r.op == shm.major && r.data == shmQueryVersion:
-		f.reply(r, 0, (&req{}).u16(1).u16(f.shmMinor).b)
+		f.mu.Lock()
+		minor := f.shmMinor
+		f.mu.Unlock()
+		f.reply(r, 0, (&req{}).u16(1).u16(minor).b)
 	case r.op == shm.major && r.data == shmAttachFd:
 		for _, fd := range r.fds {
 			syscall.Close(fd)
@@ -492,8 +513,11 @@ func (f *fakeX) answerExtension(r request) {
 	case r.op == render.major && r.data == renderQueryVersion:
 		f.reply(r, 0, (&req{}).u32(0).u32(11).b)
 	case r.op == render.major && r.data == renderQueryPictFormats:
-		b := (&req{}).u32(uint32(len(f.formats))).pad(20)
-		for _, fm := range f.formats {
+		f.mu.Lock()
+		formats := f.formats
+		f.mu.Unlock()
+		b := (&req{}).u32(uint32(len(formats))).pad(20)
+		for _, fm := range formats {
 			b.u32(fm.id).u8(1).u8(fm.depth).pad(2)
 			for i := range 4 {
 				b.u16(fm.shifts[i]).u16(fm.masks[i])

@@ -169,13 +169,15 @@ func TestSetupFailures(t *testing.T) {
 
 func TestCallsGetTheirRepliesInOrderAndErrorsGoToTheirRequests(t *testing.T) {
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		if r.op == opInternAtom && string(r.body[4:4+r.u16(0)]) == "BAD" {
-			f.fail(r, 2, 77)
-			return true
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			if r.op == opInternAtom && string(r.body[4:4+r.u16(0)]) == "BAD" {
+				f.fail(r, 2, 77)
+				return true
+			}
+			return false
 		}
-		return false
-	}
+	})
 	waits := []func() ([]byte, error){
 		c.Start(newReq(opInternAtom, 0).u16(1).pad(2).bytes([]byte("A"))),
 		c.Start(newReq(opInternAtom, 0).u16(3).pad(2).bytes([]byte("BAD"))),
@@ -201,13 +203,15 @@ func TestCallsGetTheirRepliesInOrderAndErrorsGoToTheirRequests(t *testing.T) {
 
 func TestUnclaimedErrorsGoToTheHandler(t *testing.T) {
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		if r.op == opMapWindow {
-			f.fail(r, 3, r.u32(0))
-			return true
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			if r.op == opMapWindow {
+				f.fail(r, 3, r.u32(0))
+				return true
+			}
+			return false
 		}
-		return false
-	}
+	})
 	got := make(chan *Error, 2)
 	c.Send(newReq(opMapWindow, 0).u32(1)) // before a handler: dropped
 	c.Sync()
@@ -263,13 +267,15 @@ func TestSequenceNumbersSurviveWrapping(t *testing.T) {
 
 func TestClosingFailsWaitingCallsAndEndsTheEventStream(t *testing.T) {
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		if r.op == opGetInputFocus {
-			f.sock.Close() // hang up instead of answering
-			return true
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			if r.op == opGetInputFocus {
+				f.sock.Close() // hang up instead of answering
+				return true
+			}
+			return false
 		}
-		return false
-	}
+	})
 	f.event([]byte{evExpose, 0, 0, 0})
 	if err := c.Sync(); !errors.Is(err, ErrClosed) {
 		t.Errorf("Sync = %v", err)
@@ -288,15 +294,17 @@ func TestClosingFailsWaitingCallsAndEndsTheEventStream(t *testing.T) {
 
 func TestTruncatedReplyEndsTheConnection(t *testing.T) {
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		p := make([]byte, 32)
-		p[0] = packetReply
-		order.PutUint16(p[2:], r.seq)
-		order.PutUint32(p[4:], 10) // promises 40 more bytes
-		f.write(p)
-		f.sock.Close()
-		return true
-	}
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			p := make([]byte, 32)
+			p[0] = packetReply
+			order.PutUint16(p[2:], r.seq)
+			order.PutUint32(p[4:], 10) // promises 40 more bytes
+			f.write(p)
+			f.sock.Close()
+			return true
+		}
+	})
 	if _, err := c.Call(newReq(opGetInputFocus, 0)); err == nil {
 		t.Error("truncated reply accepted")
 	}
@@ -403,13 +411,15 @@ func TestReaderReportsShortFields(t *testing.T) {
 
 func TestGetPropertyTooShort(t *testing.T) {
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		if r.op == opGetProperty {
-			f.reply(r, 32, (&req{}).u32(atomCardinal).u32(0).u32(100).b) // claims 100 values, sends none
-			return true
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			if r.op == opGetProperty {
+				f.reply(r, 32, (&req{}).u32(atomCardinal).u32(0).u32(100).b) // claims 100 values, sends none
+				return true
+			}
+			return false
 		}
-		return false
-	}
+	})
 	if _, err := c.getProperty(fakeRoot, 1, false, 4); !errors.Is(err, ErrShortReply) {
 		t.Errorf("err = %v", err)
 	}
@@ -421,13 +431,15 @@ func TestGetPropertyTooShort(t *testing.T) {
 func TestCallTimesOutNever(t *testing.T) {
 	// Sync returns once the server answers, however late.
 	f, c := startFake(t, defaultSetup())
-	f.handle = func(f *fakeX, r request) bool {
-		if r.op == opGetInputFocus {
-			go func() { time.Sleep(20 * time.Millisecond); f.reply(r, 0, nil) }()
-			return true
+	f.set(func(f *fakeX) {
+		f.handle = func(f *fakeX, r request) bool {
+			if r.op == opGetInputFocus {
+				go func() { time.Sleep(20 * time.Millisecond); f.reply(r, 0, nil) }()
+				return true
+			}
+			return false
 		}
-		return false
-	}
+	})
 	if err := c.Sync(); err != nil {
 		t.Error(err)
 	}
