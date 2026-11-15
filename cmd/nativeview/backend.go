@@ -1,0 +1,66 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"viewer/internal/ui/platform"
+	"viewer/internal/ui/platform/wayland"
+	"viewer/internal/ui/platform/x11"
+)
+
+// backend is a windowing system the viewer can run on.
+type backend interface {
+	platform.Platform
+	Close() error
+}
+
+// Constructors of the backends, replaced by tests.
+var (
+	newWayland = func() (backend, error) { return wayland.New() }
+	newX11     = func() (backend, error) { return x11.New() }
+)
+
+// openBackend connects to the desktop's windowing system. VIEWER_BACKEND
+// names one, "wayland" or "x11"; otherwise Wayland is tried first, where a
+// Wayland session offers it, and then X11, which also serves a Wayland
+// desktop through Xwayland.
+func openBackend(getenv func(string) string) (backend, error) {
+	switch name := strings.ToLower(getenv("VIEWER_BACKEND")); name {
+	case "wayland":
+		return newWayland()
+	case "x11":
+		return newX11()
+	case "":
+	default:
+		return nil, fmt.Errorf("unknown VIEWER_BACKEND %q: want wayland or x11", name)
+	}
+	var errs []error
+	if getenv("WAYLAND_DISPLAY") != "" || getenv("DISPLAY") == "" {
+		be, err := newWayland()
+		if err == nil {
+			return be, nil
+		}
+		errs = append(errs, err)
+	}
+	if getenv("DISPLAY") != "" {
+		be, err := newX11()
+		if err == nil {
+			return be, nil
+		}
+		errs = append(errs, err)
+	}
+	return nil, errors.Join(errs...)
+}
+
+// activationToken returns the token a launcher gave this process, which lets
+// the running instance bring its window forward: Wayland's activation token,
+// or X11's startup notification ID.
+func activationToken() string {
+	if t := os.Getenv("XDG_ACTIVATION_TOKEN"); t != "" {
+		return t
+	}
+	return os.Getenv("DESKTOP_STARTUP_ID")
+}

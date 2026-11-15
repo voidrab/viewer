@@ -235,8 +235,12 @@ type WindowOptions struct {
 	Title   string
 	Size    Size
 	MinSize Size
-	// AppID names the application to the desktop (Wayland app ID).
+	// AppID names the application to the desktop: the Wayland app ID, and on
+	// X11 the window's class.
 	AppID string
+	// Icon, if not nil, is the window's icon where the desktop takes it from
+	// the window rather than from the application's desktop entry, as on X11.
+	Icon image.Image
 }
 
 // Window is a top-level window. Events must be drained by one goroutine;
