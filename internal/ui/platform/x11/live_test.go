@@ -10,6 +10,7 @@ package x11
 import (
 	"fmt"
 	"image"
+	"os"
 	"image/color"
 	"strings"
 	"sync"
@@ -363,4 +364,31 @@ func TestLiveKeymapDump(t *testing.T) {
 		}
 		t.Logf("code %d: syms %x -> %v", code, km.keysyms(code), s)
 	}
+}
+
+// TestLiveDriveApp sends synthetic input to a running viewer's window,
+// named by VIEWER_WIN, as a hexadecimal ID: Ctrl+F and a search, then a
+// click on the maximise button at VIEWER_MAX ("x,y").
+func TestLiveDriveApp(t *testing.T) {
+	var win uint32
+	if _, err := fmt.Sscanf(os.Getenv("VIEWER_WIN"), "0x%x", &win); err != nil {
+		t.Skip("VIEWER_WIN not set")
+	}
+	b := liveBackend(t)
+	w := &window{b: b, id: win}
+	ctrlF := keycodeFor(t, b, 'f')
+	synth(b, w, evKeyPress, ctrlF, stateControl, 0, 0)
+	synth(b, w, evKeyRelease, ctrlF, stateControl, 0, 0)
+	for _, r := range os.Getenv("VIEWER_TYPE") {
+		code := keycodeFor(t, b, r)
+		synth(b, w, evKeyPress, code, 0, 0, 0)
+		synth(b, w, evKeyRelease, code, 0, 0, 0)
+	}
+	var x, y int
+	if _, err := fmt.Sscanf(os.Getenv("VIEWER_MAX"), "%d,%d", &x, &y); err == nil {
+		synth(b, w, evMotionNotify, 0, 0, x, y)
+		synth(b, w, evButtonPress, 1, 0, x, y)
+		synth(b, w, evButtonRelease, 1, 0x100, x, y)
+	}
+	b.c.Sync()
 }
