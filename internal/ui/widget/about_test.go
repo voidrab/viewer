@@ -86,6 +86,16 @@ func TestAboutShowsTheVersion(t *testing.T) {
 	if got := text(); got != "Version v1.2.0" {
 		t.Errorf("with a version: %q", got)
 	}
+	for v, want := range map[string]string{
+		"v1.2.0-3-g3b48fe4": "Version v1.2.0-3-g3b48fe4",
+		"3b48fe4-dirty":     "Development build (3b48fe4-dirty)",
+		"v":                 "Development build (v)",
+		"vnext":             "Development build (vnext)",
+	} {
+		if got := versionText(v); got != want {
+			t.Errorf("versionText(%q) = %q, want %q", v, got, want)
+		}
+	}
 }
 
 func TestAboutDraw(t *testing.T) {

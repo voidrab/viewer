@@ -107,13 +107,9 @@ func (a *About) OverLink() bool { return a.Open && a.hover >= 0 }
 
 // rows returns the dialog's text, below the logo.
 func (a *About) rows() []aboutRow {
-	version := "Development build"
-	if a.Version != "" {
-		version = "Version " + a.Version
-	}
 	return []aboutRow{
 		{16, []aboutSpan{{"Viewrab", aboutTitle, ""}}},
-		{10, []aboutSpan{{version, aboutBody, ""}}},
+		{10, []aboutSpan{{versionText(a.Version), aboutBody, ""}}},
 		{10, []aboutSpan{{"A fast, small and simple PDF viewer", aboutBody, ""}}},
 		{2, []aboutSpan{{"with PDF/A validation", aboutBody, ""}}},
 		{12, []aboutSpan{{"Website", aboutLink, WebsiteURL}}},
@@ -125,6 +121,19 @@ func (a *About) rows() []aboutRow {
 			{" for details.", aboutMuted, ""},
 		}},
 	}
+}
+
+// versionText describes version: a release, which begins with "v" and a
+// digit, as "Version v1.2.0", and anything else, such as the commit of a
+// build from an untagged tree, as a development build.
+func versionText(version string) string {
+	switch {
+	case version == "":
+		return "Development build"
+	case len(version) > 1 && version[0] == 'v' && version[1] >= '0' && version[1] <= '9':
+		return "Version " + version
+	}
+	return "Development build (" + version + ")"
 }
 
 // face returns the font face that a span of style is drawn in.
