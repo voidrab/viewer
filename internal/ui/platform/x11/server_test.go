@@ -323,6 +323,21 @@ func (f *fakeX) set(change func(f *fakeX)) {
 	change(f)
 }
 
+// events sends several events in one write, as a server sends events that
+// happen together, each stamped with the latest sequence number.
+func (f *fakeX) events(evs ...[]byte) {
+	f.mu.Lock()
+	seq := f.seq
+	f.mu.Unlock()
+	var all []byte
+	for _, ev := range evs {
+		ev = bytes.Clone(ev)
+		order.PutUint16(ev[2:], seq)
+		all = append(all, ev...)
+	}
+	f.write(all)
+}
+
 // atom returns the atom for name, interning it.
 func (f *fakeX) atom(name string) uint32 {
 	f.mu.Lock()

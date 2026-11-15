@@ -155,7 +155,7 @@ func (km *keymap) lookup(code byte, state uint16) (platform.Key, rune) {
 		sym = sym1
 	default:
 		if sym = col(base[group][level]); sym == 0 {
-			sym = col(base[group][level-2])
+			sym = [2]uint32{sym0, sym1}[level-2] // a key without the level types its lower one
 		}
 	}
 	return desktop.ResolveKeysym(sym)
