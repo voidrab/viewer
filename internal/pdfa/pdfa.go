@@ -69,14 +69,8 @@ type Info struct {
 	Claimed string `json:"claimed"`
 }
 
-// Inspect reads a document's basic properties.
-func Inspect(path string) (Info, error) {
-	doc, err := gopdfrab.Open(path)
-	if err != nil {
-		return Info{}, explain(err)
-	}
-	defer doc.Close()
-
+// Inspect reads the basic properties of doc, a document the caller has open.
+func Inspect(doc *gopdfrab.Document) Info {
 	var info Info
 	info.Version, _ = doc.Version()
 	if meta, err := doc.Metadata(); err == nil {
@@ -85,7 +79,7 @@ func Inspect(path string) (Info, error) {
 	if part, level, err := doc.ClaimedConformance(); err == nil && part != "" {
 		info.Claimed = "PDF/A-" + part + strings.ToLower(level)
 	}
-	return info, nil
+	return info
 }
 
 // Issue groups every report of one check.

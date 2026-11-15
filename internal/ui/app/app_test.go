@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/voidrab/gopdfrab"
+
 	"viewrab/internal/pdfa"
 	"viewrab/internal/testpdf"
 	"viewrab/internal/ui/instance"
@@ -47,7 +49,7 @@ func newFixture(t *testing.T) *fixture {
 	a, err := New(w, Options{
 		Now:       func() time.Time { return f.now },
 		AfterFunc: func(d time.Duration, fn func()) { f.timers = append(f.timers, fn) },
-		Inspect:   func(string) (pdfa.Info, error) { return pdfa.Info{Claimed: "PDF/A-1b"}, nil },
+		Inspect:   func(*gopdfrab.Document) pdfa.Info { return pdfa.Info{Claimed: "PDF/A-1b"} },
 	})
 	if err != nil {
 		t.Fatal(err)

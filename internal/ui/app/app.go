@@ -51,7 +51,7 @@ type Options struct {
 	// Verify, Convert and Inspect default to the pdfa package's.
 	Verify  func(ctx context.Context, path, profile string) (pdfa.Report, error)
 	Convert func(ctx context.Context, in, out, profile string) (pdfa.ConvertReport, error)
-	Inspect func(path string) (pdfa.Info, error)
+	Inspect func(doc *gopdfrab.Document) pdfa.Info
 	// Now and AfterFunc default to the time package's.
 	Now       func() time.Time
 	AfterFunc func(d time.Duration, f func())
@@ -469,6 +469,10 @@ func (a *App) load(path string) (*document, error) {
 	pal := a.opts.Palette
 	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc}
 	d.owner.Store(a)
+	// The properties are read before the view exists, and with it any render
+	// that could use the document at the same time.
+	info := a.opts.Inspect(doc)
+	d.version, d.claimed = info.Version, info.Claimed
 	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
 		Pool: a.pool, OpenURI: a.opts.OpenURI, Gap: theme.PageGap, Margin: theme.PageMargin,
 		Background: pal.Canvas, Selection: pal.Selection,
@@ -476,9 +480,6 @@ func (a *App) load(path string) (*document, error) {
 	if err != nil {
 		doc.Close()
 		return nil, err
-	}
-	if info, err := a.opts.Inspect(path); err == nil {
-		d.version, d.claimed = info.Version, info.Claimed
 	}
 	// The first pages are rendered in the background, so that the tab is ready
 	// when it is shown.

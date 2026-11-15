@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/voidrab/gopdfrab"
+
 	"viewrab/internal/pdfa"
 	"viewrab/internal/ui/platform"
 	"viewrab/internal/ui/widget"
@@ -347,7 +349,7 @@ func TestOpenConvertedOpensOrReloadsTheCopy(t *testing.T) {
 
 func TestPanelMetaListsWhatIsKnown(t *testing.T) {
 	f := newFixture(t)
-	f.a.opts.Inspect = func(string) (pdfa.Info, error) { return pdfa.Info{Version: "1.7"}, nil }
+	f.a.opts.Inspect = func(*gopdfrab.Document) pdfa.Info { return pdfa.Info{Version: "1.7"} }
 	f.open(f.pdf("a.pdf", 1))
 	if got := panelMeta(f.a.current()); !strings.HasPrefix(got, "1 page · ") || !strings.HasSuffix(got, " · PDF 1.7") {
 		t.Errorf("meta = %q", got)
