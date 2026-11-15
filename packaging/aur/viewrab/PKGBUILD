@@ -1,0 +1,29 @@
+# Template: packaging/render.sh fills in @VERSION@ and the checksum from a
+# release's SHA256SUMS. Run makepkg --printsrcinfo > .SRCINFO before pushing.
+#
+# It builds the release's vendored source, which carries every Go module the
+# program needs, so the build runs offline.
+pkgname=viewrab
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Fast, simple PDF viewer with PDF/A validation'
+arch=('x86_64' 'aarch64')
+url='https://github.com/voidrab/viewrab'
+license=('AGPL-3.0-only' 'OFL-1.1')
+makedepends=('go')
+optdepends=('xdg-desktop-portal: Open and Save dialogs'
+            'xdg-utils: opening links')
+options=('!debug')
+source=("$url/releases/download/v$pkgver/viewrab-$pkgver-vendored.tar.gz")
+sha256sums=('@SHA256_VENDORED@')
+
+build() {
+  cd "viewrab-$pkgver"
+  export GOTOOLCHAIN=local
+  make build VERSION="v$pkgver"
+}
+
+package() {
+  cd "viewrab-$pkgver"
+  make install DESTDIR="$pkgdir" PREFIX=/usr
+}

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.voidrab.gopdfrab.Viewrab</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+
+  <name>Viewrab</name>
+  <summary>Fast, simple PDF viewer with PDF/A validation</summary>
+  <developer id="com.github.voidrab">
+    <name>The Viewrab authors</name>
+  </developer>
+
+  <description>
+    <p>
+      Viewrab is a fast, small and simple PDF viewer. It also checks documents
+      against PDF/A, the archival form of PDF, and converts them to a
+      conformant copy.
+    </p>
+    <ul>
+      <li>Tabs, zoom, a page field, find, text selection and copy, and links</li>
+      <li>Verify against PDF/A-1b, PDF/A-2b or plain PDF structure, jump to the
+        pages an issue is on, and convert to a conformant copy</li>
+      <li>Drag tabs to reorder them, move them between windows or tear them off
+        into a new one</li>
+      <li>Light on memory: files are read by byte range and pages rendered in
+        tiles under a bitmap budget</li>
+      <li>A light and a dark theme that follow the desktop</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.voidrab.gopdfrab.Viewrab.desktop</launchable>
+  <provides>
+    <binary>viewrab</binary>
+    <mediatype>application/pdf</mediatype>
+  </provides>
+
+  <url type="homepage">https://github.com/voidrab/viewrab</url>
+  <url type="bugtracker">https://github.com/voidrab/viewrab/issues</url>
+  <url type="vcs-browser">https://github.com/voidrab/viewrab</url>
+
+  <categories>
+    <category>Office</category>
+    <category>Viewer</category>
+  </categories>
+  <keywords>
+    <keyword>pdf</keyword>
+    <keyword>pdfa</keyword>
+    <keyword>document</keyword>
+  </keywords>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">600</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-11-15">
+      <description>
+        <p>The first release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

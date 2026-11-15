@@ -1,0 +1,25 @@
+# Template: packaging/render.sh fills in @VERSION@ and the checksums from a
+# release's SHA256SUMS. Run makepkg --printsrcinfo > .SRCINFO before pushing.
+pkgname=viewrab-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Fast, simple PDF viewer with PDF/A validation (release binary)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/voidrab/viewrab'
+license=('AGPL-3.0-only' 'OFL-1.1')
+provides=('viewrab')
+conflicts=('viewrab')
+optdepends=('xdg-desktop-portal: Open and Save dialogs'
+            'xdg-utils: opening links')
+options=('!strip' '!debug')
+source_x86_64=("$url/releases/download/v$pkgver/viewrab-$pkgver-linux-amd64.tar.gz")
+source_aarch64=("$url/releases/download/v$pkgver/viewrab-$pkgver-linux-arm64.tar.gz")
+sha256sums_x86_64=('@SHA256_LINUX_AMD64@')
+sha256sums_aarch64=('@SHA256_LINUX_ARM64@')
+
+package() {
+  local goarch=amd64
+  [[ $CARCH == aarch64 ]] && goarch=arm64
+  cd "viewrab-$pkgver-linux-$goarch"
+  make install DESTDIR="$pkgdir" PREFIX=/usr
+}
