@@ -57,7 +57,8 @@ func (a *App) pointer(ev platform.PointerEvent) {
 		a.win.Invalidate()
 		return
 	}
-	// So does the About dialog, which opens the links clicked in it.
+	// The About dialog takes every event while it is open, and opens the links
+	// clicked in it.
 	if uri, taken := a.about.HandlePointer(ev, a.bounds()); taken {
 		if uri != "" && a.opts.OpenURI != nil {
 			a.opts.OpenURI(uri)

@@ -2,8 +2,8 @@ package main
 
 import "runtime/debug"
 
-// version is the program's version, set when building with
-// -ldflags "-X main.version=…"; the Makefile sets it from git describe.
+// version is the program's version. The build sets it with
+// -ldflags "-X main.version=…".
 var version string
 
 // readBuildInfo is debug.ReadBuildInfo; tests replace it.

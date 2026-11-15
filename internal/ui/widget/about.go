@@ -66,8 +66,9 @@ type aboutLayout struct {
 	spans             []aboutPlaced
 }
 
-// aboutHit is the close button's place among the dialog's targets; links are
-// numbered from 0 in the order they are laid out.
+// aboutNothing and aboutCloseIt are the hit values of no target and of the
+// close button. A link's hit value is its index from 0, in the order the links
+// are laid out.
 const (
 	aboutNothing = -1
 	aboutCloseIt = -2
@@ -126,7 +127,7 @@ func (a *About) rows() []aboutRow {
 	}
 }
 
-// face returns the face text of style is drawn in.
+// face returns the font face that a span of style is drawn in.
 func (a *About) face(style aboutStyle) *text.Face {
 	switch style {
 	case aboutTitle:
@@ -177,7 +178,7 @@ func (a *About) layout(window image.Rectangle) aboutLayout {
 	return l
 }
 
-// rowAscent is the tallest ascent of row's faces, and rowHeight its height.
+// rowAscent returns the tallest ascent of row's faces.
 func (a *About) rowAscent(row aboutRow) int {
 	asc := 0
 	for _, s := range row.spans {
@@ -186,6 +187,7 @@ func (a *About) rowAscent(row aboutRow) int {
 	return asc
 }
 
+// rowHeight returns the ascent of row plus the deepest descent of its faces.
 func (a *About) rowHeight(row aboutRow) int {
 	desc := 0
 	for _, s := range row.spans {
@@ -285,11 +287,11 @@ func (a *About) Draw(c *paint.Canvas, window image.Rectangle) {
 	}
 }
 
-// HandlePointer applies a pointer event in window coordinates, the window
-// being window. While the dialog is open it takes every event: a click on a
-// link returns its URI, a click on the close button closes the dialog, and a
-// press outside the card closes it too. It also takes the release of the
-// press that closed it. It returns false when the event is not the dialog's.
+// HandlePointer applies ev to the dialog, which is laid out in window. While
+// the dialog is open it takes every event: a click on a link returns its URI,
+// a click on the close button closes the dialog, and a press outside the card
+// closes it too. It also takes the release of the press that closed it. It
+// returns false when the event is not the dialog's.
 func (a *About) HandlePointer(ev platform.PointerEvent, window image.Rectangle) (uri string, taken bool) {
 	if !a.Open {
 		if a.swallow && ev.Kind == platform.Release {

@@ -24,12 +24,14 @@ func newAbout(t *testing.T) *About {
 	return NewAbout(palette, face(theme.FontSize, false), face(theme.SmallFontSize, false), face(theme.FontSize+2, true))
 }
 
-// aboutPointer sends a in window a pointer event of kind at p.
+// aboutPointer sends a pointer event of kind at p to a, which is laid out in
+// aboutWindow.
 func aboutPointer(a *About, kind platform.PointerKind, p image.Point) (string, bool) {
 	return a.HandlePointer(platform.PointerEvent{Kind: kind, Button: platform.Left, X: float64(p.X), Y: float64(p.Y)}, aboutWindow)
 }
 
-// aboutClick clicks a at p and returns the URI it opened, if any.
+// aboutClick moves to p, then presses and releases there. It returns the URI
+// the click opened, if any.
 func aboutClick(a *About, p image.Point) string {
 	aboutPointer(a, platform.Move, p)
 	aboutPointer(a, platform.Press, p)

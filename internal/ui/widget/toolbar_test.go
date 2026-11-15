@@ -257,7 +257,7 @@ func TestToolbarWindowControls(t *testing.T) {
 	if r := tb.rects[ButtonTheme]; r.Max.X != tb.rects[ButtonMenu].Min.X-toolGap {
 		t.Errorf("theme switch at %v", r)
 	}
-	// It needs no document.
+	// The menu button is shown with no document open.
 	tb.NoDocument = true
 	if !tb.shown(ButtonMenu) {
 		t.Error("the menu button is hidden with no document")

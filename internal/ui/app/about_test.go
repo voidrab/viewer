@@ -57,12 +57,13 @@ func TestTheAboutDialog(t *testing.T) {
 		t.Errorf("cursor %v off the links", f.win.Cursor())
 	}
 
-	// The dialog has the keys: Ctrl+O opens no file dialog behind it.
+	// While the dialog is open, shortcuts do not reach the window behind it:
+	// Ctrl+O opens no file dialog.
 	f.key('o', platform.Ctrl)
 	if len(f.picks) != 0 {
 		t.Error("a shortcut reached the window behind the dialog")
 	}
-	// The theme switch reaches it too.
+	// A theme change applies to the dialog too.
 	f.a.setTheme(true)
 	if f.a.about.Palette != theme.Dark() {
 		t.Error("the dialog kept the light palette")
