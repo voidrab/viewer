@@ -42,11 +42,19 @@ func TestLookupUnknown(t *testing.T) {
 	}
 }
 
-func TestInspect(t *testing.T) {
-	info, err := Inspect(sample(t))
+// inspect opens the document at path and inspects it.
+func inspect(t *testing.T, path string) Info {
+	t.Helper()
+	doc, err := gopdfrab.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer doc.Close()
+	return Inspect(doc)
+}
+
+func TestInspect(t *testing.T) {
+	info := inspect(t, sample(t))
 	want := Info{Version: "1.4", Title: "Sample"}
 	if info != want {
 		t.Fatalf("Inspect = %+v; want %+v", info, want)
@@ -59,20 +67,8 @@ func TestInspectClaimedConformance(t *testing.T) {
 	if _, err := Convert(context.Background(), src, out, "pdfa2b"); err != nil {
 		t.Fatal(err)
 	}
-	info, err := Inspect(out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Claimed != "PDF/A-2b" {
+	if info := inspect(t, out); info.Claimed != "PDF/A-2b" {
 		t.Fatalf("Claimed = %q; want PDF/A-2b", info.Claimed)
-	}
-}
-
-func TestInspectNotPDF(t *testing.T) {
-	path := testpdf.Write(t, t.TempDir(), "x.pdf", []byte("hello"))
-	_, err := Inspect(path)
-	if !errors.Is(err, gopdfrab.ErrNotPDF) || err.Error() != "This file is not a PDF document." {
-		t.Fatalf("err = %v; want ErrNotPDF explained", err)
 	}
 }
 

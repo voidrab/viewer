@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/voidrab/gopdfrab"
+
 	"viewrab/internal/pdfa"
 	"viewrab/internal/testpdf"
 	"viewrab/internal/ui/instance"
@@ -32,7 +34,7 @@ func newMulti(t *testing.T) *multi {
 	t.Helper()
 	m := &multi{t: t, dir: t.TempDir()}
 	m.s = newSession(Options{
-		Inspect: func(string) (pdfa.Info, error) { return pdfa.Info{}, nil },
+		Inspect: func(*gopdfrab.Document) pdfa.Info { return pdfa.Info{} },
 		NewWindow: func() (platform.Window, error) {
 			if m.newWindowErr != nil {
 				return nil, m.newWindowErr
