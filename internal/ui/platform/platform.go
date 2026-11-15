@@ -86,7 +86,9 @@ type CloseEvent struct{}
 type FocusEvent struct{ Focused bool }
 
 // PointerEvent reports pointer motion or a button change at (X, Y) in device
-// pixels from the window's top-left corner.
+// pixels from the window's top-left corner. While a button is held, the
+// pointer stays in the window that took the press, so motion may report
+// points outside it, and it leaves only once every button is up.
 type PointerEvent struct {
 	Kind   PointerKind
 	Button Button
@@ -257,8 +259,10 @@ type Window interface {
 	Invalidate()
 	SetTitle(title string)
 	// Activate asks the compositor to bring the window to the front, citing
-	// token, the activation token of the user action behind the request. It
-	// does nothing without a token or where the compositor offers no way to ask.
+	// token, the activation token of the user action behind the request: a
+	// Wayland activation token or an X11 startup notification ID. Where the
+	// desktop requires a token, as Wayland does, it does nothing without one;
+	// it also does nothing where the compositor offers no way to ask.
 	Activate(token string)
 	// SetClipboard makes text the clipboard's content, for other programs to
 	// paste. It must follow a key press or click, as the compositor requires.

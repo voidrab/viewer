@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -27,7 +28,10 @@ var (
 // names one, "wayland" or "x11". Otherwise Wayland is tried when
 // WAYLAND_DISPLAY is set or DISPLAY is not, and X11 when DISPLAY is set. X11
 // also serves a Wayland desktop through Xwayland.
-func openBackend(getenv func(string) string) (backend, error) {
+//
+// A Wayland session that cannot be used, but whose Xwayland can, is reported
+// on warn, since the window then runs through Xwayland.
+func openBackend(getenv func(string) string, warn io.Writer) (backend, error) {
 	switch name := strings.ToLower(getenv("VIEWER_BACKEND")); name {
 	case "wayland":
 		return newWayland()
@@ -48,6 +52,9 @@ func openBackend(getenv func(string) string) (backend, error) {
 	if getenv("DISPLAY") != "" {
 		be, err := newX11()
 		if err == nil {
+			if len(errs) > 0 {
+				fmt.Fprintf(warn, "nativeview: Wayland is unavailable (%v); using X11\n", errs[0])
+			}
 			return be, nil
 		}
 		errs = append(errs, err)

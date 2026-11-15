@@ -68,7 +68,7 @@ func run(paths []string) error {
 	themeChanges := make(chan bool, 1)
 	watchScheme(theme, themeChanges)
 	dark := theme.dark()
-	be, err := openBackend(os.Getenv)
+	be, err := openBackend(os.Getenv, os.Stderr)
 	if err != nil {
 		return err
 	}
