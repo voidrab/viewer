@@ -12,7 +12,7 @@ import (
 type fakeBackend struct{ name string }
 
 func (fakeBackend) NewWindow(platform.WindowOptions) (platform.Window, error) { return nil, nil }
-func (fakeBackend) Close() error                                             { return nil }
+func (fakeBackend) Close() error                                              { return nil }
 
 func TestOpenBackendPicksBySessionAndOverride(t *testing.T) {
 	waylandErr, x11Err := errors.New("no wayland"), errors.New("no x11")
