@@ -1,0 +1,41 @@
+{
+    "version": "@VERSION@",
+    "description": "Fast, simple PDF viewer with PDF/A validation",
+    "homepage": "https://github.com/voidrab/viewrab",
+    "license": "AGPL-3.0-only",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/voidrab/viewrab/releases/download/v@VERSION@/viewrab-@VERSION@-windows-amd64.zip",
+            "hash": "@SHA256_WINDOWS_AMD64@",
+            "extract_dir": "viewrab-@VERSION@-windows-amd64"
+        },
+        "arm64": {
+            "url": "https://github.com/voidrab/viewrab/releases/download/v@VERSION@/viewrab-@VERSION@-windows-arm64.zip",
+            "hash": "@SHA256_WINDOWS_ARM64@",
+            "extract_dir": "viewrab-@VERSION@-windows-arm64"
+        }
+    },
+    "bin": "viewrab.exe",
+    "shortcuts": [
+        [
+            "viewrab.exe",
+            "Viewrab"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/voidrab/viewrab/releases/download/v$version/viewrab-$version-windows-amd64.zip",
+                "extract_dir": "viewrab-$version-windows-amd64"
+            },
+            "arm64": {
+                "url": "https://github.com/voidrab/viewrab/releases/download/v$version/viewrab-$version-windows-arm64.zip",
+                "extract_dir": "viewrab-$version-windows-arm64"
+            }
+        },
+        "hash": {
+            "url": "$baseurl/SHA256SUMS"
+        }
+    }
+}

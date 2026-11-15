@@ -1,0 +1,150 @@
+# Builds a release when a version tag (v1.2.0) is pushed: the Linux archives,
+# the portable Windows zips, the Windows installers and the vendored source,
+# with their SHA256SUMS, as a draft GitHub release to review and publish. The
+# filled-in AUR, Scoop, winget and Flatpak manifests are left as the
+# workflow's "packaging" artifact.
+#
+# Windows signing runs when the repository has the SignPath variables and
+# secret set (SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+# SIGNPATH_POLICY_SLUG and the secret SIGNPATH_API_TOKEN); without them the
+# Windows files are unsigned.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test (100% coverage)
+        run: make test
+      - name: Check the bundled licence notices
+        run: make check-licenses
+      # Software centres show the metainfo's newest release as the version.
+      - name: Check the metainfo names this release
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          got=$(grep -m1 -o '<release version="[^"]*"' build/linux/com.voidrab.gopdfrab.Viewrab.metainfo.xml | cut -d'"' -f2)
+          [ "$got" = "$want" ] || { echo "the metainfo's newest release is $got, not $want"; exit 1; }
+
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      zips-id: ${{ steps.zips.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the release archives
+        run: make dist VERSION="$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unix
+          path: |
+            dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        id: zips
+        with:
+          name: windows-unsigned
+          path: dist/*.zip
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    env:
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        if: env.SIGN != 'true'
+        with:
+          name: windows-unsigned
+          path: dist/
+      # SignPath signs viewrab.exe inside each zip, by the project's artifact
+      # configuration, and hands the zips back.
+      - name: Sign the programs
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: zips
+          github-artifact-id: ${{ needs.build.outputs.zips-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/
+      - name: Build the installers
+        shell: pwsh
+        run: ./packaging/windows/installers.ps1
+      - uses: actions/upload-artifact@v4
+        if: env.SIGN == 'true'
+        id: setups
+        with:
+          name: windows-installers-unsigned
+          path: dist/*-setup.exe
+      - name: Sign the installers
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: installers
+          github-artifact-id: ${{ steps.setups.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed/
+      - name: Use the signed installers
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: Copy-Item signed\*-setup.exe dist\ -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+
+  publish:
+    needs: [test, build, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: unix
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist/
+      - name: Write SHA256SUMS
+        run: cd dist && sha256sum *.tar.gz *.zip *.exe > SHA256SUMS && cat SHA256SUMS
+      - name: Fill in the packaging manifests
+        run: packaging/render.sh "${GITHUB_REF_NAME#v}" dist/SHA256SUMS packaging-out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packaging
+          path: packaging-out/
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft --verify-tag --generate-notes \
+            --title "Viewrab ${GITHUB_REF_NAME#v}"

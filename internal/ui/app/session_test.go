@@ -217,7 +217,7 @@ func TestWindowsThatCannotOpenAreReported(t *testing.T) {
 	m.newWindowErr = nil
 	orig := newFace
 	defer func() { newFace = orig }()
-	newFace = func(float64) (*text.Face, error) { return nil, errors.New("no font") }
+	newFace = func(float64, bool) (*text.Face, error) { return nil, errors.New("no font") }
 	if err := m.s.openWindow(nil, nil); err == nil {
 		t.Error("openWindow succeeded without a font")
 	}

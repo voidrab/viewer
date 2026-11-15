@@ -61,7 +61,9 @@ func (a *App) chrome() {
 	tb.NoDocument = d == nil // which hides the controls that need one
 	if d == nil {
 		a.endPageEdit(false)
-		a.menu.Close()
+		if a.menuKind != menuApp {
+			a.menu.Close() // the zoom and profile menus need a document
+		}
 		tb.Page, tb.Pages, tb.ZoomText = 0, 0, pageview.ZoomPresets[0].Label
 		a.status.Info, a.status.Claimed, a.status.Right = "", "", nil
 		a.setTitle("Viewrab")
@@ -83,6 +85,7 @@ func (a *App) chrome() {
 	}
 	a.syncFind()
 	tb.On[widget.ButtonZoomMode] = a.menu.Open && a.menuKind == menuZoom
+	tb.On[widget.ButtonMenu] = a.menu.Open && a.menuKind == menuApp
 	tb.On[widget.ButtonPDFA] = a.panelOpen
 	tb.Controls, tb.Maximized = !a.decorated, a.maximized
 	tb.Layout(a.size.W)
@@ -153,6 +156,7 @@ func (a *App) draw() {
 	}
 	a.status.Draw(c, status)
 	a.menu.Draw(c)
+	a.about.Draw(c, a.bounds())
 	a.win.Present(c.Img)
 }
 

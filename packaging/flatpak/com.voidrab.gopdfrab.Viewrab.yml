@@ -1,0 +1,35 @@
+# Template: packaging/render.sh fills in @VERSION@ and the checksum from a
+# release's SHA256SUMS. It builds the release's vendored source, as Flatpak
+# builds run offline.
+#
+#   flatpak-builder --user --install --force-clean build-dir com.voidrab.gopdfrab.Viewrab.yml
+id: com.voidrab.gopdfrab.Viewrab
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.golang
+command: viewrab
+finish-args:
+  # Viewrab speaks Wayland, and X11 where the session has no Wayland.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # Files come in as arguments, which Flatpak forwards through the document
+  # portal, or through the Open and Save portals, so it needs no file system
+  # access of its own. Files dropped from the host arrive as paths outside
+  # the sandbox until Viewrab supports the portal's file transfer.
+build-options:
+  append-path: /usr/lib/sdk/golang/bin
+  env:
+    GOTOOLCHAIN: local
+modules:
+  - name: viewrab
+    buildsystem: simple
+    build-commands:
+      - make build VERSION=v@VERSION@
+      - make install PREFIX=/app
+    sources:
+      - type: archive
+        url: https://github.com/voidrab/viewrab/releases/download/v@VERSION@/viewrab-@VERSION@-vendored.tar.gz
+        sha256: '@SHA256_VENDORED@'

@@ -27,6 +27,7 @@ const (
 	ButtonFind // where the find field goes; the toolbar leaves it empty
 	ButtonPDFA
 	ButtonTheme // switches between the light and the dark theme
+	ButtonMenu  // opens the application menu
 	// The window controls, at the right end, shown when Controls is set.
 	ButtonMinimize
 	ButtonMaximize
@@ -112,7 +113,7 @@ func (t *Toolbar) Height() int { return theme.ToolbarHeight }
 // find field and the theme switch have none here.
 var icons = map[ButtonID]icon.Icon{
 	ButtonOpen: icon.Open, ButtonPrev: icon.Prev, ButtonNext: icon.Next,
-	ButtonZoomOut: icon.Minus, ButtonZoomIn: icon.Plus, ButtonPDFA: icon.Shield,
+	ButtonZoomOut: icon.Minus, ButtonZoomIn: icon.Plus, ButtonPDFA: icon.Shield, ButtonMenu: icon.Menu,
 	ButtonMinimize: icon.WinMinimize, ButtonMaximize: icon.WinMaximize, ButtonCloseWindow: icon.WinClose,
 }
 
@@ -134,7 +135,8 @@ func (t *Toolbar) zoomWidth() int {
 
 // Layout records width as the bar's width and places the controls: the logo,
 // Open, and the page and zoom groups from the left edge; the window controls,
-// if shown, the theme switch, PDF/A and the find field from the right edge.
+// if shown, the menu button, the theme switch, PDF/A and the find field from
+// the right edge.
 // The find field shrinks, down to FindMinWidth, to fit a narrow bar.
 func (t *Toolbar) Layout(width int) {
 	t.width = width
@@ -176,6 +178,7 @@ func (t *Toolbar) Layout(width int) {
 		t.rects[id] = image.Rect(right-w, y, right, y+toolButton)
 		right -= w + toolGap
 	}
+	placeLeft(ButtonMenu, toolButton)
 	placeLeft(ButtonTheme, toolButton)
 	placeLeft(ButtonPDFA, toolButton)
 	right -= 4 // the find field's margin

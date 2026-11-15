@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# Template: packaging/render.sh fills it in from a release's SHA256SUMS.
+PackageIdentifier: Voidrab.Viewrab
+PackageVersion: "@VERSION@"
+InstallerType: inno
+Scope: user
+InstallerSwitches:
+  Custom: /CURRENTUSER
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+FileExtensions:
+  - pdf
+ReleaseDate: "@DATE@"
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/voidrab/viewrab/releases/download/v@VERSION@/viewrab-@VERSION@-windows-amd64-setup.exe
+    InstallerSha256: "@SHA256_WINDOWS_AMD64_SETUP@"
+  - Architecture: arm64
+    InstallerUrl: https://github.com/voidrab/viewrab/releases/download/v@VERSION@/viewrab-@VERSION@-windows-arm64-setup.exe
+    InstallerSha256: "@SHA256_WINDOWS_ARM64_SETUP@"
+ManifestType: installer
+ManifestVersion: 1.10.0

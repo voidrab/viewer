@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+# Template: packaging/render.sh fills it in from a release's SHA256SUMS.
+PackageIdentifier: Voidrab.Viewrab
+PackageVersion: "@VERSION@"
+PackageLocale: en-US
+Publisher: The Viewrab authors
+PublisherUrl: https://github.com/voidrab
+PublisherSupportUrl: https://github.com/voidrab/viewrab/issues
+PackageName: Viewrab
+PackageUrl: https://github.com/voidrab/viewrab
+License: AGPL-3.0-only
+LicenseUrl: https://github.com/voidrab/viewrab/blob/main/LICENSE
+Copyright: © 2026 The Viewrab authors
+ShortDescription: Fast, simple PDF viewer with PDF/A validation
+Description: |-
+  Viewrab is a fast, small and simple PDF viewer. It also checks documents
+  against PDF/A, the archival form of PDF, and converts them to a conformant
+  copy.
+Moniker: viewrab
+Tags:
+  - pdf
+  - pdf-viewer
+  - pdfa
+ReleaseNotesUrl: https://github.com/voidrab/viewrab/releases/tag/v@VERSION@
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

@@ -37,13 +37,15 @@ Open and Save dialogs and follows the system's app mode for its theme.
 ## Usage
 
 ```sh
-make build                      # bin/viewrab, a static binary
-make build-windows              # bin/viewrab.exe, for Windows
+make build                      # bin/viewrab, a static binary (ARCH=arm64 to cross-build)
+make build-windows              # bin/viewrab.exe, for Windows, with icon and version info
 make test-windows               # the Win32 backend's tests, under Wine
-sudo make install               # with desktop entry and icon
+sudo make install               # with desktop entry, metainfo, icon and licences
 make default                    # make Viewrab your default PDF application
 make test                       # Go tests; fails below 100% coverage
+make dist                       # release archives for Linux and Windows in dist/
 viewrab a.pdf b.pdf             # each file opens in its own tab
+viewrab --version
 ```
 
 | Shortcut                  | Action                          |
@@ -69,5 +71,48 @@ internal/ui             app, widgets, page view, text layer
 internal/ui/platform    the window seam, with the wayland, x11 and win32 backends
 internal/pdfa           gopdfrab adapter producing PDF/A reports
 internal/testpdf        builds small valid PDFs for tests
-build/                  app icon and Linux desktop entry
+build/                  app icon, Linux desktop entry and metainfo, Windows resources,
+                        and the notices of what gopdfrab bundles (make check-licenses)
+packaging/              Windows installer, AUR, Scoop, winget and Flatpak templates
+.github/workflows       CI, and the release built from a version tag
 ```
+
+## Releasing
+
+Push a version tag, such as `git tag -a v0.1.0 -m "Viewrab 0.1.0" && git push
+origin v0.1.0`. The Release workflow tests, then builds:
+
+- `viewrab-<version>-linux-<arch>.tar.gz` for amd64 and arm64: the static
+  binary with its desktop entry, metainfo, icon and licences. Unpacked,
+  `sudo make install` (or `PREFIX=~/.local make install`) installs it,
+  without Go.
+- `viewrab-<version>-windows-<arch>.zip`: the portable program.
+- `viewrab-<version>-windows-<arch>-setup.exe`: an Inno Setup installer that
+  installs for the current user without administrator rights, adds a Start
+  menu entry and offers Viewrab under "Open with" for PDFs. Windows lets
+  only the user pick the default PDF program; the installer's last page
+  opens that setting.
+- `viewrab-<version>-vendored.tar.gz`: the source with every module it needs,
+  which builds offline (`make build VERSION=v<version>`).
+- `SHA256SUMS`.
+
+It creates a draft release with these files, to check and publish by hand.
+Its `packaging` artifact holds the AUR (`viewrab`, `viewrab-bin`), Scoop,
+winget and Flatpak manifests filled in for the release;
+`packaging/render.sh` makes them from any `SHA256SUMS`. They go to:
+
+- **AUR:** run `makepkg --printsrcinfo > .SRCINFO` next to each PKGBUILD and
+  push both to `ssh://aur@aur.archlinux.org/<name>.git`.
+- **Scoop:** a bucket repository; `checkver` and `autoupdate` keep it current.
+- **winget:** a pull request to `microsoft/winget-pkgs` under
+  `manifests/v/Voidrab/Viewrab/<version>/`, for instance with `wingetcreate`.
+- **Flathub:** a new-app pull request to `flathub/flathub`. Test the sandbox
+  first: files dropped from the host are not yet handed over through the
+  document portal.
+
+Windows files are signed when the repository has SignPath set up: the
+variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG` and
+`SIGNPATH_POLICY_SLUG`, the secret `SIGNPATH_API_TOKEN`, and in the SignPath
+project the artifact configurations `zips` (viewrab.exe inside each zip) and
+`installers` (each setup.exe). Unsigned, Windows SmartScreen warns before the
+first start.

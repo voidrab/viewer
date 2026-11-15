@@ -1,0 +1,94 @@
+# Tests every push to main and every pull request: the full suite on Linux,
+# the Windows-only code on Windows, and every release artifact, the installer
+# included, so that a tag never meets a packaging problem first.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test (100% coverage)
+        run: make test
+      - name: Vet for Windows
+        run: GOOS=windows go vet ./...
+      - name: Check the bundled licence notices
+        run: make check-licenses
+
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the desktop entry and metainfo
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq appstream desktop-file-utils
+          desktop-file-validate build/linux/com.voidrab.gopdfrab.Viewrab.desktop
+          appstreamcli validate --no-net build/linux/com.voidrab.gopdfrab.Viewrab.metainfo.xml
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The drag test finds its target with WindowFromPoint, which times out
+      # on the runner's desktop; it passes under Wine (make test-windows).
+      - name: Test the Windows code
+        run: go test -race -skip TestLiveDragBetweenWindows ./cmd/... ./internal/ui/platform/...
+
+  dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe needs the tags
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the release archives
+        run: make dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  installer:
+    needs: dist
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Build the installers
+        shell: pwsh
+        run: ./packaging/windows/installers.ps1
+      - name: Install, check and uninstall
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-windows-amd64-setup.exe
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Viewrab"
+          if (-not (Test-Path "$app\viewrab.exe")) { throw "viewrab.exe was not installed" }
+          $open = (Get-ItemProperty 'HKCU:\Software\Classes\Viewrab.PDF\shell\open\command').'(default)'
+          if ($open -notlike "*viewrab.exe*") { throw "the PDF open command is $open" }
+          Get-ItemProperty 'HKCU:\Software\Classes\.pdf\OpenWithProgids' -Name 'Viewrab.PDF' | Out-Null
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          Start-Sleep -Seconds 2
+          if (Test-Path "$app\viewrab.exe") { throw "viewrab.exe is still installed" }
+          if (Test-Path 'HKCU:\Software\Classes\Viewrab.PDF') { throw "the ProgID is still registered" }

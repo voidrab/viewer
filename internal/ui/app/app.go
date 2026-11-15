@@ -65,6 +65,9 @@ type Options struct {
 	// NewWindow opens another window, for Ctrl+N and for tabs dragged out of
 	// every window. Nil means the program has a single window.
 	NewWindow func() (platform.Window, error)
+	// Version is the program's version, shown in the About dialog; empty
+	// means a development build.
+	Version string
 }
 
 // withDefaults returns opts with the zero fields that have defaults set.
@@ -98,7 +101,7 @@ func (d *document) close() {
 
 // newFace and newView are replaced by tests to force their failures.
 var (
-	newFace = func(size float64) (*text.Face, error) { return text.Mono().Face(size, false) }
+	newFace = func(size float64, bold bool) (*text.Face, error) { return text.Mono().Face(size, bold) }
 	newView = pageview.New
 )
 
@@ -151,8 +154,9 @@ type App struct {
 	toolbar  *widget.Toolbar
 	tabs     *widget.TabBar
 	status   *widget.StatusBar
-	menu     *widget.Menu // the zoom or profile drop-down's list
+	menu     *widget.Menu // the zoom, profile or application drop-down's list
 	menuKind menuKind     // which of them it is
+	about    *widget.About
 
 	docs   []*document
 	active int
@@ -207,11 +211,15 @@ func New(win platform.Window, opts Options) (*App, error) {
 // newApp returns an App for win in session s.
 func newApp(s *session, win platform.Window) (*App, error) {
 	opts := s.options()
-	face, err := newFace(theme.FontSize)
+	face, err := newFace(theme.FontSize, false)
 	if err != nil {
 		return nil, err
 	}
-	small, err := newFace(theme.SmallFontSize)
+	small, err := newFace(theme.SmallFontSize, false)
+	if err != nil {
+		return nil, err
+	}
+	bold, err := newFace(theme.FontSize+2, true)
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +238,8 @@ func newApp(s *session, win platform.Window) (*App, error) {
 		labels = append(labels, p.Label)
 	}
 	a.panel = widget.NewPanel(opts.Palette, face, labels)
+	a.about = widget.NewAbout(opts.Palette, face, small, bold)
+	a.about.Version = opts.Version
 	return a, nil
 }
 
@@ -306,6 +316,9 @@ func (a *App) post(f func()) bool {
 		return false
 	}
 }
+
+// bounds returns the whole window, in window coordinates.
+func (a *App) bounds() image.Rectangle { return image.Rect(0, 0, a.size.W, a.size.H) }
 
 // layout returns the rectangles of the parts of the window as it is now.
 func (a *App) layout() (toolbar, tabs, content, status image.Rectangle) {
@@ -469,8 +482,8 @@ func (a *App) load(path string) (*document, error) {
 	pal := a.opts.Palette
 	d := &document{path: path, name: filepath.Base(path), bytes: st.Size(), doc: doc}
 	d.owner.Store(a)
-	// The properties are read before the view exists, and with it any render
-	// that could use the document at the same time.
+	// Inspect runs before newView, so the properties are read before any
+	// render of doc starts.
 	info := a.opts.Inspect(doc)
 	d.version, d.claimed = info.Version, info.Claimed
 	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
@@ -591,7 +604,7 @@ func (a *App) setTheme(dark bool) {
 	a.s.setPalette(p)
 	a.opts.Palette = p
 	a.toolbar.Palette, a.tabs.Palette, a.status.Palette = p, p, p
-	a.findBar.Palette, a.panel.Palette, a.menu.Palette = p, p, p
+	a.findBar.Palette, a.panel.Palette, a.menu.Palette, a.about.Palette = p, p, p, p
 	for _, d := range a.docs {
 		d.view.SetColors(p.Canvas, p.Selection)
 	}
