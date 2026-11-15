@@ -33,7 +33,7 @@ jobs:
       - name: Check the metainfo names this release
         run: |
           want="${GITHUB_REF_NAME#v}"
-          got=$(grep -m1 -o '<release version="[^"]*"' build/linux/com.voidrab.gopdfrab.Viewrab.metainfo.xml | cut -d'"' -f2)
+          got=$(grep -m1 -o '<release version="[^"]*"' build/linux/com.voidrab.Viewrab.metainfo.xml | cut -d'"' -f2)
           [ "$got" = "$want" ] || { echo "the metainfo's newest release is $got, not $want"; exit 1; }
 
   build:

@@ -2,8 +2,8 @@
 # release's SHA256SUMS. It builds the release's vendored source, as Flatpak
 # builds run offline.
 #
-#   flatpak-builder --user --install --force-clean build-dir com.voidrab.gopdfrab.Viewrab.yml
-id: com.voidrab.gopdfrab.Viewrab
+#   flatpak-builder --user --install --force-clean build-dir com.voidrab.Viewrab.yml
+id: com.voidrab.Viewrab
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk

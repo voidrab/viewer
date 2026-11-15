@@ -82,7 +82,7 @@ func run(paths []string) error {
 	newWindow := func() (platform.Window, error) {
 		return be.NewWindow(platform.WindowOptions{
 			Title: "Viewrab",
-			AppID: "com.voidrab.gopdfrab.Viewrab",
+			AppID: "com.voidrab.Viewrab",
 			Size:  platform.Size{W: 1100, H: 800},
 			// Wide enough for the toolbar and its window controls.
 			MinSize: platform.Size{W: 600, H: 360},
