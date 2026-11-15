@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"viewer/internal/ui/platform"
+	"viewer/internal/ui/platform/desktop"
 )
 
 // Opcodes and events of wl_data_device_manager, wl_data_device, wl_data_source
@@ -35,13 +36,6 @@ var pipe = os.Pipe
 // textMimes are the clipboard formats the client offers and accepts for text,
 // best first.
 var textMimes = []string{"text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING"}
-
-// maxPaste bounds how much clipboard text is read, and pasteTimeout how long
-// the program that holds it has to supply it.
-const (
-	maxPaste     = 8 << 20
-	pasteTimeout = 2 * time.Second
-)
 
 // clipboard is the seat's selection: the offer other programs hold, which can
 // be pasted, and the source the client holds, which they can paste from.
@@ -125,7 +119,7 @@ func (b *Backend) onDataSource(opcode uint16, d *Decoder) {
 		// The reader may be slow, so the dispatching goroutine does not wait.
 		go func() {
 			defer f.Close()
-			f.SetWriteDeadline(time.Now().Add(pasteTimeout))
+			f.SetWriteDeadline(time.Now().Add(desktop.PasteTimeout))
 			io.WriteString(f, text)
 		}()
 	case sourceCancel:
@@ -171,8 +165,8 @@ func (b *Backend) requestPaste(w *window) {
 	wr.Close()
 	go func() {
 		defer r.Close()
-		r.SetReadDeadline(time.Now().Add(pasteTimeout))
-		data, err := io.ReadAll(io.LimitReader(r, maxPaste))
+		r.SetReadDeadline(time.Now().Add(desktop.PasteTimeout))
+		data, err := io.ReadAll(io.LimitReader(r, desktop.MaxPaste))
 		if err == nil && len(data) > 0 {
 			w.emit(platform.PasteEvent{Text: string(data)})
 		}

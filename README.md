@@ -3,11 +3,11 @@
 A fast, small and simple PDF viewer with built-in PDF/A validation and
 conversion. Pure Go: no cgo or Node. It renders with
 [gopdfrab](https://github.com/voidrab/gopdfrab)'s rasterizer and talks to
-Wayland directly.
+Wayland or X11 directly.
 
 ## TODO
 
-- Support for X11, Windows and macOS
+- Support for Windows and macOS
 
 ## Features
 
@@ -27,8 +27,9 @@ Wayland directly.
 
 ## Requirements
 
-Go 1.24+, a Wayland session and, for the Open/Save dialogs,
-xdg-desktop-portal.
+Go 1.24+, a Wayland or X11 session and, for the Open/Save dialogs,
+xdg-desktop-portal. Wayland is used where the session offers it, X11
+otherwise; `VIEWER_BACKEND=x11` or `VIEWER_BACKEND=wayland` picks one.
 
 ## Usage
 
@@ -37,6 +38,7 @@ make build                      # bin/viewer, a static binary
 sudo make install               # with desktop entry and icon
 make default                    # make Viewer your default PDF application
 make test                       # Go tests; fails below 100% coverage
+go test -tags xlive -run Live ./internal/ui/platform/x11/  # against $DISPLAY
 viewer a.pdf b.pdf              # each file opens in its own tab
 ```
 
@@ -59,7 +61,8 @@ Dragging on text selects it; elsewhere it pans, as does the middle button.
 
 ```
 cmd/nativeview          entry point: file dialogs (portal), theme, single instance
-internal/ui             app, widgets, page view, text layer, Wayland platform
+internal/ui             app, widgets, page view, text layer
+internal/ui/platform    the window seam, with the wayland and x11 backends
 internal/pdfa           gopdfrab adapter producing PDF/A reports
 internal/testpdf        builds small valid PDFs for tests
 build/                  app icon and Linux desktop entry

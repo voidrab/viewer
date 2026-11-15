@@ -86,7 +86,9 @@ type CloseEvent struct{}
 type FocusEvent struct{ Focused bool }
 
 // PointerEvent reports pointer motion or a button change at (X, Y) in device
-// pixels from the window's top-left corner.
+// pixels from the window's top-left corner. While a button is held, the
+// pointer stays in the window that took the press, so motion may report
+// points outside it, and it leaves only once every button is up.
 type PointerEvent struct {
 	Kind   PointerKind
 	Button Button
@@ -235,8 +237,12 @@ type WindowOptions struct {
 	Title   string
 	Size    Size
 	MinSize Size
-	// AppID names the application to the desktop (Wayland app ID).
+	// AppID names the application to the desktop: the Wayland app ID, and on
+	// X11 the window's class.
 	AppID string
+	// Icon, if not nil, is the window's icon on desktops that take it from the
+	// window, as X11 does, rather than from the application's desktop entry.
+	Icon image.Image
 }
 
 // Window is a top-level window. Events must be drained by one goroutine;
@@ -252,9 +258,11 @@ type Window interface {
 	// ready for a frame may be answered by a single FrameEvent.
 	Invalidate()
 	SetTitle(title string)
-	// Activate asks the compositor to bring the window to the front, citing
-	// token, the activation token of the user action behind the request. It
-	// does nothing without a token or where the compositor offers no way to ask.
+	// Activate asks the compositor to bring the window to the front. token is
+	// the activation token of the user action behind the request: a Wayland
+	// activation token or an X11 startup notification ID. Where the
+	// desktop requires a token, as Wayland does, it does nothing without one;
+	// it also does nothing where the compositor offers no way to ask.
 	Activate(token string)
 	// SetClipboard makes text the clipboard's content, for other programs to
 	// paste. It must follow a key press or click, as the compositor requires.

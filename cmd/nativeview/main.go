@@ -1,7 +1,6 @@
 // Command nativeview opens PDFs in a pure-Go window: no webview and no cgo,
-// using only the Wayland platform backend. Every argument opens in its own
-// tab, in the window last used of the instance already running if there is
-// one.
+// on Wayland or X11. Every argument opens in its own tab, in the window last
+// used by the instance already running if there is one.
 package main
 
 import (
@@ -10,9 +9,9 @@ import (
 	"runtime/debug"
 
 	"viewer/internal/ui/app"
+	"viewer/internal/ui/icon"
 	"viewer/internal/ui/instance"
 	"viewer/internal/ui/platform"
-	"viewer/internal/ui/platform/wayland"
 )
 
 func main() {
@@ -53,7 +52,7 @@ func run(paths []string) error {
 	var requests <-chan instance.Request
 	srv, forwarded, err := instance.Claim(instance.DefaultPath("viewer-native"), instance.Request{
 		Paths: paths,
-		Token: os.Getenv("XDG_ACTIVATION_TOKEN"),
+		Token: activationToken(),
 	})
 	if forwarded {
 		return nil
@@ -69,7 +68,7 @@ func run(paths []string) error {
 	themeChanges := make(chan bool, 1)
 	watchScheme(theme, themeChanges)
 	dark := theme.dark()
-	be, err := wayland.New()
+	be, err := openBackend(os.Getenv, os.Stderr)
 	if err != nil {
 		return err
 	}
@@ -81,6 +80,7 @@ func run(paths []string) error {
 			Size:  platform.Size{W: 1100, H: 800},
 			// Wide enough for the toolbar and its window controls.
 			MinSize: platform.Size{W: 600, H: 360},
+			Icon:    icon.Logo(64),
 		})
 	}
 	win, err := newWindow()

@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"viewer/internal/ui/platform"
+	"viewer/internal/ui/platform/desktop"
 )
 
 // The bits of the XKB modifier mask have fixed positions.
@@ -145,7 +146,7 @@ func resolve(name string) (platform.Key, rune) {
 		if err != nil {
 			return platform.KeyNone, 0
 		}
-		return resolveValue(uint32(v))
+		return desktop.ResolveKeysym(uint32(v))
 	}
 	if k, ok := namedKeys[name]; ok {
 		return k, 0
@@ -165,46 +166,6 @@ func resolve(name string) (platform.Key, rune) {
 		return platform.KeyNone, r
 	}
 	return platform.KeyNone, 0
-}
-
-// resolveValue turns a keysym value into a navigation key or a typed rune.
-func resolveValue(v uint32) (platform.Key, rune) {
-	if k, ok := valueKeys[v]; ok {
-		return k, 0
-	}
-	switch {
-	case v >= 0x20 && v <= 0x7e, v >= 0xa0 && v <= 0xff: // Latin-1 keysyms are their code points
-		return platform.KeyNone, rune(v)
-	case v >= 0xffb0 && v <= 0xffb9: // KP_0 to KP_9
-		return platform.KeyNone, rune('0' + v - 0xffb0)
-	case v > 0x01000000 && v <= 0x01000000+unicode.MaxRune: // Unicode keysyms
-		return platform.KeyNone, rune(v - 0x01000000)
-	}
-	if r, ok := valueRunes[v]; ok {
-		return platform.KeyNone, r
-	}
-	return platform.KeyNone, 0
-}
-
-// valueKeys maps the keysym values of the namedKeys to their keys.
-var valueKeys = map[uint32]platform.Key{
-	0xff0d: platform.KeyEnter, 0xff8d: platform.KeyEnter, 0xfe34: platform.KeyEnter,
-	0xff1b: platform.KeyEscape, 0xff09: platform.KeyTab, 0xfe20: platform.KeyTab,
-	0xff08: platform.KeyBackspace, 0xffff: platform.KeyDelete, 0xff9f: platform.KeyDelete,
-	0xff51: platform.KeyLeft, 0xff96: platform.KeyLeft,
-	0xff53: platform.KeyRight, 0xff98: platform.KeyRight,
-	0xff52: platform.KeyUp, 0xff97: platform.KeyUp,
-	0xff54: platform.KeyDown, 0xff99: platform.KeyDown,
-	0xff55: platform.KeyPageUp, 0xff9a: platform.KeyPageUp,
-	0xff56: platform.KeyPageDown, 0xff9b: platform.KeyPageDown,
-	0xff50: platform.KeyHome, 0xff95: platform.KeyHome,
-	0xff57: platform.KeyEnd, 0xff9c: platform.KeyEnd,
-}
-
-// valueRunes maps the keysym values of keypad operators and of the Euro sign
-// to the runes they type.
-var valueRunes = map[uint32]rune{
-	0xffab: '+', 0xffad: '-', 0xffaa: '*', 0xffaf: '/', 0xffae: '.', 0x20ac: '€',
 }
 
 var namedKeys = map[string]platform.Key{
