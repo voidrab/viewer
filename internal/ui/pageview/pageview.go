@@ -51,6 +51,15 @@ type Options struct {
 	// Scrollbar is the colour of the scrollbars drawn over the pages, whose
 	// opacity the view sets; zero means a mid gray.
 	Scrollbar color.NRGBA
+	// Render, if not nil, renders pages in place of the document's own
+	// rendering. It must return the pixels gopdfrab's Page.Render returns. It
+	// lets pages render elsewhere, such as in other processes.
+	Render RenderFunc
+	// Parallel is the number of renders of the view that may run at once;
+	// zero means one. A document's own rendering handles one page at a time,
+	// so a larger value helps only with a Render that renders elsewhere, such
+	// as in other processes that each have the document open.
+	Parallel int
 }
 
 func (o *Options) fill() {
@@ -99,8 +108,9 @@ type Document interface {
 	Page(i int) (*gopdfrab.Page, error)
 }
 
-// renderFunc renders the part region of p at scale; tests replace it.
-type renderFunc func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error)
+// RenderFunc renders the part region of p at scale, as gopdfrab's Page.Render
+// does with those options.
+type RenderFunc func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error)
 
 func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 	return p.Render(ctx, gopdfrab.RenderOptions{Scale: scale, Region: region})
@@ -111,7 +121,8 @@ func renderPage(ctx context.Context, p *gopdfrab.Page, scale float64, region ima
 type View struct {
 	pages      []*gopdfrab.Page
 	sizes      []layout.Size // of the pages, in points
-	render     renderFunc
+	render     RenderFunc
+	parallel   int // the renders of the view that may run at once
 	opts       Options
 	invalidate func()
 	lay        *layout.Layout
@@ -143,7 +154,7 @@ type View struct {
 	// The rest is the pool's: it is guarded by the pool's lock.
 	id       int
 	inflight map[key]*job // the renders asked for and not yet delivered
-	running  bool         // a render of this view is in progress
+	running  int          // the renders of this view in progress
 	inactive bool         // the view is in the background
 }
 
@@ -155,8 +166,11 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	if err != nil {
 		return nil, err
 	}
-	v := &View{opts: opts, invalidate: invalidate, render: renderPage, pool: opts.Pool, now: time.Now, after: afterFunc,
-		datas: map[int]*pageData{}, loading: map[int]bool{}}
+	v := &View{opts: opts, invalidate: invalidate, render: renderPage, parallel: max(1, opts.Parallel), pool: opts.Pool,
+		now: time.Now, after: afterFunc, datas: map[int]*pageData{}, loading: map[int]bool{}}
+	if opts.Render != nil {
+		v.render = opts.Render
+	}
 	v.loadCtx, v.loadCancel = context.WithCancel(context.Background())
 	v.glyphs = func(ctx context.Context, i int) ([]gopdfrab.Glyph, error) { return v.pages[i].Glyphs(ctx) }
 	v.links = func(ctx context.Context, i int) ([]gopdfrab.Link, error) { return v.pages[i].Links(ctx) }

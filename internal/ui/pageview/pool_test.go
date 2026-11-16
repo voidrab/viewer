@@ -34,8 +34,8 @@ func newTracker(block func(k key) bool) *tracker {
 	return &tracker{gate: make(chan struct{}), block: block, seen: make(chan key, 256), blocked: make(chan key, 256)}
 }
 
-// render is the renderFunc of a view whose pages are v.pages.
-func (tr *tracker) render(v *View) renderFunc {
+// render is the RenderFunc of a view whose pages are v.pages.
+func (tr *tracker) render(v *View) RenderFunc {
 	return func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 		page := 0
 		for i, q := range v.pages {
@@ -266,7 +266,7 @@ func TestOnlyOneRenderPerViewRunsAtATime(t *testing.T) {
 	t.Cleanup(pool.Close)
 	var perView [2]atomic.Int32
 	var maxPer, total, maxTotal atomic.Int32
-	renderFor := func(idx int) renderFunc {
+	renderFor := func(idx int) RenderFunc {
 		return func(_ context.Context, _ *gopdfrab.Page, _ float64, region image.Rectangle) (*image.RGBA, error) {
 			n := perView[idx].Add(1)
 			for {
@@ -888,5 +888,63 @@ func TestDefaultTimerFiresAndStops(t *testing.T) {
 	}
 	if tm := afterFunc(time.Hour, func() {}); !tm.Stop() {
 		t.Error("a pending timer could not be stopped")
+	}
+}
+
+func TestParallelRunsRendersOfOneViewTogether(t *testing.T) {
+	for _, perView := range []int{1, 2} {
+		pool := NewPool(PoolOptions{Workers: 3})
+		tr := newTracker(func(key) bool { return true })
+		v, _ := sharedView(t, pool, 3, tr)
+		v.parallel = perView
+		v.Draw(paint.New(124, 400))
+		for range perView {
+			<-tr.blocked
+		}
+		// No more than perView of the view's renders start, though workers
+		// are free.
+		select {
+		case k := <-tr.blocked:
+			t.Errorf("Parallel %d: another render, of %v, started", perView, k)
+		case <-time.After(50 * time.Millisecond):
+		}
+		close(tr.gate)
+		waitIdle(t, pool)
+		pool.Close()
+	}
+}
+
+func TestOptionsRenderReplacesTheDocumentsRendering(t *testing.T) {
+	type call struct {
+		page   int
+		scale  float64
+		region image.Rectangle
+	}
+	calls := make(chan call, 64)
+	render := func(_ context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		calls <- call{p.Index(), scale, region}
+		return image.NewRGBA(image.Rect(0, 0, region.Dx(), region.Dy())), nil
+	}
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	v, err := New(openDoc(t, 2), image.Pt(124, 400), Options{Pool: pool, Render: render}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(v.Close)
+	v.now = (&autoClock{}).now
+	v.Draw(paint.New(124, 400))
+	pages := map[int]bool{}
+	timeout := time.After(5 * time.Second)
+	for len(pages) < 2 {
+		select {
+		case c := <-calls:
+			if c.scale <= 0 || c.region.Empty() {
+				t.Errorf("render of page %d at scale %v, region %v", c.page, c.scale, c.region)
+			}
+			pages[c.page] = true
+		case <-timeout:
+			t.Fatalf("pages rendered through Options.Render: %v, want 0 and 1", pages)
+		}
 	}
 }

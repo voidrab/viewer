@@ -34,9 +34,10 @@ const (
 // Pool renders parts of pages for any number of views on a few workers and
 // keeps their bitmaps under one memory budget. Work is ordered by priority:
 // what is in the active view first, nearest its middle, then what lies just
-// beyond it, then the background views. A view has at most one render running,
-// because the pages of one document render one after another whatever the
-// number of workers, and work that is no longer wanted is dropped.
+// beyond it, then the background views. A view has at most its
+// Options.Parallel renders running, which is one by default, because the
+// pages of one document render one after another whatever the number of
+// workers. Work that is no longer wanted is dropped.
 type Pool struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -182,7 +183,7 @@ func (p *Pool) detach(v *View) {
 	}
 	delete(p.areas, v.id)
 	p.fitBudget()
-	for v.running {
+	for v.running > 0 {
 		p.cond.Wait()
 	}
 }
@@ -337,12 +338,13 @@ func (p *Pool) setActive(v *View, active bool) {
 }
 
 // pick removes and returns the waiting job with the lowest priority among the
-// views that have no render running, or nil. The caller holds p.mu.
+// views with fewer than their parallel renders running, or nil. The caller
+// holds p.mu.
 func (p *Pool) pick() *job {
 	best := -1
 	bestPrio := 0
 	for i, j := range p.jobs {
-		if j.v.running {
+		if j.v.running >= j.v.parallel {
 			continue
 		}
 		prio := j.base
@@ -378,13 +380,13 @@ func (p *Pool) work() {
 			p.cond.Wait()
 		}
 		j.started = true
-		j.v.running = true
+		j.v.running++
 		p.mu.Unlock()
 
 		img, err := j.v.render(j.ctx, j.v.pages[j.k.page], float64(j.k.dpi)/72, j.k.rect)
 
 		p.mu.Lock()
-		j.v.running = false
+		j.v.running--
 		// Only a render that is still wanted may keep its result: a job that
 		// was cancelled has been removed from the view's inflight map.
 		wanted := j.v.inflight[j.k] == j && err == nil && !p.closed

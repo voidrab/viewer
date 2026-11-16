@@ -232,6 +232,22 @@ func ResizeCursor(edges Edge) Cursor {
 	return CursorDefault
 }
 
+// cssNames are the CSS names of the cursors.
+var cssNames = [...]string{
+	CursorDefault: "default", CursorPointer: "pointer",
+	CursorResizeN: "n-resize", CursorResizeS: "s-resize", CursorResizeW: "w-resize", CursorResizeE: "e-resize",
+	CursorResizeNW: "nw-resize", CursorResizeNE: "ne-resize", CursorResizeSW: "sw-resize", CursorResizeSE: "se-resize",
+}
+
+// CSSName returns the CSS name of c, which is also the name that cursor themes
+// use for it. It returns "default" for a cursor it does not know.
+func (c Cursor) CSSName() string {
+	if int(c) < len(cssNames) {
+		return cssNames[c]
+	}
+	return "default"
+}
+
 // WindowOptions describes a window to open.
 type WindowOptions struct {
 	Title   string
