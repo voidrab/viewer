@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"slices"
 
 	"github.com/voidrab/gopdfrab"
@@ -17,42 +18,40 @@ const maxOpen = 8
 
 // openDoc is a document a render worker has open, at one version of its file.
 type openDoc struct {
-	key string
-	doc *gopdfrab.Document
+	path, key string
+	doc       *gopdfrab.Document
 }
 
 // serveRenders renders pages for the viewer, which runs in another worker. It
 // does not return. The page sends this worker one job at a time, the next
 // after the last is answered.
 func serveRenders() {
-	docs := map[string]*openDoc{}
-	var recent []string // the paths of docs, the most recently used last
+	var docs []openDoc // the most recently used last
 	for job := range web.RenderJobs() {
 		var dropped []string
-		d := docs[job.Path]
-		if d != nil && d.key != job.Key { // the file was changed since it was opened
-			d.doc.Close()
-			d = nil
+		i := slices.IndexFunc(docs, func(d openDoc) bool { return d.path == job.Path })
+		var d openDoc
+		if i >= 0 {
+			d = docs[i]
+			docs = slices.Delete(docs, i, i+1)
+			if d.key != job.Key { // the file was changed since it was opened
+				d.doc.Close()
+				d.doc = nil
+			}
 		}
-		if d == nil {
-			doc, err := gopdfrab.Open(job.Path)
+		if d.doc == nil {
+			doc, err := open(job.Path)
 			if err != nil {
-				delete(docs, job.Path)
-				recent = slices.DeleteFunc(recent, func(p string) bool { return p == job.Path })
 				web.Finish(job.ID, nil, err, nil)
 				continue
 			}
-			d = &openDoc{key: job.Key, doc: doc}
-			docs[job.Path] = d
+			d = openDoc{path: job.Path, key: job.Key, doc: doc}
 		}
-		recent = append(slices.DeleteFunc(recent, func(p string) bool { return p == job.Path }), job.Path)
-		for len(recent) > maxOpen {
-			old := recent[0]
-			recent = recent[1:]
-			docs[old].doc.Close()
-			delete(docs, old)
-			web.Forget(old)
-			dropped = append(dropped, old)
+		docs = append(docs, d)
+		for len(docs) > maxOpen {
+			docs[0].doc.Close()
+			dropped = append(dropped, docs[0].path)
+			docs = docs[1:]
 		}
 		p, err := d.doc.Page(job.Page)
 		if err != nil {
@@ -62,4 +61,20 @@ func serveRenders() {
 		img, err := p.Render(context.Background(), gopdfrab.RenderOptions{Scale: job.Scale, Region: job.Region})
 		web.Finish(job.ID, img, err, dropped)
 	}
+}
+
+// open opens the document at path from memory, which on the web is far faster
+// than reading through the in-memory file system, and then removes the file,
+// so that it is held once.
+func open(path string) (*gopdfrab.Document, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := gopdfrab.OpenBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	web.Forget(path)
+	return doc, nil
 }

@@ -32,11 +32,9 @@ importScripts("memfs.js", "wasm_exec.js");
 	});
 
 	const importFiles = async (files) => {
-		const paths = [];
-		for (const f of Array.from(files)) {
-			paths.push(memfs.put(f.name, new Uint8Array(await f.arrayBuffer())));
-		}
-		return paths;
+		files = Array.from(files);
+		const buffers = await Promise.all(files.map((f) => f.arrayBuffer()));
+		return files.map((f, i) => memfs.put(f.name, new Uint8Array(buffers[i])));
 	};
 
 	let darkWatch = null;
@@ -67,16 +65,15 @@ importScripts("memfs.js", "wasm_exec.js");
 			if (r.busy || r.dead) continue;
 			const job = queue.shift();
 			if (!job) return;
-			r.busy = job;
 			let key;
 			try {
 				key = memfs.version(job.path);
 			} catch (err) {
-				r.busy = null;
 				jobs.delete(job.id);
 				job.reject(err);
 				continue;
 			}
+			r.busy = job;
 			if (r.files.get(job.path) !== key) {
 				const bytes = memfs.get(job.path).slice(); // a copy the render worker takes
 				r.worker.postMessage({ type: "file", path: job.path, bytes }, [bytes.buffer]);
@@ -135,7 +132,7 @@ importScripts("memfs.js", "wasm_exec.js");
 		prefersDark: false,
 		renderers: 0,
 		listen(f) {
-			listener = f ? (msg) => f(msg) : null;
+			listener = f || null;
 			while (listener && early.length) listener(early.shift());
 		},
 		toPage(op, arg) { postMessage({ op, arg }); },
@@ -177,7 +174,7 @@ importScripts("memfs.js", "wasm_exec.js");
 			job.reject(new Error("render dropped"));
 		},
 		// A render worker's side.
-		onJob(f) { listener = (msg) => f(msg); while (early.length) listener(early.shift()); },
+		onJob: (f) => host.listen(f),
 		finish(result) {
 			const transfer = result.image ? [result.image.pix.buffer] : [];
 			postMessage({ op: "finish", arg: result }, transfer);

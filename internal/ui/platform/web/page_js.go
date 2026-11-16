@@ -62,26 +62,23 @@ func stringsOf(a js.Value) []string {
 	return out
 }
 
-// ImportFiles copies the browser's files, a FileList or an array of File, into
-// the in-memory file system and returns their paths there.
-func ImportFiles(files js.Value) ([]string, error) {
-	v, err := Await(host().Call("importFiles", files))
+// paths calls the host's op with args and waits for the paths it promises.
+func paths(op string, args ...any) ([]string, error) {
+	v, err := Await(host().Call(op, args...))
 	if err != nil {
 		return nil, err
 	}
 	return stringsOf(v), nil
 }
 
+// ImportFiles copies the browser's files, a FileList or an array of File, into
+// the in-memory file system and returns their paths there.
+func ImportFiles(files js.Value) ([]string, error) { return paths("importFiles", files) }
+
 // PickPDFs shows the browser's file chooser for PDFs and returns the paths of
 // the files chosen, copied into the in-memory file system; none if the user
 // cancels.
-func PickPDFs() ([]string, error) {
-	v, err := Await(host().Call("pickFiles"))
-	if err != nil {
-		return nil, err
-	}
-	return stringsOf(v), nil
-}
+func PickPDFs() ([]string, error) { return paths("pickFiles") }
 
 // Fetch downloads the file at url into the in-memory file system and returns
 // its path there.
@@ -141,12 +138,7 @@ func Store(key, value string) { host().Call("store", key, value) }
 
 // RenderWorkers returns how many render workers the page started for the
 // program, zero if it could start none.
-func RenderWorkers() int {
-	if v := host().Get("renderers"); v.Type() == js.TypeNumber {
-		return v.Int()
-	}
-	return 0
-}
+func RenderWorkers() int { return host().Get("renderers").Int() }
 
 // RenderPage renders the part region of page, counted from zero, of the
 // document at path at scale in one of the page's render workers, and returns
@@ -200,7 +192,7 @@ func EncodeImage(img *image.RGBA) js.Value {
 // IsRenderer reports whether the program runs as one of the page's render
 // workers rather than as the viewer.
 func IsRenderer() bool {
-	return host().Get("role").Truthy() && host().Get("role").String() == "renderer"
+	return host().Get("role").String() == "renderer"
 }
 
 // RenderJob describes a render that a render worker is asked to perform.
@@ -249,3 +241,12 @@ func Finish(id int, img *image.RGBA, err error, dropped []string) {
 
 // Forget removes the file at path from the in-memory file system.
 func Forget(path string) { host().Call("forget", path) }
+
+// Started tells the page that the program has started.
+func Started() { host().Call("started") }
+
+// Exited tells the page that the program has ended.
+func Exited() { host().Call("exited") }
+
+// Failed tells the page that the program could not run, because of err.
+func Failed(err error) { host().Call("failed", err.Error()) }

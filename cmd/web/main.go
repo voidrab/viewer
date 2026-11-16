@@ -13,8 +13,9 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"slices"
+	"sync"
 	"sync/atomic"
-	"syscall/js"
 
 	"viewrab/internal/pdfa"
 	"viewrab/internal/ui/app"
@@ -39,30 +40,18 @@ func main() {
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "viewrab:", err)
-		host().Call("failed", err.Error())
+		web.Failed(err)
 		return
 	}
-	host().Call("exited")
+	web.Exited()
 }
-
-func host() js.Value { return js.Global().Get("viewrab") }
 
 func run() error {
 	win, err := web.New().NewWindow(platform.WindowOptions{Title: "Viewrab"})
 	if err != nil {
 		return err
 	}
-	// Files named by the page's address are fetched before the program runs.
-	// A file that cannot be fetched is reported on the console and skipped.
-	var paths []string
-	for _, url := range web.Params("file") {
-		p, err := web.Fetch(url)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "viewrab: fetching", url+":", err)
-			continue
-		}
-		paths = append(paths, p)
-	}
+	paths := fetchAll(web.Params("file"))
 	// system is the system's preference, which the watch below updates
 	// while SaveTheme reads it.
 	var system atomic.Bool
@@ -81,7 +70,7 @@ func run() error {
 			themes <- d
 		}
 	})
-	host().Call("started")
+	web.Started()
 	opts := app.Options{
 		PickFiles: web.PickPDFs,
 		OpenURI:   web.OpenURI,
@@ -117,4 +106,24 @@ func run() error {
 		opts.Render, opts.RenderWorkers = web.RenderPage, n
 	}
 	return app.Run(win, paths, opts)
+}
+
+// fetchAll fetches the files at urls, all at once, and returns their paths in
+// the in-memory file system in the order of urls. A file that cannot be
+// fetched is reported on the console and skipped.
+func fetchAll(urls []string) []string {
+	got := make([]string, len(urls))
+	var wg sync.WaitGroup
+	for i, url := range urls {
+		wg.Go(func() {
+			p, err := web.Fetch(url)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "viewrab: fetching", url+":", err)
+				return
+			}
+			got[i] = p
+		})
+	}
+	wg.Wait()
+	return slices.DeleteFunc(got, func(p string) bool { return p == "" })
 }

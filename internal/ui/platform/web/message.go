@@ -47,11 +47,12 @@ func (m Message) Event() (platform.Event, bool) {
 			kind = platform.Release
 		}
 		return platform.PointerEvent{Kind: kind, Button: b, X: m.X, Y: m.Y, Mods: m.mods()}, ok
-	case "pointermove", "pointerenter", "pointerleave":
-		kind := map[string]platform.PointerKind{
-			"pointermove": platform.Move, "pointerenter": platform.Enter, "pointerleave": platform.Leave,
-		}[m.Type]
-		return platform.PointerEvent{Kind: kind, X: m.X, Y: m.Y, Mods: m.mods()}, true
+	case "pointermove":
+		return platform.PointerEvent{Kind: platform.Move, X: m.X, Y: m.Y, Mods: m.mods()}, true
+	case "pointerenter":
+		return platform.PointerEvent{Kind: platform.Enter, X: m.X, Y: m.Y, Mods: m.mods()}, true
+	case "pointerleave":
+		return platform.PointerEvent{Kind: platform.Leave, X: m.X, Y: m.Y, Mods: m.mods()}, true
 	case "wheel":
 		dx, dy := Wheel(m.DX, m.DY, m.Mode, float64(m.H))
 		return platform.ScrollEvent{DX: dx, DY: dy, X: m.X, Y: m.Y, Mods: m.mods()}, true
@@ -60,11 +61,12 @@ func (m Message) Event() (platform.Event, bool) {
 		return ev, ok
 	case "focus", "blur":
 		return platform.FocusEvent{Focused: m.Type == "focus"}, true
-	case "dragenter", "dragover", "dragleave":
-		kind := map[string]platform.DragKind{
-			"dragenter": platform.DragEnter, "dragover": platform.DragMove, "dragleave": platform.DragLeave,
-		}[m.Type]
-		return platform.DragEvent{Kind: kind, X: m.X, Y: m.Y}, true
+	case "dragenter":
+		return platform.DragEvent{Kind: platform.DragEnter, X: m.X, Y: m.Y}, true
+	case "dragover":
+		return platform.DragEvent{Kind: platform.DragMove, X: m.X, Y: m.Y}, true
+	case "dragleave":
+		return platform.DragEvent{Kind: platform.DragLeave, X: m.X, Y: m.Y}, true
 	case "resize":
 		if m.W <= 0 || m.H <= 0 {
 			return nil, false

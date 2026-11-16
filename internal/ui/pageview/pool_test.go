@@ -34,8 +34,8 @@ func newTracker(block func(k key) bool) *tracker {
 	return &tracker{gate: make(chan struct{}), block: block, seen: make(chan key, 256), blocked: make(chan key, 256)}
 }
 
-// render is the renderFunc of a view whose pages are v.pages.
-func (tr *tracker) render(v *View) renderFunc {
+// render is the RenderFunc of a view whose pages are v.pages.
+func (tr *tracker) render(v *View) RenderFunc {
 	return func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
 		page := 0
 		for i, q := range v.pages {
@@ -266,7 +266,7 @@ func TestOnlyOneRenderPerViewRunsAtATime(t *testing.T) {
 	t.Cleanup(pool.Close)
 	var perView [2]atomic.Int32
 	var maxPer, total, maxTotal atomic.Int32
-	renderFor := func(idx int) renderFunc {
+	renderFor := func(idx int) RenderFunc {
 		return func(_ context.Context, _ *gopdfrab.Page, _ float64, region image.Rectangle) (*image.RGBA, error) {
 			n := perView[idx].Add(1)
 			for {
@@ -891,11 +891,12 @@ func TestDefaultTimerFiresAndStops(t *testing.T) {
 	}
 }
 
-func TestPerViewRunsRendersOfOneViewTogether(t *testing.T) {
+func TestParallelRunsRendersOfOneViewTogether(t *testing.T) {
 	for _, perView := range []int{1, 2} {
-		pool := NewPool(PoolOptions{Workers: 3, PerView: perView})
+		pool := NewPool(PoolOptions{Workers: 3})
 		tr := newTracker(func(key) bool { return true })
 		v, _ := sharedView(t, pool, 3, tr)
+		v.parallel = perView
 		v.Draw(paint.New(124, 400))
 		for range perView {
 			<-tr.blocked
@@ -904,7 +905,7 @@ func TestPerViewRunsRendersOfOneViewTogether(t *testing.T) {
 		// are free.
 		select {
 		case k := <-tr.blocked:
-			t.Errorf("PerView %d: another render, of %v, started", perView, k)
+			t.Errorf("Parallel %d: another render, of %v, started", perView, k)
 		case <-time.After(50 * time.Millisecond):
 		}
 		close(tr.gate)
@@ -920,8 +921,8 @@ func TestOptionsRenderReplacesTheDocumentsRendering(t *testing.T) {
 		region image.Rectangle
 	}
 	calls := make(chan call, 64)
-	render := func(_ context.Context, page int, scale float64, region image.Rectangle) (*image.RGBA, error) {
-		calls <- call{page, scale, region}
+	render := func(_ context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		calls <- call{p.Index(), scale, region}
 		return image.NewRGBA(image.Rect(0, 0, region.Dx(), region.Dy())), nil
 	}
 	pool := NewPool(PoolOptions{Workers: 1})

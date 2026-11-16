@@ -4,7 +4,9 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"image"
+	"os"
 	"sync"
 	"syscall/js"
 	"time"
@@ -60,10 +62,9 @@ type window struct {
 // the page forwards: Ctrl+V reaches the program as a key press, and the paste
 // event follows it, before or after the program asks.
 type pasteState struct {
-	text    string
-	at      time.Time // when text arrived; zero for none
-	asked   time.Time // when the program asked with no text at hand
-	pending bool
+	text  string
+	at    time.Time // when text arrived; zero for none
+	asked time.Time // when the program asked with no text at hand; zero for no request
 }
 
 // pasteWindow is how far apart a paste event and a request may be and still
@@ -96,7 +97,8 @@ func newWindow(opts platform.WindowOptions) *window {
 	return w
 }
 
-// decode reads the plain object the page posted.
+// decode reads the plain object the page posted: its type, and the fields
+// that type uses.
 func decode(v js.Value) Message {
 	str := func(name string) string {
 		if f := v.Get(name); f.Type() == js.TypeString {
@@ -111,13 +113,30 @@ func decode(v js.Value) Message {
 		return 0
 	}
 	flag := func(name string) bool { return v.Get(name).Truthy() }
-	return Message{
-		Type: str("type"), X: num("x"), Y: num("y"), Button: int(num("button")),
-		Shift: flag("shift"), Ctrl: flag("ctrl"), Alt: flag("alt"), Meta: flag("meta"),
-		AltGraph: flag("altGraph"), Key: str("key"), Code: str("code"),
-		DX: num("dx"), DY: num("dy"), Mode: int(num("mode")),
-		W: int(num("w")), H: int(num("h")), Text: str("text"),
+	m := Message{Type: str("type")}
+	mods := func() {
+		m.Shift, m.Ctrl, m.Alt = flag("shift"), flag("ctrl"), flag("alt")
+		m.Meta, m.AltGraph = flag("meta"), flag("altGraph")
 	}
+	switch m.Type {
+	case "pointerdown", "pointerup", "pointermove", "pointerenter", "pointerleave":
+		m.X, m.Y, m.Button = num("x"), num("y"), int(num("button"))
+		mods()
+	case "wheel":
+		m.X, m.Y, m.DX, m.DY = num("x"), num("y"), num("dx"), num("dy")
+		m.Mode, m.H = int(num("mode")), int(num("h"))
+		mods()
+	case "keydown", "keyup":
+		m.Key, m.Code = str("key"), str("code")
+		mods()
+	case "dragenter", "dragover", "dragleave", "drop":
+		m.X, m.Y = num("x"), num("y")
+	case "resize":
+		m.W, m.H = int(num("w")), int(num("h"))
+	case "paste", "clipboard":
+		m.Text = str("text")
+	}
+	return m
 }
 
 // handle takes one message from the page.
@@ -129,7 +148,7 @@ func (w *window) handle(v js.Value) {
 		go func() {
 			paths, err := ImportFiles(files)
 			if err != nil {
-				js.Global().Get("console").Call("error", "viewrab: dropping files:", err.Error())
+				fmt.Fprintln(os.Stderr, "viewrab: dropping files:", err)
 			}
 			w.q.post(platform.DropEvent{X: m.X, Y: m.Y, Paths: paths})
 		}()
@@ -154,7 +173,7 @@ func (w *window) handle(v js.Value) {
 func (w *window) pasted(text string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.paste.pending && time.Since(w.paste.asked) < pasteWindow {
+	if !w.paste.asked.IsZero() && time.Since(w.paste.asked) < pasteWindow {
 		w.paste = pasteState{}
 		w.q.post(platform.PasteEvent{Text: text})
 		return
@@ -220,12 +239,12 @@ func (w *window) RequestPaste() {
 		w.q.post(platform.PasteEvent{Text: text})
 		return
 	}
-	w.paste = pasteState{pending: true, asked: time.Now()}
+	w.paste = pasteState{asked: time.Now()}
 	w.mu.Unlock()
 	go func() {
 		time.Sleep(pasteWindow / 4)
 		w.mu.Lock()
-		still := w.paste.pending
+		still := !w.paste.asked.IsZero()
 		w.paste = pasteState{}
 		w.mu.Unlock()
 		if still {
@@ -247,7 +266,7 @@ func (w *window) ShowMenu(int, int)    {}
 func (w *window) StartDrag(*image.RGBA, image.Point) bool { return false }
 
 // SetCursor implements platform.Window.
-func (w *window) SetCursor(c platform.Cursor) { toPage("setCursor", CursorName(c)) }
+func (w *window) SetCursor(c platform.Cursor) { toPage("setCursor", c.CSSName()) }
 
 // Close implements platform.Window, no longer taking the page's events.
 func (w *window) Close() {

@@ -1249,8 +1249,8 @@ func TestPoolOptions(t *testing.T) {
 	}{
 		{Options{}, pageview.PoolOptions{}},
 		{Options{RenderWorkers: 3}, pageview.PoolOptions{}},
-		{Options{Render: render}, pageview.PoolOptions{Workers: 1, PerView: 1}},
-		{Options{Render: render, RenderWorkers: 3}, pageview.PoolOptions{Workers: 3, PerView: 3}},
+		{Options{Render: render}, pageview.PoolOptions{Workers: 1}},
+		{Options{Render: render, RenderWorkers: 3}, pageview.PoolOptions{Workers: 3}},
 	} {
 		if got := poolOptions(tc.opts); got != tc.want {
 			t.Errorf("poolOptions(Render set %v, RenderWorkers %d) = %+v, want %+v",

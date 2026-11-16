@@ -27,21 +27,21 @@ const (
 const atomResourceManager = 23
 
 // cursorShapes gives, for each cursor, the names it goes by in cursor
-// themes, the CSS name first, and its glyph in the core cursor font.
+// themes after its CSS name, and its glyph in the core cursor font.
 var cursorShapes = map[platform.Cursor]struct {
 	names []string
 	glyph uint16
 }{
-	platform.CursorDefault:  {[]string{"default", "left_ptr"}, 68},
-	platform.CursorPointer:  {[]string{"pointer", "hand2", "hand1"}, 60},
-	platform.CursorResizeN:  {[]string{"n-resize", "top_side"}, 138},
-	platform.CursorResizeS:  {[]string{"s-resize", "bottom_side"}, 16},
-	platform.CursorResizeW:  {[]string{"w-resize", "left_side"}, 70},
-	platform.CursorResizeE:  {[]string{"e-resize", "right_side"}, 96},
-	platform.CursorResizeNW: {[]string{"nw-resize", "top_left_corner"}, 134},
-	platform.CursorResizeNE: {[]string{"ne-resize", "top_right_corner"}, 136},
-	platform.CursorResizeSW: {[]string{"sw-resize", "bottom_left_corner"}, 12},
-	platform.CursorResizeSE: {[]string{"se-resize", "bottom_right_corner"}, 14},
+	platform.CursorDefault:  {[]string{"left_ptr"}, 68},
+	platform.CursorPointer:  {[]string{"hand2", "hand1"}, 60},
+	platform.CursorResizeN:  {[]string{"top_side"}, 138},
+	platform.CursorResizeS:  {[]string{"bottom_side"}, 16},
+	platform.CursorResizeW:  {[]string{"left_side"}, 70},
+	platform.CursorResizeE:  {[]string{"right_side"}, 96},
+	platform.CursorResizeNW: {[]string{"top_left_corner"}, 134},
+	platform.CursorResizeNE: {[]string{"top_right_corner"}, 136},
+	platform.CursorResizeSW: {[]string{"bottom_left_corner"}, 12},
+	platform.CursorResizeSE: {[]string{"bottom_right_corner"}, 14},
 }
 
 // cursors are the pointer images, made the first time each is shown: from
@@ -131,7 +131,11 @@ func (cs *cursors) fromTheme(b *Backend, c platform.Cursor) uint32 {
 	if !b.render.present {
 		return 0
 	}
-	for _, name := range cursorShapes[c].names {
+	shape, ok := cursorShapes[c]
+	if !ok {
+		return 0
+	}
+	for _, name := range append([]string{c.CSSName()}, shape.names...) {
 		if f := findCursorFile(cs.theme, name); f != "" {
 			if img, ok := loadXcursor(f, cs.size); ok {
 				return b.uploadCursor(img)

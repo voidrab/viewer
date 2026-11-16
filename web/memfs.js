@@ -236,14 +236,9 @@
 
 	// put stores bytes as a new file named name and returns its path.
 	const put = (name, bytes) => {
-		const safe = String(name).replaceAll("/", "_") || "document.pdf";
-		const dir = "/files/" + nextImport++;
-		nodes.set(dir, mkNode(true, 0o755));
-		const n = mkNode(false, 0o644);
-		n.data = bytes;
-		n.size = bytes.length;
-		nodes.set(dir + "/" + safe, n);
-		return dir + "/" + safe;
+		const path = "/files/" + nextImport++ + "/" + (String(name).replaceAll("/", "_") || "document.pdf");
+		write(path, bytes);
+		return path;
 	};
 
 	// get returns the bytes of the file at path.

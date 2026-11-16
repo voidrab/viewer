@@ -120,19 +120,3 @@ func TestWheel(t *testing.T) {
 		}
 	}
 }
-
-func TestCursorName(t *testing.T) {
-	for c, want := range map[platform.Cursor]string{
-		platform.CursorDefault: "default", platform.CursorPointer: "pointer",
-		platform.CursorResizeSE: "se-resize", platform.Cursor(200): "default",
-	} {
-		if got := CursorName(c); got != want {
-			t.Errorf("CursorName(%v) = %q, want %q", c, got, want)
-		}
-	}
-	for c := platform.CursorResizeN; c <= platform.CursorPointer; c++ {
-		if CursorName(c) == "default" {
-			t.Errorf("CursorName(%v) has no CSS cursor", c)
-		}
-	}
-}

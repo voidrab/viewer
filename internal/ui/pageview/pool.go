@@ -13,11 +13,6 @@ type PoolOptions struct {
 	// Workers is the number of renders in flight at once; zero means half the
 	// CPUs, at least one.
 	Workers int
-	// PerView is the number of renders of one view that may run at once; zero
-	// means one. A document's own rendering handles one page at a time, so a
-	// larger value helps only views whose Options.Render renders elsewhere,
-	// such as in other processes that each have the document open.
-	PerView int
 	// CacheBytes bounds the memory of all cached page bitmaps. Zero means a
 	// budget that follows the views' viewports: viewportScreens viewports'
 	// worth of pixels, between minBudget and maxBudget.
@@ -39,8 +34,8 @@ const (
 // Pool renders parts of pages for any number of views on a few workers and
 // keeps their bitmaps under one memory budget. Work is ordered by priority:
 // what is in the active view first, nearest its middle, then what lies just
-// beyond it, then the background views. A view has at most PerView renders
-// running, which is one by default, because the pages of one document render
+// beyond it, then the background views. A view has at most its Options.Parallel
+// renders running, which is one by default, because the pages of one document render
 // one after another whatever the number of workers. Work that is no longer
 // wanted is dropped.
 type Pool struct {
@@ -49,9 +44,8 @@ type Pool struct {
 	closed bool
 	wg     sync.WaitGroup
 
-	jobs    []*job // waiting to run
-	nextID  int
-	perView int // the renders of one view that may run at once
+	jobs   []*job // waiting to run
+	nextID int
 
 	budget int
 	fixed  bool        // the budget was given, rather than following the viewports
@@ -100,8 +94,7 @@ func NewPool(opts PoolOptions) *Pool {
 		opts.Workers = max(1, runtime.NumCPU()/2)
 	}
 	p := &Pool{
-		perView: max(1, opts.PerView),
-		budget:  opts.CacheBytes, fixed: opts.CacheBytes > 0, areas: map[int]int{},
+		budget: opts.CacheBytes, fixed: opts.CacheBytes > 0, areas: map[int]int{},
 		cache: map[cacheKey]*entry{}, lru: list.New(), byPage: map[viewPage][]*entry{},
 	}
 	if !p.fixed {
@@ -345,13 +338,13 @@ func (p *Pool) setActive(v *View, active bool) {
 }
 
 // pick removes and returns the waiting job with the lowest priority among the
-// views with fewer than perView renders running, or nil. The caller holds
-// p.mu.
+// views with fewer than their parallel renders running, or nil. The caller
+// holds p.mu.
 func (p *Pool) pick() *job {
 	best := -1
 	bestPrio := 0
 	for i, j := range p.jobs {
-		if j.v.running >= p.perView {
+		if j.v.running >= j.v.parallel {
 			continue
 		}
 		prio := j.base

@@ -135,20 +135,3 @@ func Wheel(dx, dy float64, mode int, page float64) (float64, float64) {
 	}
 	return dx / pixelsPerStep, dy / pixelsPerStep
 }
-
-// cursors names the CSS cursor of each platform cursor.
-var cursors = map[platform.Cursor]string{
-	platform.CursorResizeN: "n-resize", platform.CursorResizeS: "s-resize",
-	platform.CursorResizeW: "w-resize", platform.CursorResizeE: "e-resize",
-	platform.CursorResizeNW: "nw-resize", platform.CursorResizeNE: "ne-resize",
-	platform.CursorResizeSW: "sw-resize", platform.CursorResizeSE: "se-resize",
-	platform.CursorPointer: "pointer",
-}
-
-// CursorName returns the CSS cursor that shows c.
-func CursorName(c platform.Cursor) string {
-	if name, ok := cursors[c]; ok {
-		return name
-	}
-	return "default"
-}

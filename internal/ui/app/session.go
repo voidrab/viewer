@@ -46,14 +46,13 @@ func newSession(opts Options) *session {
 }
 
 // poolOptions returns the options of the pool that renders for the windows.
-// These are the defaults unless opts.Render is set. Then every render may run
-// at once, including those of one document.
+// These are the defaults unless opts.Render is set. Then the pool runs as
+// many renders at once as opts.RenderWorkers allows.
 func poolOptions(opts Options) pageview.PoolOptions {
 	if opts.Render == nil {
 		return pageview.PoolOptions{}
 	}
-	n := max(1, opts.RenderWorkers)
-	return pageview.PoolOptions{Workers: n, PerView: n}
+	return pageview.PoolOptions{Workers: max(1, opts.RenderWorkers)}
 }
 
 // options returns the options a new window starts with: those of the run,
