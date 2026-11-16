@@ -34,10 +34,10 @@ const (
 // Pool renders parts of pages for any number of views on a few workers and
 // keeps their bitmaps under one memory budget. Work is ordered by priority:
 // what is in the active view first, nearest its middle, then what lies just
-// beyond it, then the background views. A view has at most its Options.Parallel
-// renders running, which is one by default, because the pages of one document render
-// one after another whatever the number of workers. Work that is no longer
-// wanted is dropped.
+// beyond it, then the background views. A view has at most its
+// Options.Parallel renders running, which is one by default, because the
+// pages of one document render one after another whatever the number of
+// workers. Work that is no longer wanted is dropped.
 type Pool struct {
 	mu     sync.Mutex
 	cond   *sync.Cond

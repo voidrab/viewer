@@ -239,8 +239,8 @@ var cssNames = [...]string{
 	CursorResizeNW: "nw-resize", CursorResizeNE: "ne-resize", CursorResizeSW: "sw-resize", CursorResizeSE: "se-resize",
 }
 
-// CSSName returns the CSS name of c, which cursor themes also use; "default"
-// for a cursor it does not know.
+// CSSName returns the CSS name of c, which is also the name that cursor themes
+// use for it. It returns "default" for a cursor it does not know.
 func (c Cursor) CSSName() string {
 	if int(c) < len(cssNames) {
 		return cssNames[c]

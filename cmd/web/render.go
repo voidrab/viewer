@@ -63,9 +63,9 @@ func serveRenders() {
 	}
 }
 
-// open opens the document at path from memory, which on the web is far faster
-// than reading through the in-memory file system, and then removes the file,
-// so that it is held once.
+// open parses the document at path from its bytes in memory. On the web this
+// is faster than reading through the in-memory file system. It then removes
+// the file, so that the document's bytes are held once.
 func open(path string) (*gopdfrab.Document, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
