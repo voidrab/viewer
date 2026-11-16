@@ -6,6 +6,8 @@ conversion written in Go. It renders with
 Wayland, X11 or Win32 directly. You can also run it on the web as it 
 compiles to WebAssembly.
 
+![Viewrab showing a PDF](docs/showcase.png)
+
 ## TODO
 
 - Support for macOS
