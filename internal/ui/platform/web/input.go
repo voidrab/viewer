@@ -1,8 +1,8 @@
 // Package web is the platform backend for browsers, for a build to
 // WebAssembly that runs in a web worker: one window, drawn on the page's
-// canvas through an OffscreenCanvas, which takes its input from the canvas's
-// DOM events as web/viewrab.js forwards them from the page's thread. Files
-// live in the in-memory file system of web/memfs.js, in the worker.
+// canvas through an OffscreenCanvas. Its input is the canvas's DOM events,
+// which web/viewrab.js forwards from the page's thread. Files live in the
+// in-memory file system of web/memfs.js, in the worker.
 //
 // The files without a build constraint hold the parts that need no browser,
 // so that they are tested on every system.
@@ -48,12 +48,12 @@ func Modifiers(shift, ctrl, alt, meta, altGraph bool) platform.Modifiers {
 }
 
 // Key turns a KeyboardEvent, its key and code properties, into the event to
-// report, if any. A navigation key is reported pressed and released. A
-// character is reported only pressed, and with Ctrl as its unshifted
-// character in lower case, as X11 reports a shortcut; a layout that types no
-// Latin letter with the key takes the letter or digit of its place on the
-// keyboard, the code, instead. Characters typed with Alt or Super are left
-// to the browser and the desktop.
+// report, if any. A named key is reported pressed and released. A character
+// is reported only pressed. With Ctrl, it is reported as its unshifted
+// character in lower case, as the desktop backends report a shortcut; a
+// layout that types no Latin letter with the key takes the letter or digit
+// of its place on the keyboard, given by the code, instead. Characters typed
+// with Alt or Super are left to the browser and the desktop.
 //
 // Whether the browser's own handling of the key is prevented is decided on
 // the page's thread, by web/viewrab.js, which cannot wait for the worker.

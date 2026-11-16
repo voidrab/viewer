@@ -30,8 +30,8 @@ var version string
 const themeKey = "viewrab-theme"
 
 func main() {
-	// As in the native program: the heap is nearly all bitmaps the collector
-	// does not scan, so collecting often costs little.
+	// The heap is mostly bitmaps, which the collector does not scan, so
+	// frequent collections cost little.
 	debug.SetGCPercent(25)
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "viewrab:", err)
@@ -48,8 +48,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// Files the address names are fetched while the window opens; the viewer
-	// reports one that cannot be opened.
+	// Files named by the page's address are fetched before the program runs.
+	// A file that cannot be fetched is reported on the console and skipped.
 	var paths []string
 	for _, url := range web.Params("file") {
 		p, err := web.Fetch(url)
