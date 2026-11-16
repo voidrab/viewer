@@ -16,28 +16,22 @@ Check out out the live demo at [voidrab.github.io/viewrab](https://voidrab.githu
 
 ## Features
 
-- Tabs, zoom (fit width/page, 50-300%), page field, text selection and copy,
-  find, and links (highlighted, hand cursor on hover; external ones open with
-  `xdg-open`, or the default program on Windows)
-- PDF/A panel: verify against PDF/A-1b, PDF/A-2b or plain PDF structure, jump
+- Tabs, zoom, page field, text selection and copy,
+  find, and links
+- PDF/A panel to verify against PDF/A-1b, PDF/A-2b or plain PDF structure, jump
   to the pages an issue is on, and convert to a conformant copy
-- One process runs every window; later launches add a tab to the last-used
-  window. Drop PDFs on a window to open them, drag tabs to reorder them, move
-  them between windows, or tear them off into a new one
-- Light on memory: one render pool under a bitmap budget, tiled zoom, files
-  read by byte range
-- Console-style UI with the toolbar as the title bar, Adwaita Mono type, and a
-  light/dark theme that follows the desktop until you pick one (kept in
-  `~/.config/viewrab/theme`, or `%AppData%\viewrab\theme` on Windows)
+- Support for multiple document tabs, re-ordering of tabs and creation of new instances via drag-and-drop
+- Memory efficient
+- Console-style minimalistic UI
 
 ## Requirements
 
-Go 1.24+, a Wayland or X11 session and, for the Open/Save dialogs,
-xdg-desktop-portal. Wayland is used where the session offers it, X11
-otherwise; `VIEWRAB_BACKEND=x11` or `VIEWRAB_BACKEND=wayland` picks one.
+- Go 1.24+
 
-On Windows 10 1803 or later it runs as a plain Win32 program with the common
-Open and Save dialogs and follows the system's app mode for its theme.
+On Linux it runs via Wayland or X11. Wayland is used by default. 
+Change this by setting the `VIEWRAB_BACKEND` environment variable to either `x11` or `wayland`.
+
+On Windows 10 1803 or later it runs as a Win32 program.
 
 ## Usage
 
@@ -48,7 +42,7 @@ make build-web                  # bin/web, the WebAssembly build and its page (m
 make test-windows               # the Win32 backend's tests, under Wine
 sudo make install               # with desktop entry, metainfo, icon and licences
 make default                    # make Viewrab your default PDF application
-make test                       # Go tests; fails below 100% coverage
+make test                       # Go tests
 make dist                       # release archives for Linux and Windows in dist/
 viewrab a.pdf b.pdf             # each file opens in its own tab
 viewrab --version
@@ -65,32 +59,20 @@ viewrab --version
 | Ctrl+A / Ctrl+C           | Select all / copy               |
 | Ctrl+= / Ctrl+− / Ctrl+0  | Zoom in / out / fit width       |
 | Ctrl+wheel                | Zoom around the pointer         |
-| Esc                       | Close find, drop-down or panel; clear selection |
+| Esc                       | Close actions; clear selection  |
 
 Dragging on text selects it; elsewhere it pans, as does the middle button.
 
 ## In the browser
 
-`make build-web` builds Viewrab to WebAssembly in `bin/web`, with the page
-that runs it; any static HTTP server can serve the directory, and
-`make serve-web` serves it on http://127.0.0.1:8080. It is the same viewer,
-run in a web worker and drawn on the page's canvas through an OffscreenCanvas,
-which current Chrome, Firefox and Safari have. Pages render in further
-workers, up to four, one fewer than the cores, so that scrolling never waits
-for a render and pages render side by side; each holds its own copy of the
-open files, so `?renderers=N` in the address sets how many, and
-`?renderers=0` renders in the viewer's worker. It differs from the native
-program in that:
+`make build-web` builds Viewrab to WebAssembly in `bin/web`.
+Any HTTP server can serve the directory, and
+`make serve-web` serves the app on http://127.0.0.1:8080.
 
-- Files come from the browser: the open button's file chooser, files dropped
-  on the page, or `?file=<url>` in the address (each one fetched, so another
-  site's file needs CORS). They are held in memory, in the in-memory file
-  system of `web/memfs.js`, and never leave the page.
-- A converted PDF/A copy is saved among the browser's downloads.
-- One window and no tear-off: tabs reorder along the tab bar only. Ctrl+N,
-  Ctrl+T and Ctrl+W may be taken by the browser before the page sees them.
-- The theme follows the system's, or the choice made with the switch, kept
-  in the page's local storage.
+The browser build primarily differs from the native program in that 
+files come from the browser: the open button's file chooser, files dropped 
+on the page, or `?file=<url>` in the address. Files are held in memory, in
+the in-memory file system of `web/memfs.js`, and never leave the page.
 
 ## Layout
 
