@@ -35,8 +35,8 @@ WIN_VERSION  := $(or $(shell echo '$(VERSION)' | sed -nE 's/^v([0-9]+(\.[0-9]+){
 DIST    := dist
 WINRES  := go run github.com/tc-hib/go-winres@v0.3.3
 
-.PHONY: all build build-windows winres check-licenses test test-windows cover \
-	dist dist-linux dist-windows dist-src install uninstall default clean
+.PHONY: all build build-windows build-web serve-web winres check-licenses test test-windows \
+	cover dist dist-linux dist-windows dist-src install uninstall default clean
 
 all: test build
 
@@ -50,6 +50,21 @@ build:
 build-windows: winres
 	GOOS=windows GOARCH=$(ARCH) CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS) -H windowsgui" -o $(BIN).exe ./cmd/nativeview
 	@ls -lh $(BIN).exe | awk '{print "built " $$9 " (" $$5 ")"}'
+
+## build-web: bin/web, the WebAssembly build with the page that runs it,
+##            for any static HTTP server (make serve-web serves it locally)
+WEB := bin/web
+build-web:
+	mkdir -p $(WEB)
+	GOOS=js GOARCH=wasm CGO_ENABLED=0 go build $(GO_FLAGS) -o $(WEB)/viewrab.wasm ./cmd/web
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" web/index.html web/viewrab.js web/worker.js web/memfs.js $(WEB)/
+	cp build/appicon.png $(WEB)/icon.png
+	@ls -lh $(WEB)/viewrab.wasm | awk '{print "built " $$9 " (" $$5 ")"}'
+
+## serve-web: serve bin/web on http://127.0.0.1:$(PORT)
+PORT ?= 8080
+serve-web: build-web
+	python3 -m http.server -d $(WEB) -b 127.0.0.1 $(PORT)
 
 ## winres: the .exe's resources, as .syso files go build links on Windows
 winres:
@@ -75,6 +90,7 @@ test-windows:
 ## test: vet and test, held to 100% coverage
 test:
 	go vet ./...
+	GOOS=js GOARCH=wasm go vet ./cmd/web ./internal/ui/platform/web
 	go test -race -coverprofile=coverage.out ./internal/...
 	@go tool cover -func=coverage.out | awk '/^total:/ { \
 		if ($$3 != "100.0%") { print "FAIL: Go coverage " $$3 ", want 100.0%"; exit 1 } \

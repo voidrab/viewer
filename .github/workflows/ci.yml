@@ -23,6 +23,8 @@ jobs:
         run: make test
       - name: Vet for Windows
         run: GOOS=windows go vet ./...
+      - name: Build for the web
+        run: make build-web
       - name: Check the bundled licence notices
         run: make check-licenses
 

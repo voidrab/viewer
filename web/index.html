@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Viewrab</title>
+<link rel="icon" href="icon.png">
+<style>
+	html, body { margin: 0; height: 100%; overflow: hidden; background: #fafafa; }
+	@media (prefers-color-scheme: dark) { html, body { background: #1e1e1e; } }
+	/* The canvas takes this box's size: the window is the page. */
+	#viewrab-box { position: fixed; inset: 0; overflow: hidden; }
+	#viewrab { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+	#viewrab-status {
+		position: fixed; inset: 0; display: grid; place-items: center;
+		font: 14px "Adwaita Mono", ui-monospace, monospace; color: #777;
+	}
+	#viewrab-status[hidden] { display: none; }
+	#viewrab-status.failed { color: #c01c28; }
+</style>
+<script src="viewrab.js"></script>
+</head>
+<body>
+<div id="viewrab-box"><canvas id="viewrab"></canvas></div>
+<div id="viewrab-status" role="status"></div>
+<script>viewrab.start("viewrab.wasm");</script>
+</body>
+</html>

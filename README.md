@@ -39,6 +39,7 @@ Open and Save dialogs and follows the system's app mode for its theme.
 ```sh
 make build                      # bin/viewrab, a static binary (ARCH=arm64 to cross-build)
 make build-windows              # bin/viewrab.exe, for Windows, with icon and version info
+make build-web                  # bin/web, the WebAssembly build and its page (make serve-web)
 make test-windows               # the Win32 backend's tests, under Wine
 sudo make install               # with desktop entry, metainfo, icon and licences
 make default                    # make Viewrab your default PDF application
@@ -63,17 +64,39 @@ viewrab --version
 
 Dragging on text selects it; elsewhere it pans, as does the middle button.
 
+## In the browser
+
+`make build-web` builds Viewrab to WebAssembly in `bin/web`, with the page
+that runs it; any static HTTP server can serve the directory, and
+`make serve-web` serves it on http://127.0.0.1:8080. It is the same viewer,
+run in a web worker so that rendering never holds up the page, and drawn on
+the page's canvas through an OffscreenCanvas, which current Chrome, Firefox
+and Safari have. It differs from the native program in that:
+
+- Files come from the browser: the open button's file chooser, files dropped
+  on the page, or `?file=<url>` in the address (each one fetched, so another
+  site's file needs CORS). They are held in memory, in the in-memory file
+  system of `web/memfs.js`, and never leave the page.
+- A converted PDF/A copy is saved among the browser's downloads.
+- One window and no tear-off: tabs reorder along the tab bar only. Ctrl+N,
+  Ctrl+T and Ctrl+W may be taken by the browser before the page sees them.
+- The theme follows the system's, or the choice made with the switch, kept
+  in the page's local storage.
+
 ## Layout
 
 ```
 cmd/nativeview          entry point: file dialogs (portal), theme, single instance
+cmd/web                 entry point of the WebAssembly build
 internal/ui             app, widgets, page view, text layer
-internal/ui/platform    the window seam, with the wayland, x11 and win32 backends
+internal/ui/platform    the window seam, with the wayland, x11, win32 and web backends
 internal/pdfa           gopdfrab adapter producing PDF/A reports
 internal/testpdf        builds small valid PDFs for tests
 build/                  app icon, Linux desktop entry and metainfo, Windows resources,
                         and the notices of what gopdfrab bundles (make check-licenses)
 packaging/              Windows installer, AUR, Scoop, winget and Flatpak templates
+web/                    the page of the WebAssembly build, the worker it runs in, and its
+                        in-memory file system
 .github/workflows       CI, and the release built from a version tag
 ```
 
