@@ -110,8 +110,9 @@ func run() error {
 		},
 		Version: version,
 	}
-	// Pages render in the page's render workers, so that the viewer's
-	// worker, which the runtime gives one thread, stays free to scroll.
+	// Pages render in the page's render workers, so the viewer's own worker
+	// stays free to scroll. Without render workers, the viewer renders the
+	// pages itself.
 	if n := web.RenderWorkers(); n > 0 {
 		opts.Render, opts.RenderWorkers = web.RenderPage, n
 	}

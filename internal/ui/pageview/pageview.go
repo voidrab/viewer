@@ -52,9 +52,9 @@ type Options struct {
 	// opacity the view sets; zero means a mid gray.
 	Scrollbar color.NRGBA
 	// Render, if not nil, renders the part region of page, counted from
-	// zero, at scale, in place of the document's own rendering. It must give
-	// the pixels gopdfrab's Page.Render gives; it exists so that pages may
-	// render elsewhere, such as in other processes.
+	// zero, at scale, in place of the document's own rendering. It must return
+	// the pixels gopdfrab's Page.Render returns. It lets pages render elsewhere,
+	// such as in other processes.
 	Render RenderFunc
 }
 

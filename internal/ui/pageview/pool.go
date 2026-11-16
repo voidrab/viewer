@@ -13,10 +13,10 @@ type PoolOptions struct {
 	// Workers is the number of renders in flight at once; zero means half the
 	// CPUs, at least one.
 	Workers int
-	// PerView is the number of renders of one view in flight at once; zero
-	// means one. A document renders one page at a time, so more help only
-	// views whose Options.Render renders elsewhere, such as in other
-	// processes that each have the document open.
+	// PerView is the number of renders of one view that may run at once; zero
+	// means one. A document's own rendering handles one page at a time, so a
+	// larger value helps only views whose Options.Render renders elsewhere,
+	// such as in other processes that each have the document open.
 	PerView int
 	// CacheBytes bounds the memory of all cached page bitmaps. Zero means a
 	// budget that follows the views' viewports: viewportScreens viewports'
@@ -40,9 +40,9 @@ const (
 // keeps their bitmaps under one memory budget. Work is ordered by priority:
 // what is in the active view first, nearest its middle, then what lies just
 // beyond it, then the background views. A view has at most PerView renders
-// running, one unless the options say otherwise, because the pages of one
-// document render one after another whatever the number of workers, and work
-// that is no longer wanted is dropped.
+// running, which is one by default, because the pages of one document render
+// one after another whatever the number of workers. Work that is no longer
+// wanted is dropped.
 type Pool struct {
 	mu     sync.Mutex
 	cond   *sync.Cond

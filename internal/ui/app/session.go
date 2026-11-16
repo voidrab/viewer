@@ -45,9 +45,9 @@ func newSession(opts Options) *session {
 	return &session{opts: opts, pool: pageview.NewPool(poolOptions(opts)), empty: make(chan struct{})}
 }
 
-// poolOptions returns the options of the pool that renders for the windows:
-// the defaults, unless pages render elsewhere, where every render may run at
-// once, those of one document included.
+// poolOptions returns the options of the pool that renders for the windows.
+// These are the defaults unless opts.Render is set. Then every render may run
+// at once, including those of one document.
 func poolOptions(opts Options) pageview.PoolOptions {
 	if opts.Render == nil {
 		return pageview.PoolOptions{}

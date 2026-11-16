@@ -11,8 +11,8 @@ import (
 	"viewrab/internal/ui/platform/web"
 )
 
-// maxOpen is how many documents a render worker keeps open, the most
-// recently used; each holds its file in the worker's memory.
+// maxOpen is the number of documents a render worker keeps open. When more
+// are open, the least recently used is closed. Each holds its file in memory.
 const maxOpen = 8
 
 // openDoc is a document a render worker has open, at one version of its file.
@@ -21,16 +21,16 @@ type openDoc struct {
 	doc *gopdfrab.Document
 }
 
-// serveRenders renders pages for the viewer, which runs in another worker,
-// until the page closes. The page sends a job only once the last is answered,
-// so renders run one at a time.
+// serveRenders renders pages for the viewer, which runs in another worker. It
+// does not return. The page sends this worker one job at a time, the next
+// after the last is answered.
 func serveRenders() {
 	docs := map[string]*openDoc{}
 	var recent []string // the paths of docs, the most recently used last
 	for job := range web.RenderJobs() {
 		var dropped []string
 		d := docs[job.Path]
-		if d != nil && d.key != job.Key { // the file changed, as converting in place does
+		if d != nil && d.key != job.Key { // the file was changed since it was opened
 			d.doc.Close()
 			d = nil
 		}

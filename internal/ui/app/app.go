@@ -69,10 +69,10 @@ type Options struct {
 	// means a development build.
 	Version string
 	// Render, if not nil, renders the pages of the document at path in place
-	// of the documents' own rendering, as pageview.Options.Render does, and
-	// RenderWorkers is how many renders it takes at once. It is for a
-	// platform that renders elsewhere, such as the browser's other workers;
-	// zero RenderWorkers means one.
+	// of the document's own rendering, with the semantics of
+	// pageview.Options.Render. RenderWorkers is the number of renders that may
+	// run at once; zero means one. It is for platforms that render in other
+	// workers, such as the browser.
 	Render        func(ctx context.Context, path string, page int, scale float64, region image.Rectangle) (*image.RGBA, error)
 	RenderWorkers int
 }
