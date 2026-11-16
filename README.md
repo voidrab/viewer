@@ -1,9 +1,10 @@
 # Viewrab
 
 A fast, small and simple PDF viewer with built-in PDF/A validation and
-conversion. Pure Go: no cgo or Node. It renders with
+conversion written in Go. It renders with
 [gopdfrab](https://github.com/voidrab/gopdfrab)'s rasterizer and talks to
-Wayland, X11 or Win32 directly.
+Wayland, X11 or Win32 directly. You can also run it on the web as it 
+compiles to WebAssembly.
 
 ## TODO
 
