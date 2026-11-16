@@ -68,6 +68,13 @@ type Options struct {
 	// Version is the program's version, shown in the About dialog; empty
 	// means a development build.
 	Version string
+	// Render, if not nil, renders the pages of the document at path in place
+	// of the documents' own rendering, as pageview.Options.Render does, and
+	// RenderWorkers is how many renders it takes at once. It is for a
+	// platform that renders elsewhere, such as the browser's other workers;
+	// zero RenderWorkers means one.
+	Render        func(ctx context.Context, path string, page int, scale float64, region image.Rectangle) (*image.RGBA, error)
+	RenderWorkers int
 }
 
 // withDefaults returns opts with the zero fields that have defaults set.
@@ -486,10 +493,16 @@ func (a *App) load(path string) (*document, error) {
 	// render of doc starts.
 	info := a.opts.Inspect(doc)
 	d.version, d.claimed = info.Version, info.Claimed
-	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), pageview.Options{
+	opts := pageview.Options{
 		Pool: a.pool, OpenURI: a.opts.OpenURI, Gap: theme.PageGap, Margin: theme.PageMargin,
 		Background: pal.Canvas, Selection: pal.Selection,
-	}, d.invalidate)
+	}
+	if render := a.opts.Render; render != nil {
+		opts.Render = func(ctx context.Context, page int, scale float64, region image.Rectangle) (*image.RGBA, error) {
+			return render(ctx, path, page, scale, region)
+		}
+	}
+	d.view, err = newView(doc, image.Pt(content.Dx(), content.Dy()), opts, d.invalidate)
 	if err != nil {
 		doc.Close()
 		return nil, err

@@ -33,6 +33,10 @@ func main() {
 	// The heap is mostly bitmaps, which the collector does not scan, so
 	// frequent collections cost little.
 	debug.SetGCPercent(25)
+	if web.IsRenderer() {
+		serveRenders()
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "viewrab:", err)
 		host().Call("failed", err.Error())
@@ -78,7 +82,7 @@ func run() error {
 		}
 	})
 	host().Call("started")
-	return app.Run(win, paths, app.Options{
+	opts := app.Options{
 		PickFiles: web.PickPDFs,
 		OpenURI:   web.OpenURI,
 		Dark:      dark,
@@ -105,5 +109,11 @@ func run() error {
 			return cr, err
 		},
 		Version: version,
-	})
+	}
+	// Pages render in the page's render workers, so that the viewer's
+	// worker, which the runtime gives one thread, stays free to scroll.
+	if n := web.RenderWorkers(); n > 0 {
+		opts.Render, opts.RenderWorkers = web.RenderPage, n
+	}
+	return app.Run(win, paths, opts)
 }

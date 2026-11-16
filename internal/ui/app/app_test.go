@@ -1206,3 +1206,55 @@ func TestSelectAllSeedsTheFindBarWithItsFirstLine(t *testing.T) {
 		t.Errorf("the bar starts with %q, want the first line of the selection", got)
 	}
 }
+
+func TestRenderOptionRendersThePagesOfEachPath(t *testing.T) {
+	var plat platform.Fake
+	w, _ := plat.NewWindow(platform.WindowOptions{Size: platform.Size{W: winW, H: winH}})
+	type call struct {
+		path string
+		page int
+	}
+	calls := make(chan call, 64)
+	a, err := New(w, Options{
+		Inspect: func(*gopdfrab.Document) pdfa.Info { return pdfa.Info{} },
+		Render: func(_ context.Context, path string, page int, _ float64, region image.Rectangle) (*image.RGBA, error) {
+			calls <- call{path, page}
+			return image.NewRGBA(image.Rect(0, 0, region.Dx(), region.Dy())), nil
+		},
+		RenderWorkers: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.closeAll)
+	path := testpdf.Write(t, t.TempDir(), "a.pdf", testpdf.BuildPages([][2]int{{200, 300}}))
+	a.Handle(platform.ResizeEvent{Size: platform.Size{W: winW, H: winH}, Scale: 1})
+	a.Open(path)
+	a.Handle(platform.FrameEvent{})
+	select {
+	case c := <-calls:
+		if c.path != a.docs[0].path || c.page != 0 {
+			t.Errorf("rendered page %d of %q, want page 0 of %q", c.page, c.path, a.docs[0].path)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no page rendered through Options.Render")
+	}
+}
+
+func TestPoolOptions(t *testing.T) {
+	render := func(context.Context, string, int, float64, image.Rectangle) (*image.RGBA, error) { return nil, nil }
+	for _, tc := range []struct {
+		opts Options
+		want pageview.PoolOptions
+	}{
+		{Options{}, pageview.PoolOptions{}},
+		{Options{RenderWorkers: 3}, pageview.PoolOptions{}},
+		{Options{Render: render}, pageview.PoolOptions{Workers: 1, PerView: 1}},
+		{Options{Render: render, RenderWorkers: 3}, pageview.PoolOptions{Workers: 3, PerView: 3}},
+	} {
+		if got := poolOptions(tc.opts); got != tc.want {
+			t.Errorf("poolOptions(Render set %v, RenderWorkers %d) = %+v, want %+v",
+				tc.opts.Render != nil, tc.opts.RenderWorkers, got, tc.want)
+		}
+	}
+}

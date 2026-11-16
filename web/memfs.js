@@ -262,5 +262,32 @@
 		chdir() { throw fsError("ENOSYS"); },
 	};
 	globalThis.path ??= { resolve: (...segments) => normalize(segments.join("/")) };
-	globalThis.memfs = { fs, put, get, base: (path) => normalize(path).split("/").pop() };
+	// write stores bytes as the file at path, with its directories, in place
+	// of any file there.
+	const write = (path, bytes) => {
+		path = normalize(path);
+		let dir = "";
+		for (const part of parentOf(path).split("/").filter(Boolean)) {
+			dir += "/" + part;
+			if (!nodes.has(dir)) nodes.set(dir, mkNode(true, 0o755));
+		}
+		const n = mkNode(false, 0o644);
+		n.data = bytes;
+		n.size = bytes.length;
+		nodes.set(path, n);
+	};
+
+	// version names the version of the file at path: a file put, written or
+	// renamed there anew has another, one written in place keeps its own
+	// until its modification time moves.
+	const version = (path) => {
+		const n = lookup(path);
+		return n.ino + ":" + n.mtime;
+	};
+
+	const remove = (path) => { nodes.delete(normalize(path)); };
+
+	globalThis.memfs = {
+		fs, put, get, write, version, remove, base: (path) => normalize(path).split("/").pop(),
+	};
 })();

@@ -42,7 +42,18 @@ type tabDrag struct {
 }
 
 func newSession(opts Options) *session {
-	return &session{opts: opts, pool: pageview.NewPool(pageview.PoolOptions{}), empty: make(chan struct{})}
+	return &session{opts: opts, pool: pageview.NewPool(poolOptions(opts)), empty: make(chan struct{})}
+}
+
+// poolOptions returns the options of the pool that renders for the windows:
+// the defaults, unless pages render elsewhere, where every render may run at
+// once, those of one document included.
+func poolOptions(opts Options) pageview.PoolOptions {
+	if opts.Render == nil {
+		return pageview.PoolOptions{}
+	}
+	n := max(1, opts.RenderWorkers)
+	return pageview.PoolOptions{Workers: n, PerView: n}
 }
 
 // options returns the options a new window starts with: those of the run,

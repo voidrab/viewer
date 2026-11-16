@@ -69,9 +69,13 @@ Dragging on text selects it; elsewhere it pans, as does the middle button.
 `make build-web` builds Viewrab to WebAssembly in `bin/web`, with the page
 that runs it; any static HTTP server can serve the directory, and
 `make serve-web` serves it on http://127.0.0.1:8080. It is the same viewer,
-run in a web worker so that rendering never holds up the page, and drawn on
-the page's canvas through an OffscreenCanvas, which current Chrome, Firefox
-and Safari have. It differs from the native program in that:
+run in a web worker and drawn on the page's canvas through an OffscreenCanvas,
+which current Chrome, Firefox and Safari have. Pages render in further
+workers, up to four, one fewer than the cores, so that scrolling never waits
+for a render and pages render side by side; each holds its own copy of the
+open files, so `?renderers=N` in the address sets how many, and
+`?renderers=0` renders in the viewer's worker. It differs from the native
+program in that:
 
 - Files come from the browser: the open button's file chooser, files dropped
   on the page, or `?file=<url>` in the address (each one fetched, so another

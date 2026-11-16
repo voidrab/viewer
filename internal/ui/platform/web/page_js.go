@@ -3,7 +3,9 @@
 package web
 
 import (
+	"context"
 	"errors"
+	"image"
 	"syscall/js"
 )
 
@@ -136,3 +138,111 @@ func Stored(key string) (string, bool) {
 // Store keeps value under key in the page's local storage, or forgets the key
 // when value is empty. Storage the browser refuses keeps nothing.
 func Store(key, value string) { host().Call("store", key, value) }
+
+// RenderWorkers returns how many render workers the page started for the
+// program, zero if it could start none.
+func RenderWorkers() int {
+	if v := host().Get("renderers"); v.Type() == js.TypeNumber {
+		return v.Int()
+	}
+	return 0
+}
+
+// RenderPage renders the part region of page, counted from zero, of the
+// document at path at scale in one of the page's render workers, each of
+// which has its own copy of the file, and returns the pixels gopdfrab's
+// Page.Render gives. The calling goroutine waits, while the worker the
+// program runs in stays free. If ctx is done first, the render is dropped,
+// or its result is once it comes.
+func RenderPage(ctx context.Context, path string, page int, scale float64, region image.Rectangle) (*image.RGBA, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	job := host().Call("renderPage", path, page, scale, region.Min.X, region.Min.Y, region.Max.X, region.Max.Y)
+	id := job.Get("id")
+	// Dropping a job settles its promise at once, which ends the wait.
+	stop := context.AfterFunc(ctx, func() { host().Call("cancelRender", id) })
+	defer stop()
+	v, err := Await(job.Get("promise"))
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return decodeImage(v), nil
+}
+
+// decodeImage reads the image a render worker sends: its rectangle, stride
+// and pixels.
+func decodeImage(v js.Value) *image.RGBA {
+	img := &image.RGBA{
+		Rect:   image.Rect(v.Get("x0").Int(), v.Get("y0").Int(), v.Get("x1").Int(), v.Get("y1").Int()),
+		Stride: v.Get("stride").Int(),
+	}
+	img.Pix = make([]byte, v.Get("pix").Length())
+	js.CopyBytesToGo(img.Pix, v.Get("pix"))
+	return img
+}
+
+// EncodeImage turns img into the object a render worker sends, for
+// decodeImage on the other side.
+func EncodeImage(img *image.RGBA) js.Value {
+	pix := js.Global().Get("Uint8Array").New(len(img.Pix))
+	js.CopyBytesToJS(pix, img.Pix)
+	return js.ValueOf(map[string]any{
+		"x0": img.Rect.Min.X, "y0": img.Rect.Min.Y, "x1": img.Rect.Max.X, "y1": img.Rect.Max.Y,
+		"stride": img.Stride, "pix": pix,
+	})
+}
+
+// IsRenderer reports whether the program runs as one of the page's render
+// workers rather than as the viewer.
+func IsRenderer() bool {
+	return host().Get("role").Truthy() && host().Get("role").String() == "renderer"
+}
+
+// RenderJob is a render a render worker is asked for.
+type RenderJob struct {
+	ID        int
+	Path, Key string // the file, and the version of it the job is for
+	Page      int
+	Scale     float64
+	Region    image.Rectangle
+}
+
+// RenderJobs returns the renders the render worker is asked for, one at a
+// time: the page sends the next once Finish answers the last.
+func RenderJobs() <-chan RenderJob {
+	jobs := make(chan RenderJob, 16)
+	host().Call("onJob", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		j := args[0]
+		job := RenderJob{
+			ID: j.Get("id").Int(), Path: j.Get("path").String(), Key: j.Get("key").String(),
+			Page: j.Get("page").Int(), Scale: j.Get("scale").Float(),
+			Region: image.Rect(j.Get("x0").Int(), j.Get("y0").Int(), j.Get("x1").Int(), j.Get("y1").Int()),
+		}
+		go func() { jobs <- job }() // a callback must not block
+		return nil
+	}))
+	return jobs
+}
+
+// Finish answers render job id with img, or with err if it failed, and
+// reports the paths whose files the render worker no longer keeps.
+func Finish(id int, img *image.RGBA, err error, dropped []string) {
+	drops := make([]any, len(dropped))
+	for i, p := range dropped {
+		drops[i] = p
+	}
+	result := map[string]any{"id": id, "dropped": drops}
+	if err != nil {
+		result["error"] = err.Error()
+	} else {
+		result["image"] = EncodeImage(img)
+	}
+	host().Call("finish", result)
+}
+
+// Forget removes the file at path from the in-memory file system.
+func Forget(path string) { host().Call("forget", path) }

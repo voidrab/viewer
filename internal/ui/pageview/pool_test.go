@@ -890,3 +890,60 @@ func TestDefaultTimerFiresAndStops(t *testing.T) {
 		t.Error("a pending timer could not be stopped")
 	}
 }
+
+func TestPerViewRunsRendersOfOneViewTogether(t *testing.T) {
+	for _, perView := range []int{1, 2} {
+		pool := NewPool(PoolOptions{Workers: 3, PerView: perView})
+		tr := newTracker(func(key) bool { return true })
+		v, _ := sharedView(t, pool, 3, tr)
+		v.Draw(paint.New(124, 400))
+		for range perView {
+			<-tr.blocked
+		}
+		// No more than perView of the view's renders start, though workers
+		// are free.
+		select {
+		case k := <-tr.blocked:
+			t.Errorf("PerView %d: another render, of %v, started", perView, k)
+		case <-time.After(50 * time.Millisecond):
+		}
+		close(tr.gate)
+		waitIdle(t, pool)
+		pool.Close()
+	}
+}
+
+func TestOptionsRenderReplacesTheDocumentsRendering(t *testing.T) {
+	type call struct {
+		page   int
+		scale  float64
+		region image.Rectangle
+	}
+	calls := make(chan call, 64)
+	render := func(_ context.Context, page int, scale float64, region image.Rectangle) (*image.RGBA, error) {
+		calls <- call{page, scale, region}
+		return image.NewRGBA(image.Rect(0, 0, region.Dx(), region.Dy())), nil
+	}
+	pool := NewPool(PoolOptions{Workers: 1})
+	t.Cleanup(pool.Close)
+	v, err := New(openDoc(t, 2), image.Pt(124, 400), Options{Pool: pool, Render: render}, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(v.Close)
+	v.now = (&autoClock{}).now
+	v.Draw(paint.New(124, 400))
+	pages := map[int]bool{}
+	timeout := time.After(5 * time.Second)
+	for len(pages) < 2 {
+		select {
+		case c := <-calls:
+			if c.scale <= 0 || c.region.Empty() {
+				t.Errorf("render of page %d at scale %v, region %v", c.page, c.scale, c.region)
+			}
+			pages[c.page] = true
+		case <-timeout:
+			t.Fatalf("pages rendered through Options.Render: %v, want 0 and 1", pages)
+		}
+	}
+}
