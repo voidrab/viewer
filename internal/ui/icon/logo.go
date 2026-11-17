@@ -27,9 +27,9 @@ func DrawLogo(c *paint.Canvas, r image.Rectangle) {
 	c.DrawImage(r.Min, Logo(c.Device(r).Dx()))
 }
 
-// Logo returns the app's gopher icon, size device pixels square and premultiplied for
-// paint.Canvas.DrawImage. Each size is scaled once and then reused, so the
-// result must not be modified.
+// Logo returns the app's gopher icon, size device pixels square and
+// premultiplied for paint.Canvas.DrawImage. Each size is scaled once and then
+// reused, so the result must not be modified.
 func Logo(size int) *image.RGBA {
 	logoMu.Lock()
 	defer logoMu.Unlock()

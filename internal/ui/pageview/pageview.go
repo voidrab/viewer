@@ -237,8 +237,8 @@ func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
 // and memory of two for a difference hard to see.
 const maxDensity = 2
 
-// renderDPI returns the dpi pages are rendered at: the zoom's, at the
-// display's density, so that a page's pixels are the display's.
+// renderDPI returns the dpi pages are rendered at: the dpi of the zoom,
+// multiplied by the display's density up to maxDensity.
 func (v *View) renderDPI() int {
 	return dpiFor(v.lay.Scale() * min(max(v.density, 1), maxDensity))
 }

@@ -27,7 +27,7 @@ type Message struct {
 	// for "wheel", which deltas in pages are measured in.
 	W, H int
 	// Scale is the device pixels per CSS pixel, for "resize": the page's
-	// devicePixelRatio. Zero means 1.
+	// devicePixelRatio. A value that is not positive means 1.
 	Scale float64
 	// Text is the text of a "paste".
 	Text string

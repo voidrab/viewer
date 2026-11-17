@@ -156,8 +156,9 @@ func (c *Canvas) StrokeRound(r image.Rectangle, radius, width int, col color.NRG
 }
 
 // round paints the rounded rectangle r, or with a positive width only the
-// band of that width inside its edge, all in device pixels. The straight parts are plain fills; only
-// the corner squares are worked out pixel by pixel.
+// band of that width inside its edge, all in device pixels. The straight
+// parts are plain fills; only the corner squares are worked out pixel by
+// pixel.
 func (c *Canvas) round(r image.Rectangle, radius, width int, col color.NRGBA) {
 	radius = min(radius, r.Dx()/2, r.Dy()/2)
 	if radius <= 0 {
@@ -249,10 +250,9 @@ func coverage(px, py, hx, hy, r float64) float64 {
 }
 
 // DrawImage blends src over the canvas with its top-left corner at the
-// logical point p. src is in device pixels, one to each of the bitmap's, so
-// that it is drawn sharp: on a canvas at scale 2, an icon to fill 16 logical
-// pixels is made 32 pixels wide. It must be premultiplied, as image.RGBA
-// samples are.
+// logical point p. src is taken in device pixels and is not scaled, so that
+// it is drawn sharp: on a canvas at scale 2, an icon filling 16 logical pixels
+// must be 32 pixels wide. It must be premultiplied, as image.RGBA samples are.
 func (c *Canvas) DrawImage(p image.Point, src *image.RGBA) {
 	p = c.devicePoint(p)
 	dst := src.Rect.Sub(src.Rect.Min).Add(p).Intersect(c.clip())
@@ -283,14 +283,15 @@ func blend(d []uint8, src color.RGBA) {
 }
 
 // DrawScaled replaces the pixels of dst, a rectangle in device pixels, with
-// src stretched to fill it, using nearest-neighbour sampling. src must be opaque, because its pixels replace
-// the canvas's rather than blend over them. It is meant for showing a page
-// rendered at a slightly different size than its slot.
+// src stretched to fill it, using nearest-neighbour sampling. src must be
+// opaque, because its pixels replace the canvas's rather than blend over
+// them. It is meant for showing a page rendered at a slightly different size
+// than its slot.
 //
 // dst is in device pixels because what is drawn this way is laid out in
 // them: the tiles of a page, which must meet with no seam, each copied one to
-// one when rendered at the size of its place. Device maps a logical
-// rectangle.
+// one when rendered at the size of its place. Callers map a logical rectangle
+// with Device.
 func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
 	sw, sh := src.Rect.Dx(), src.Rect.Dy()
 	if dst.Empty() || sw == 0 || sh == 0 {
