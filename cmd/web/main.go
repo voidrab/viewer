@@ -1,13 +1,13 @@
 //go:build js && wasm
 
-// Command web is Viewrab for browsers, built to WebAssembly: the same viewer
-// as the native program, run in a web worker that web/viewrab.js starts for
-// the page web/index.html and drawn on the page's canvas. It is built with
-// the gopdfrab_nofonts tag, and fetches gopdfrab's substitute fonts from the
-// fonts directory next to the page when a document needs one. Files
-// are opened from the browser's file chooser, dropped on the page or named by
-// the page's ?file= parameters, which are fetched; converted copies are saved
-// among the user's downloads.
+// Command web is Viewrab for browsers, built to WebAssembly. It is the same
+// viewer as the native program. It runs in a web worker, which web/viewrab.js
+// starts from the page web/index.html, and draws on the page's canvas. The
+// build uses the gopdfrab_nofonts tag, and the program fetches gopdfrab's
+// substitute fonts from the fonts directory next to the page when a document
+// needs one. Files are opened from the browser's file chooser, dropped on the
+// page or named by the page's ?file= parameters, which are fetched; converted
+// copies are saved among the user's downloads.
 package main
 
 import (
@@ -38,8 +38,8 @@ func main() {
 	// The heap is mostly bitmaps, which the collector does not scan, so
 	// frequent collections cost little.
 	debug.SetGCPercent(25)
-	// The build leaves gopdfrab's substitute fonts out, nearly half of what
-	// the page would download first; a document that needs one fetches it.
+	// The gopdfrab_nofonts build leaves gopdfrab's substitute fonts out, so
+	// web.FetchFont supplies them when a document needs one.
 	gopdfrab.SetFontSource(web.FetchFont)
 	if web.IsRenderer() {
 		serveRenders()

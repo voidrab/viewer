@@ -90,10 +90,10 @@ func Fetch(url string) (string, error) {
 	return v.String(), nil
 }
 
-// FetchFont downloads gopdfrab's substitute font file name, which the web
-// build leaves out of the program, from the fonts directory next to the
-// page. The browser's cache shares it between the workers. Like Await, it
-// blocks the calling goroutine.
+// FetchFont returns the gzip-compressed contents of the substitute font file
+// name, which the gopdfrab_nofonts build leaves out of the program. It fetches
+// the file from the fonts directory next to the page. Like Await, it blocks
+// the calling goroutine.
 func FetchFont(name string) ([]byte, error) {
 	v, err := Await(host().Call("fetchFont", name))
 	if err != nil {
