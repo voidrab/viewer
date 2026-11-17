@@ -34,6 +34,7 @@ var cursorShapes = map[platform.Cursor]struct {
 }{
 	platform.CursorDefault:  {[]string{"left_ptr"}, 68},
 	platform.CursorPointer:  {[]string{"hand2", "hand1"}, 60},
+	platform.CursorText:     {[]string{"xterm", "ibeam"}, 152},
 	platform.CursorResizeN:  {[]string{"top_side"}, 138},
 	platform.CursorResizeS:  {[]string{"bottom_side"}, 16},
 	platform.CursorResizeW:  {[]string{"left_side"}, 70},

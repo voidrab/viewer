@@ -112,7 +112,9 @@ func (a *App) pointer(ev platform.PointerEvent) {
 	o := a.origin(target)
 	local.X, local.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
 	a.deliver(target, local)
-	if ev.Kind == platform.Release {
+	if ev.Kind == platform.Release || a.menu.Open {
+		// A menu opened by the press takes the release, so no section keeps
+		// the pointer.
 		a.capture = sectionNone
 	}
 	a.win.Invalidate()
@@ -144,6 +146,12 @@ func (a *App) deliver(s section, ev platform.PointerEvent) {
 		d := a.current()
 		if d == nil {
 			a.hintPointer(ev)
+			return
+		}
+		if ev.Kind == platform.Press && ev.Button == platform.Right {
+			d.view.HandlePointer(platform.PointerEvent{Kind: platform.Leave})
+			o := a.origin(sectionContent)
+			a.openContextMenu(image.Pt(int(ev.X)+o.X, int(ev.Y)+o.Y))
 			return
 		}
 		d.view.HandlePointer(ev)
@@ -227,17 +235,38 @@ const (
 	menuZoom    menuKind = iota // the zoom presets
 	menuProfile                 // the PDF/A panel's profiles
 	menuApp                     // the application menu
+	menuContext                 // the page's context menu
 )
 
 // appMenu is the application menu's items.
 var appMenu = []string{"About Viewrab"}
+
+// The context menu's items, in order, and their shortcuts.
+const (
+	contextCopy = iota
+	contextSelectAll
+)
+
+var (
+	contextMenu      = []string{contextCopy: "Copy", contextSelectAll: "Select All"}
+	contextShortcuts = []string{contextCopy: "Ctrl+C", contextSelectAll: "Ctrl+A"}
+)
 
 // showMenu opens the menu of kind with items, checked at checked, below
 // anchor, in window coordinates.
 func (a *App) showMenu(kind menuKind, items []string, checked int, anchor image.Rectangle) {
 	a.menuKind = kind
 	a.menu.Items, a.menu.Checked = items, checked
+	a.menu.Shortcuts, a.menu.Disabled = nil, nil
 	a.menu.Show(anchor, a.bounds())
+}
+
+// openContextMenu opens the page's context menu at at, in window coordinates.
+// Copy is offered only while text is selected.
+func (a *App) openContextMenu(at image.Point) {
+	a.showMenu(menuContext, contextMenu, -1, image.Rectangle{Min: at, Max: at}.Sub(image.Pt(0, 2)))
+	a.menu.Shortcuts = contextShortcuts
+	a.menu.Disabled = []bool{contextCopy: !a.current().view.HasSelection(), contextSelectAll: false}
 }
 
 // openZoomMenu opens the zoom presets below the zoom drop-down.
@@ -260,6 +289,15 @@ func (a *App) choose(i int) {
 		a.panel.Profile = i
 	case menuApp:
 		a.about.Show()
+	case menuContext:
+		switch i {
+		case contextCopy:
+			a.copySelection()
+		case contextSelectAll:
+			if d := a.current(); d != nil {
+				d.view.SelectAll()
+			}
+		}
 	}
 }
 

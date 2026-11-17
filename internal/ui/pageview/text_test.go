@@ -198,14 +198,15 @@ func TestClickingALinkFollowsIt(t *testing.T) {
 	if got := v.lay.ViewRect(2).Min.Y; got != 12-(30-linkMargin) {
 		t.Errorf("page 2 starts at %d, want %d", got, 12-(30-linkMargin))
 	}
-	// Dragging the page from a link over no text pans it and follows nothing.
+	// Dragging from a link over no text selects, neither panning nor
+	// following the link.
 	v.lay.GoTo(0)
 	ready(t, v, c, 0)
 	press(v, q)
 	move(v, q.Add(image.Pt(0, -30)))
 	release(v, q.Add(image.Pt(0, -30)))
-	if v.lay.Scroll().Y != 30 || v.lay.Scroll().X != 0 {
-		t.Errorf("dragging from the link did not pan by 30: scroll %v", v.lay.Scroll())
+	if v.lay.Scroll() != (image.Point{}) || v.lay.ViewRect(0).Min.Y != 12 {
+		t.Errorf("dragging from the link panned or followed it: scroll %v", v.lay.Scroll())
 	}
 	// No opener, and a destination off the end, do nothing.
 	v.opts.OpenURI = nil
@@ -214,7 +215,7 @@ func TestClickingALinkFollowsIt(t *testing.T) {
 	v.follow(gopdfrab.Link{Page: -1})
 }
 
-func TestPressBeforeTheTextIsReadPansInstead(t *testing.T) {
+func TestPressBeforeTheTextIsReadDoesNothing(t *testing.T) {
 	v, _, _ := textView(t, 1, nil)
 	gate := make(chan struct{})
 	v.glyphs = func(ctx context.Context, i int) ([]gopdfrab.Glyph, error) {
@@ -222,8 +223,8 @@ func TestPressBeforeTheTextIsReadPansInstead(t *testing.T) {
 		return line(10, 10, "Hello"), nil
 	}
 	press(v, at(v, 0, 11, 16))
-	if !v.ptr.pan || v.text.selecting {
-		t.Error("a press before the text was read did not pan")
+	if v.ptr.pan || v.text.selecting {
+		t.Error("a press before the text was read panned or selected")
 	}
 	release(v, at(v, 0, 11, 16))
 	close(gate)
@@ -267,16 +268,21 @@ func TestDraggingPastTheEdgeScrollsAndSelectsTheNearestPage(t *testing.T) {
 		t.Error("dragging above the view did not scroll up")
 	}
 	release(v, image.Pt(60, -50))
-	// A press in the gap between pages starts nothing.
+	// A press in the margin around the pages starts a selection on the
+	// nearest page rather than dragging the page.
 	v.lay.ScrollTo(image.Point{})
 	if _, ok := v.pageAt(image.Pt(60, 5)); ok {
 		t.Error("the margin above the first page is part of a page")
 	}
 	press(v, image.Pt(60, 5))
-	if v.text.selecting || !v.ptr.pan {
-		t.Error("a press on the background did not pan")
+	if !v.text.selecting || v.ptr.pan || v.HasSelection() {
+		t.Error("a press on the background did not start an empty selection")
 	}
-	release(v, image.Pt(60, 5))
+	move(v, at(v, 0, 60, 16))
+	if v.SelectedText() == "" {
+		t.Error("a drag from the background selected nothing")
+	}
+	release(v, at(v, 0, 60, 16))
 }
 
 func TestPagesThatFailToGiveTextHaveNone(t *testing.T) {
@@ -287,10 +293,11 @@ func TestPagesThatFailToGiveTextHaveNone(t *testing.T) {
 	c := paint.New(124, 300)
 	ready(t, v, c, 0)
 	press(v, at(v, 0, 11, 16))
-	if v.text.selecting || v.SelectedText() != "" {
+	move(v, at(v, 0, 60, 16))
+	if v.HasSelection() || v.SelectedText() != "" {
 		t.Error("a page without text was selectable")
 	}
-	release(v, at(v, 0, 11, 16))
+	release(v, at(v, 0, 60, 16))
 }
 
 func TestClosingCancelsReadingText(t *testing.T) {

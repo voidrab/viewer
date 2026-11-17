@@ -172,6 +172,7 @@ var edgeHits = map[platform.Edge]uintptr{
 // Identifiers of the system's cursors, for LoadCursor.
 const (
 	idcArrow    = 32512
+	idcIBeam    = 32513
 	idcSizeNWSE = 32642
 	idcSizeNESW = 32643
 	idcSizeWE   = 32644
@@ -182,6 +183,7 @@ const (
 // cursorIDs maps cursors to the system cursors that show them.
 var cursorIDs = map[platform.Cursor]uintptr{
 	platform.CursorDefault: idcArrow, platform.CursorPointer: idcHand,
+	platform.CursorText:    idcIBeam,
 	platform.CursorResizeN: idcSizeNS, platform.CursorResizeS: idcSizeNS,
 	platform.CursorResizeW: idcSizeWE, platform.CursorResizeE: idcSizeWE,
 	platform.CursorResizeNW: idcSizeNWSE, platform.CursorResizeSE: idcSizeNWSE,

@@ -11,8 +11,9 @@ import (
 // barThin, barWide, barInset and minThumb size the scrollbars drawn over the
 // pages: a thumb along the right edge, and along the bottom when the page is
 // wider than the view. A thumb is thin at rest and wide under the pointer. A
-// press on a thumb drags it; a press on the track beside it centres the thumb
-// there and drags it; any other press drags the page.
+// left press on a thumb drags it; a left press on the track beside it centres
+// the thumb there and drags it; any other left press selects text. A middle
+// press drags the page.
 const (
 	barThin  = 6  // width of a thumb at rest
 	barWide  = 12 // width of a thumb, and of the strip that takes clicks
@@ -131,11 +132,7 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 			v.dragBar(p)
 			return true
 		}
-		handled, changed := v.pressText(p)
-		if !handled {
-			s.pan, s.panBy, s.last = true, platform.Left, p
-		}
-		return changed
+		return v.pressText(p)
 	case platform.Release:
 		if ev.Button != platform.Left && ev.Button != platform.Middle {
 			return false
@@ -173,9 +170,6 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 		return v.dragText(p) || cleared
 	case s.pan:
 		cleared := v.setHover(p, false)
-		if t := &v.text; t.pressed != nil && (abs(p.X-t.pressAt.X) > dragSlop || abs(p.Y-t.pressAt.Y) > dragSlop) {
-			t.pressed, t.moved = nil, true // dragging the page, not clicking a link
-		}
 		before := v.lay.Scroll()
 		v.lay.ScrollBy(s.last.Sub(p))
 		s.last = p

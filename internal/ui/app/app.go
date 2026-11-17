@@ -495,7 +495,7 @@ func (a *App) load(path string) (*document, error) {
 	d.version, d.claimed = info.Version, info.Claimed
 	opts := pageview.Options{
 		Pool: a.pool, OpenURI: a.opts.OpenURI, Gap: theme.PageGap, Margin: theme.PageMargin,
-		Background: pal.Canvas, Selection: pal.Selection,
+		Background: pal.Canvas, Selection: pal.Selection, Zoom: pageview.DefaultZoom,
 	}
 	if render := a.opts.Render; render != nil {
 		opts.Render = func(ctx context.Context, p *gopdfrab.Page, scale float64, region image.Rectangle) (*image.RGBA, error) {

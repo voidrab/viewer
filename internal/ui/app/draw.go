@@ -64,7 +64,7 @@ func (a *App) chrome() {
 		if a.menuKind != menuApp {
 			a.menu.Close() // the zoom and profile menus need a document
 		}
-		tb.Page, tb.Pages, tb.ZoomText = 0, 0, pageview.ZoomPresets[0].Label
+		tb.Page, tb.Pages, tb.ZoomText = 0, 0, pageview.DefaultZoom.Label
 		a.status.Info, a.status.Claimed, a.status.Right = "", "", nil
 		a.setTitle("Viewrab")
 	} else {
