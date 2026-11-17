@@ -196,7 +196,7 @@ func TestDrawPresentsTheWholeWindow(t *testing.T) {
 	if !strings.HasPrefix(st.Info, "doc.pdf · 3 pages · ") || st.Claimed != "PDF/A-1b" || len(st.Right) != 1 || !strings.HasSuffix(st.Right[0], "%") {
 		t.Errorf("status info %q claimed %q right %v", st.Info, st.Claimed, st.Right)
 	}
-	if tb := f.a.toolbar; tb.Page != 1 || tb.Pages != 3 || tb.ZoomText != "fit width" || tb.NoDocument {
+	if tb := f.a.toolbar; tb.Page != 1 || tb.Pages != 3 || tb.ZoomText != "150%" || tb.NoDocument {
 		t.Errorf("toolbar page %d / %d zoom %q", tb.Page, tb.Pages, tb.ZoomText)
 	}
 	// A second frame does not change the title.
@@ -585,7 +585,7 @@ func TestScrollAndKeysReachTheView(t *testing.T) {
 	// Ctrl+0 is not an app shortcut, so the view handles it.
 	f.key('+', platform.Ctrl)
 	f.key('0', platform.Ctrl)
-	if view.ZoomLabel() != "fit width" {
+	if view.ZoomLabel() != pageview.DefaultZoom.Label {
 		t.Errorf("Ctrl+0 left zoom %q", view.ZoomLabel())
 	}
 }
@@ -829,7 +829,13 @@ func TestDraggingThePageScrollsIt(t *testing.T) {
 	view := f.a.current().view
 	x, y := c.Min.X+c.Dx()/2, c.Min.Y+c.Dy()/2
 	f.pointer(platform.Move, platform.None, x, y)
-	f.pointer(platform.Press, platform.Left, x, y)
+	if s := view.Layout().Scroll(); s != (image.Point{}) {
+		t.Fatalf("a new document opened scrolled to %v", s)
+	}
+	if got := view.ZoomLabel(); got != "150%" {
+		t.Fatalf("a new document opened at zoom %q", got)
+	}
+	f.pointer(platform.Press, platform.Middle, x, y)
 	f.pointer(platform.Move, platform.None, x, y-60)
 	if got := view.Layout().Scroll().Y; got != 60 {
 		t.Fatalf("dragging up by 60 scrolled to %d", got)
@@ -839,7 +845,7 @@ func TestDraggingThePageScrollsIt(t *testing.T) {
 	if got := view.Layout().Scroll().Y; got <= 60 {
 		t.Errorf("dragging out of the content area stopped the drag: scroll %d", got)
 	}
-	f.pointer(platform.Release, platform.Left, x, 2)
+	f.pointer(platform.Release, platform.Middle, x, 2)
 	at := view.Layout().Scroll()
 	f.pointer(platform.Move, platform.None, x, y+100)
 	if view.Layout().Scroll() != at {
@@ -1256,5 +1262,86 @@ func TestPoolOptions(t *testing.T) {
 			t.Errorf("poolOptions(Render set %v, RenderWorkers %d) = %+v, want %+v",
 				tc.opts.Render != nil, tc.opts.RenderWorkers, got, tc.want)
 		}
+	}
+}
+
+// wordAt returns the window point over the word "alpha" of the text fixture.
+func wordAt(f *fixture) image.Point {
+	c := f.content()
+	vr := f.a.current().view.Layout().ViewRect(0)
+	scale := float64(vr.Dx()) / 200
+	return image.Pt(c.Min.X+vr.Min.X+int(30*scale), c.Min.Y+vr.Min.Y+int(90*scale))
+}
+
+func TestATextCursorShowsOverText(t *testing.T) {
+	f := textFixture(t)
+	p := wordAt(f)
+	waitFor(t, "the text cursor over text", func() bool {
+		f.a.Handle(platform.FrameEvent{})
+		f.pointer(platform.Move, platform.None, p.X, p.Y)
+		return f.win.Cursor() == platform.CursorText
+	})
+	// Off the text, on the page's blank part, the cursor is the default one.
+	vr := f.a.current().view.Layout().ViewRect(0).Add(f.content().Min)
+	f.pointer(platform.Move, platform.None, vr.Min.X+5, vr.Min.Y+5)
+	if f.win.Cursor() != platform.CursorDefault {
+		t.Errorf("cursor off the text = %d", f.win.Cursor())
+	}
+}
+
+func TestTheContextMenuCopiesAndSelectsAll(t *testing.T) {
+	f := textFixture(t)
+	view := f.a.current().view
+	p := wordAt(f)
+	waitFor(t, "the text read", func() bool {
+		f.a.Handle(platform.FrameEvent{})
+		return selectWord(f, view, f.content())
+	})
+	view.ClearSelection()
+	// A right press opens the menu at the pointer, with Copy disabled while
+	// nothing is selected, and leaves no section holding the pointer.
+	f.pointer(platform.Press, platform.Right, p.X, p.Y)
+	if !f.a.menu.Open || f.a.menuKind != menuContext || f.a.capture != sectionNone {
+		t.Fatalf("menu open %v, kind %d, capture %d", f.a.menu.Open, f.a.menuKind, f.a.capture)
+	}
+	if r := f.a.menu.Rect(); r.Min != p {
+		t.Errorf("menu at %v, want its corner at %v", r.Min, p)
+	}
+	if d := f.a.menu.Disabled; !d[contextCopy] || len(d) > contextSelectAll && d[contextSelectAll] {
+		t.Errorf("disabled = %v", f.a.menu.Disabled)
+	}
+	if f.win.Cursor() != platform.CursorDefault {
+		t.Errorf("cursor over the menu = %d", f.win.Cursor())
+	}
+	f.pointer(platform.Release, platform.Right, p.X, p.Y)
+	if !f.a.menu.Open {
+		t.Fatal("the release of the right press closed the menu")
+	}
+	// Select All selects the document's text.
+	r := f.a.menu.Rect()
+	row := func(i int) image.Point {
+		return image.Pt(r.Min.X+r.Dx()/2, r.Min.Y+4+i*26+13)
+	}
+	sel := row(contextSelectAll)
+	f.click(sel.X, sel.Y)
+	if f.a.menu.Open || !view.HasSelection() {
+		t.Fatalf("after Select All: open %v, selection %v", f.a.menu.Open, view.HasSelection())
+	}
+	// Copy, now enabled, takes it to the clipboard.
+	f.pointer(platform.Press, platform.Right, p.X, p.Y)
+	f.pointer(platform.Release, platform.Right, p.X, p.Y)
+	if f.a.menu.Disabled[contextCopy] {
+		t.Error("Copy is disabled with text selected")
+	}
+	r = f.a.menu.Rect()
+	cp := row(contextCopy)
+	f.click(cp.X, cp.Y)
+	if f.win.Clipboard() == "" || f.a.messageKind != widget.MessageOK {
+		t.Errorf("clipboard %q, message %q", f.win.Clipboard(), f.a.message)
+	}
+	// Other menus show no shortcuts and nothing disabled.
+	f.a.openZoomMenu()
+	if f.a.menu.Shortcuts != nil || f.a.menu.Disabled != nil {
+		t.Error("the zoom menu kept the context menu's shortcuts")
 	}
 }

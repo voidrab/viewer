@@ -34,6 +34,7 @@ type textState struct {
 	pressed       *gopdfrab.Link
 	hovered       *gopdfrab.Link // the link under the pointer
 	hoveredPage   int
+	overText      bool // the pointer is over text, and not over a link
 	pressAt       image.Point
 	moved         bool
 	clickAt       image.Point
@@ -176,42 +177,43 @@ func (v *View) clickCount(p image.Point) int {
 	return t.clicks
 }
 
-// pressText handles a left press over the pages that is not on a scrollbar. It
-// starts a selection if the press is on text, remembers a link it is on to
-// follow on release, and otherwise reports false so that the press drags the
-// page. changed reports whether the view needs redrawing.
-func (v *View) pressText(p image.Point) (handled, changed bool) {
+// pressText handles a left press over the view that is not on a scrollbar. It
+// clears the selection and starts a new one at the caret nearest the press,
+// so that a drag from anywhere selects text; a double or triple press on text
+// selects its word or line. It remembers a link the press is on, to follow on
+// release. It reports whether the view needs redrawing.
+func (v *View) pressText(p image.Point) bool {
 	t := &v.text
-	page, ok := v.pageAt(p)
-	if !ok {
-		changed = v.clearSelection()
-		return false, changed
+	changed := v.clearSelection()
+	t.pressed, t.pressAt, t.moved = nil, p, false
+	page, onPage := v.pageAt(p)
+	if !onPage {
+		page = v.nearestPage(p)
+	}
+	if page < 0 || page >= len(v.pages) {
+		return changed
 	}
 	d := v.ensureData(page)
-	if d == nil {
-		return false, v.clearSelection()
-	}
-	x, y := v.toPage(page, p)
-	count := v.clickCount(p)
-	t.pressed, t.pressAt, t.moved = d.linkAt(x, y), p, false
-	idx, onText := d.text.At(x, y)
-	if !onText {
-		changed = v.clearSelection()
-		return false, changed
-	}
-	switch count {
-	case 2:
-		lo, hi := d.text.Word(idx)
-		t.anchor, t.focus = caret{page, lo}, caret{page, hi}
-	case 3:
-		lo, hi := d.text.Line(idx)
-		t.anchor, t.focus = caret{page, lo}, caret{page, hi}
-	default:
-		c := caret{page, d.text.Caret(x, y)}
-		t.anchor, t.focus = c, c
+	if d == nil { // the page's text is still being read
+		return changed
 	}
 	t.selecting = true
-	return true, true
+	x, y := v.toPage(page, p)
+	count := v.clickCount(p)
+	c := caret{page, d.text.Caret(x, y)}
+	t.anchor, t.focus = c, c
+	if !onPage {
+		return true
+	}
+	t.pressed = d.linkAt(x, y)
+	if idx, onText := d.text.At(x, y); onText && count > 1 {
+		lo, hi := d.text.Word(idx)
+		if count == 3 {
+			lo, hi = d.text.Line(idx)
+		}
+		t.anchor, t.focus = caret{page, lo}, caret{page, hi}
+	}
+	return true
 }
 
 // dragText moves the end of the selection to the pointer at p.
@@ -353,21 +355,30 @@ func (v *View) drawText(c *paint.Canvas, origin image.Point) {
 // cursor in that case.
 func (v *View) OverLink() bool { return v.text.hovered != nil }
 
+// OverText reports whether the pointer is over text that is not a link. The
+// window shows a text cursor in that case.
+func (v *View) OverText() bool { return v.text.overText }
+
 // setHover makes the link under p the hovered link and reports whether that
-// changed it. A link is looked up only while active is true and p is over page
-// content rather than a scrollbar; otherwise the hover is cleared.
+// changed it. It also notes whether p is over text. A link or text is looked up
+// only while active is true and p is over page content rather than a
+// scrollbar; otherwise the hover is cleared.
 func (v *View) setHover(p image.Point, active bool) bool {
 	t := &v.text
 	var link *gopdfrab.Link
 	var page int
+	overText := false
 	if pg, ok := v.pageAt(p); ok && active && v.barAt(p) == noAxis {
 		if d := v.ensureData(pg); d != nil {
 			x, y := v.toPage(pg, p)
 			link, page = d.linkAt(x, y), pg
+			if link == nil {
+				_, overText = d.text.At(x, y)
+			}
 		}
 	}
 	changed := link != t.hovered || link != nil && page != t.hoveredPage
-	t.hovered, t.hoveredPage = link, page
+	t.hovered, t.hoveredPage, t.overText = link, page, overText
 	return changed
 }
 

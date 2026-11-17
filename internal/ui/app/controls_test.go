@@ -138,7 +138,7 @@ func TestTheZoomDropDownOffersThePresets(t *testing.T) {
 	f.clickButton(widget.ButtonZoomMode)
 	m := f.a.menu
 	f.a.Handle(platform.FrameEvent{})
-	if !m.Open || len(m.Items) != len(pageview.ZoomPresets) || m.Checked != 0 || !f.a.toolbar.On[widget.ButtonZoomMode] {
+	if !m.Open || len(m.Items) != len(pageview.ZoomPresets) || m.Items[m.Checked] != pageview.DefaultZoom.Label || !f.a.toolbar.On[widget.ButtonZoomMode] {
 		t.Fatalf("menu open %v, items %v, checked %d", m.Open, m.Items, m.Checked)
 	}
 	// Clicking an item applies it.

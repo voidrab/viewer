@@ -206,6 +206,7 @@ const (
 	CursorResizeSW
 	CursorResizeSE
 	CursorPointer // the hand over a link
+	CursorText    // the I-beam over text that can be selected
 )
 
 // ResizeCursor returns the cursor for resizing from edges, or CursorDefault
@@ -234,7 +235,7 @@ func ResizeCursor(edges Edge) Cursor {
 
 // cssNames are the CSS names of the cursors.
 var cssNames = [...]string{
-	CursorDefault: "default", CursorPointer: "pointer",
+	CursorDefault: "default", CursorPointer: "pointer", CursorText: "text",
 	CursorResizeN: "n-resize", CursorResizeS: "s-resize", CursorResizeW: "w-resize", CursorResizeE: "e-resize",
 	CursorResizeNW: "nw-resize", CursorResizeNE: "ne-resize", CursorResizeSW: "sw-resize", CursorResizeSE: "se-resize",
 }

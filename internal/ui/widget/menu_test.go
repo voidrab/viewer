@@ -155,3 +155,46 @@ func TestMenuKeys(t *testing.T) {
 		t.Errorf("another key chose %d", i)
 	}
 }
+
+func TestMenuDisabledItemsAndShortcuts(t *testing.T) {
+	m := newMenu(t)
+	plain := func() int { m.Show(menuAnchor, menuLimit); return m.Rect().Dx() }()
+	m.Shortcuts = []string{"Ctrl+1"}
+	m.Disabled = []bool{false, true}
+	m.Show(menuAnchor, menuLimit)
+	r := m.Rect()
+	if r.Dx() <= plain {
+		t.Errorf("width with shortcuts %d, without %d", r.Dx(), plain)
+	}
+	c := paint.New(menuLimit.Dx(), menuLimit.Dy())
+	m.Draw(c) // draws the shortcut and the disabled item
+	// A click on the disabled item chooses nothing and keeps the menu open.
+	x, y := mid(menuRow(r, 1))
+	m.HandlePointer(ptr(platform.Press, platform.Left, x, y))
+	if i, _ := m.HandlePointer(ptr(platform.Release, platform.Left, x, y)); i != -1 || !m.Open {
+		t.Errorf("click on a disabled item: %d, open %v", i, m.Open)
+	}
+	// Nor does Enter on it; it does on an enabled one.
+	m.hover = 1
+	if i := m.HandleKey(platform.KeyEvent{Key: platform.KeyEnter, Down: true}); i != -1 || !m.Open {
+		t.Errorf("Enter on a disabled item: %d, open %v", i, m.Open)
+	}
+	m.hover = 2
+	if i := m.HandleKey(platform.KeyEvent{Key: platform.KeyEnter, Down: true}); i != 2 {
+		t.Errorf("Enter on item 2 chose %d", i)
+	}
+}
+
+func TestMenuShowAtOpensAtThePoint(t *testing.T) {
+	m := newMenu(t)
+	at := image.Pt(120, 80)
+	m.ShowAt(at, menuLimit)
+	if r := m.Rect(); !m.Open || r.Min != at {
+		t.Errorf("open %v, menu at %v, want its corner at %v", m.Open, r.Min, at)
+	}
+	// Show after ShowAt drops below its anchor again.
+	m.Show(menuAnchor, menuLimit)
+	if r := m.Rect(); r.Min.Y != menuAnchor.Max.Y+2 {
+		t.Errorf("menu top %d, want %d", r.Min.Y, menuAnchor.Max.Y+2)
+	}
+}

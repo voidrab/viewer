@@ -141,7 +141,14 @@ func TestHorizontalBarWhenTheViewIsNarrowerThanThePage(t *testing.T) {
 func TestDraggingThePage(t *testing.T) {
 	v := tall(t)
 	v.lay.ScrollTo(image.Pt(0, 100))
-	if v.HandlePointer(ptr(platform.Press, platform.Left, 50, 150)) {
+	// The left button selects text; only the middle one drags the page.
+	v.HandlePointer(ptr(platform.Press, platform.Left, 50, 150))
+	v.HandlePointer(ptr(platform.Move, platform.None, 50, 120))
+	if v.ptr.pan || v.lay.Scroll().Y != 100 {
+		t.Errorf("a left-button drag panned: scroll %v", v.lay.Scroll())
+	}
+	v.HandlePointer(ptr(platform.Release, platform.Left, 50, 120))
+	if v.HandlePointer(ptr(platform.Press, platform.Middle, 50, 150)) {
 		t.Error("pressing on a page asked for a redraw")
 	}
 	if !v.HandlePointer(ptr(platform.Move, platform.None, 50, 120)) || v.lay.Scroll().Y != 130 {
@@ -154,7 +161,7 @@ func TestDraggingThePage(t *testing.T) {
 	if v.lay.Scroll().Y != 50 {
 		t.Errorf("dragging down by 80: scroll %v", v.lay.Scroll())
 	}
-	v.HandlePointer(ptr(platform.Release, platform.Left, 50, 200))
+	v.HandlePointer(ptr(platform.Release, platform.Middle, 50, 200))
 	v.HandlePointer(ptr(platform.Move, platform.None, 50, 10))
 	if v.lay.Scroll().Y != 50 {
 		t.Error("the page followed the pointer after the release")
@@ -166,10 +173,10 @@ func TestDraggingThePage(t *testing.T) {
 	if v.HandlePointer(ptr(platform.Release, platform.Right, 50, 150)) {
 		t.Error("a right-button release asked for a redraw")
 	}
-	v.HandlePointer(ptr(platform.Press, platform.Left, 50, 150))
-	v.HandlePointer(ptr(platform.Release, platform.Middle, 50, 150))
+	v.HandlePointer(ptr(platform.Press, platform.Middle, 50, 150))
+	v.HandlePointer(ptr(platform.Release, platform.Left, 50, 150))
 	if !v.ptr.pan {
-		t.Error("a middle-button release ended a left-button drag")
+		t.Error("a left-button release ended a middle-button drag")
 	}
 }
 

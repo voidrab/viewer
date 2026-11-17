@@ -14,6 +14,7 @@ const (
 var cursorShapes = map[platform.Cursor]uint32{
 	platform.CursorDefault:  1,
 	platform.CursorPointer:  4,
+	platform.CursorText:     9,
 	platform.CursorResizeE:  18,
 	platform.CursorResizeN:  19,
 	platform.CursorResizeNE: 20,

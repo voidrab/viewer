@@ -60,6 +60,9 @@ type Options struct {
 	// so a larger value helps only with a Render that renders elsewhere, such
 	// as in other processes that each have the document open.
 	Parallel int
+	// Zoom is the zoom the view opens at, and the one Ctrl+0 goes back to;
+	// the zero value means fit width.
+	Zoom ZoomPreset
 }
 
 func (o *Options) fill() {
@@ -74,6 +77,9 @@ func (o *Options) fill() {
 	}
 	if o.ScrollSpeed == 0 {
 		o.ScrollSpeed = 5
+	}
+	if o.Zoom == (ZoomPreset{}) {
+		o.Zoom = ZoomPresets[0] // fit width
 	}
 	if o.Selection == (color.NRGBA{}) {
 		o.Selection = color.NRGBA{0x3b, 0x72, 0xd9, 0x5a}
@@ -186,6 +192,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	}
 	v.sizes = sizes
 	v.lay = layout.New(sizes, viewport, opts.Gap, opts.Margin)
+	v.SetZoomPreset(v.opts.Zoom)
 	if v.pool == nil {
 		v.pool, v.ownsPool = NewPool(PoolOptions{Workers: opts.Workers, CacheBytes: opts.CacheBytes}), true
 	}
@@ -514,6 +521,9 @@ var ZoomPresets = []ZoomPreset{
 	{"300%", layout.ZoomFixed, 3},
 }
 
+// DefaultZoom is the zoom the application opens documents at: 150%.
+var DefaultZoom = ZoomPresets[6]
+
 // SetZoomPreset applies the zoom preset p.
 func (v *View) SetZoomPreset(p ZoomPreset) {
 	if p.Mode == layout.ZoomFixed {
@@ -582,7 +592,7 @@ func (v *View) key(ev platform.KeyEvent) bool {
 		case '-':
 			v.zoomBy(1 / zoomStep)
 		case '0':
-			v.lay.SetMode(layout.ZoomFitWidth)
+			v.SetZoomPreset(v.opts.Zoom)
 		case 'a':
 			v.SelectAll()
 		default:

@@ -11,8 +11,9 @@ import (
 // barThin, barWide, barInset and minThumb size the scrollbars drawn over the
 // pages: a thumb along the right edge, and along the bottom when the page is
 // wider than the view. A thumb is thin at rest and wide under the pointer. A
-// press on a thumb drags it; a press on the track beside it centres the thumb
-// there and drags it; any other press drags the page.
+// left press on a thumb drags it; a left press on the track beside it centres
+// the thumb there and drags it; any other left press selects text. A middle
+// press drags the page.
 const (
 	barThin  = 6  // width of a thumb at rest
 	barWide  = 12 // width of a thumb, and of the strip that takes clicks
@@ -31,12 +32,11 @@ const (
 
 // pointerState is what the pointer is doing in the view.
 type pointerState struct {
-	hover axis            // the scrollbar under the pointer
-	drag  axis            // the scrollbar being dragged
-	grab  int             // where in the thumb it was taken, from the thumb's start
-	pan   bool            // the page is being dragged
-	panBy platform.Button // the button dragging it
-	last  image.Point     // where the pointer was last
+	hover axis        // the scrollbar under the pointer
+	drag  axis        // the scrollbar being dragged
+	grab  int         // where in the thumb it was taken, from the thumb's start
+	pan   bool        // the page is being dragged, by the middle button
+	last  image.Point // where the pointer was last
 }
 
 // bar is the geometry of one scrollbar along its axis.
@@ -116,7 +116,7 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 	case platform.Press:
 		switch ev.Button {
 		case platform.Middle:
-			s.pan, s.panBy, s.last = true, platform.Middle, p
+			s.pan, s.last = true, p
 			return false
 		case platform.Left:
 		default:
@@ -131,11 +131,7 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 			v.dragBar(p)
 			return true
 		}
-		handled, changed := v.pressText(p)
-		if !handled {
-			s.pan, s.panBy, s.last = true, platform.Left, p
-		}
-		return changed
+		return v.pressText(p)
 	case platform.Release:
 		if ev.Button != platform.Left && ev.Button != platform.Middle {
 			return false
@@ -148,7 +144,7 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 				changed = true
 			}
 		}
-		if s.pan && s.panBy == ev.Button {
+		if ev.Button == platform.Middle {
 			s.pan = false
 		}
 		if h := v.barAt(p); h != s.hover {
@@ -173,9 +169,6 @@ func (v *View) HandlePointer(ev platform.PointerEvent) bool {
 		return v.dragText(p) || cleared
 	case s.pan:
 		cleared := v.setHover(p, false)
-		if t := &v.text; t.pressed != nil && (abs(p.X-t.pressAt.X) > dragSlop || abs(p.Y-t.pressAt.Y) > dragSlop) {
-			t.pressed, t.moved = nil, true // dragging the page, not clicking a link
-		}
 		before := v.lay.Scroll()
 		v.lay.ScrollBy(s.last.Sub(p))
 		s.last = p

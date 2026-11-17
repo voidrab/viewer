@@ -204,3 +204,17 @@ func TestZoomAtIsClampedAndHandlesAnEmptyDocument(t *testing.T) {
 	l.ScrollTo(image.Pt(0, math.MaxInt32))
 	l.ZoomAt(1.5, image.Pt(219, 299))
 }
+
+func TestZoomInTheTopMarginKeepsTheMargin(t *testing.T) {
+	l := sample()
+	l.SetZoom(0.5) // from fit width, at the top
+	if l.Scroll() != (image.Point{}) {
+		t.Errorf("zooming out at the top scrolled to %v", l.Scroll())
+	}
+	l.SetZoom(2)
+	l.ScrollTo(image.Pt(0, 4)) // in the margin, 6 pixels above the first page
+	l.SetZoom(3)
+	if got := l.Scroll().Y; got != 4 {
+		t.Errorf("zooming in the margin scrolled to %d, want 4", got)
+	}
+}
