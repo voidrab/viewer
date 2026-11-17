@@ -90,6 +90,25 @@ func Fetch(url string) (string, error) {
 	return v.String(), nil
 }
 
+// FetchFont returns the gzip-compressed contents of the substitute font file
+// name, which the gopdfrab_nofonts build leaves out of the program. It fetches
+// the file from the fonts directory next to the page. Like Await, it blocks
+// the calling goroutine.
+func FetchFont(name string) ([]byte, error) {
+	v, err := Await(host().Call("fetchFont", name))
+	if err != nil {
+		return nil, err
+	}
+	return bytesOf(v), nil
+}
+
+// bytesOf copies the bytes of a Uint8Array.
+func bytesOf(a js.Value) []byte {
+	b := make([]byte, a.Length())
+	js.CopyBytesToGo(b, a)
+	return b
+}
+
 // Download hands the file at path, in the in-memory file system, to the
 // browser to save among the user's downloads.
 func Download(path string) { host().Call("download", path) }
@@ -173,8 +192,7 @@ func decodeImage(v js.Value) *image.RGBA {
 		Rect:   image.Rect(v.Get("x0").Int(), v.Get("y0").Int(), v.Get("x1").Int(), v.Get("y1").Int()),
 		Stride: v.Get("stride").Int(),
 	}
-	img.Pix = make([]byte, v.Get("pix").Length())
-	js.CopyBytesToGo(img.Pix, v.Get("pix"))
+	img.Pix = bytesOf(v.Get("pix"))
 	return img
 }
 

@@ -14,7 +14,12 @@
 // of the files it renders, sent when it first needs them.
 "use strict";
 
-importScripts("memfs.js", "wasm_exec.js");
+// The build's version, which the page adds to the worker's address, for the
+// files of the same build.
+const version = location.search;
+// asset returns the address of the build's file at path.
+const asset = (path) => path + version;
+importScripts(asset("memfs.js"), asset("wasm_exec.js"));
 
 (() => {
 	// Messages for the program wait here until it listens.
@@ -30,6 +35,13 @@ importScripts("memfs.js", "wasm_exec.js");
 		calls.set(id, { resolve, reject });
 		postMessage({ op, arg, id }, transfer);
 	});
+
+	// fetchOK fetches url, failing unless the server answers with it.
+	const fetchOK = async (url) => {
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(res.status + " " + res.statusText);
+		return res;
+	};
 
 	const importFiles = async (files) => {
 		files = Array.from(files);
@@ -99,7 +111,7 @@ importScripts("memfs.js", "wasm_exec.js");
 		for (let i = 0; i < n; i++) {
 			let worker;
 			try {
-				worker = new Worker("worker.js");
+				worker = new Worker(asset("worker.js"));
 			} catch {
 				break; // no workers in workers: the viewer renders itself
 			}
@@ -140,10 +152,15 @@ importScripts("memfs.js", "wasm_exec.js");
 		importFiles,
 		pickFiles: async () => importFiles(await ask("pickFiles")),
 		fetchFile: async (url) => {
-			const res = await fetch(url);
-			if (!res.ok) throw new Error(res.status + " " + res.statusText);
+			const res = await fetchOK(url);
 			const name = decodeURIComponent(new URL(res.url).pathname.split("/").pop()) || "document.pdf";
 			return memfs.put(name, new Uint8Array(await res.arrayBuffer()));
+		},
+		// fetchFont fetches a substitute font for gopdfrab, which the build
+		// leaves out of the program, from the fonts directory.
+		fetchFont: async (name) => {
+			const res = await fetchOK(asset("fonts/" + encodeURIComponent(name)));
+			return new Uint8Array(await res.arrayBuffer());
 		},
 		download(path) {
 			const bytes = memfs.get(path).slice(); // a copy the page may take
@@ -197,26 +214,23 @@ importScripts("memfs.js", "wasm_exec.js");
 		return Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
 	};
 
-	const compile = async (url) => {
-		try {
-			return await WebAssembly.compileStreaming(fetch(url));
-		} catch {
-			return WebAssembly.compile(await (await fetch(url)).arrayBuffer());
-		}
-	};
-
 	const run = async (module) => {
 		const go = new Go();
 		const instance = await WebAssembly.instantiate(module, go.importObject);
 		await go.run(instance);
 	};
 
+	// The module the page compiles while the worker starts.
+	const fromPage = Promise.withResolvers();
+
 	const startViewer = async (init) => {
 		Object.assign(host, {
 			canvas: init.canvas, params: init.params, storage: init.storage, prefersDark: init.prefersDark,
 		});
 		deliver({ type: "resize", w: init.w, h: init.h, scale: init.scale });
-		const module = await compile(init.wasm);
+		const got = await fromPage.promise;
+		if (got.error) throw new Error(got.error);
+		const module = got.module;
 		host.renderers = startRenderers(module, renderWorkers(init.params));
 		await run(module);
 	};
@@ -242,6 +256,9 @@ importScripts("memfs.js", "wasm_exec.js");
 			if (data.error) c?.reject(new Error(data.error)); else c?.resolve(data.value);
 			break;
 		}
+		case "module": // the program, compiled by the page
+			fromPage.resolve(data);
+			break;
 		case "dark":
 			darkWatch?.(data.dark);
 			break;
