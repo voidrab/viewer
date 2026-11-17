@@ -219,8 +219,8 @@ func (b *Backend) onDrag(opcode uint16, d *Decoder) {
 	case deviceLeave:
 		g.mu.Lock()
 		if g.over != nil {
-			g.over.emit(platform.DragEvent{Kind: platform.DragLeave, X: g.x, Y: g.y, Own: g.own})
 			g.leftAt = now()
+			g.over.emit(platform.DragEvent{Kind: platform.DragLeave, X: g.x, Y: g.y, Own: g.own})
 		}
 		g.mu.Unlock()
 		b.dropOffer()
