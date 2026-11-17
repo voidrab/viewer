@@ -395,9 +395,13 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		a.decorated, a.maximized = ev.Decorated, ev.Maximized
 		a.win.Invalidate()
 	case platform.ScrollEvent:
-		if r := a.panelRect(); image.Pt(int(ev.X), int(ev.Y)).In(r) {
-			a.panel.Scroll(ev.DY*panelScrollSpeed, r.Size())
-			a.win.Invalidate()
+		if a.scrollPanel(ev.X, ev.Y, ev.DY*panelScrollSpeed) {
+			break
+		}
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
+	case platform.PanEvent:
+		if a.scrollPanel(ev.X, ev.Y, ev.DY) {
 			break
 		}
 		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
@@ -414,6 +418,18 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		}
 	}
 	return a.quitting
+}
+
+// scrollPanel scrolls the PDF/A panel by dy pixels if (x, y) is on it, and
+// reports whether it is.
+func (a *App) scrollPanel(x, y, dy float64) bool {
+	r := a.panelRect()
+	if !image.Pt(int(x), int(y)).In(r) {
+		return false
+	}
+	a.panel.Scroll(dy, r.Size())
+	a.win.Invalidate()
+	return true
 }
 
 // inContent returns the window point (x, y) relative to the content.

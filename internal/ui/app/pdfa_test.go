@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"image"
 	"os"
 	"path/filepath"
 	"strings"
@@ -374,4 +375,28 @@ func writeFile(path, content string) error {
 		return err
 	}
 	return os.Remove(old)
+}
+
+// TestAPanScrollsWhatItIsOver verifies that a touch pan scrolls the pages by
+// its distance exactly, and over the panel scrolls the panel instead.
+func TestAPanScrollsWhatItIsOver(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("a.pdf", 12))
+	d := f.a.current()
+	c := f.content()
+	scroll := d.view.Layout().Scroll()
+	f.a.Handle(platform.PanEvent{DY: 37, X: float64(c.Min.X + 10), Y: float64(c.Min.Y + 10)})
+	if got := d.view.Layout().Scroll(); got != scroll.Add(image.Pt(0, 37)) {
+		t.Errorf("a pan of 37 pixels scrolled the pages from %v to %v", scroll, got)
+	}
+
+	f.a.setPanel(true)
+	d.result = &widget.PanelResult{Label: "PDF/A-1b", Report: &pdfa.Report{Total: 40, Issues: manyIssues(40)}}
+	f.a.Handle(platform.FrameEvent{})
+	pr := f.a.panelRect()
+	scroll = d.view.Layout().Scroll()
+	f.a.Handle(platform.PanEvent{DY: 50, X: float64(pr.Min.X + 20), Y: float64(pr.Min.Y + 20)})
+	if d.view.Layout().Scroll() != scroll {
+		t.Error("a pan over the panel scrolled the pages")
+	}
 }

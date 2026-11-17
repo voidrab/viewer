@@ -20,7 +20,8 @@ type Message struct {
 	Shift, Ctrl, Alt, Meta, AltGraph bool
 	// Key and Code are a keyboard event's key and code.
 	Key, Code string
-	// DX, DY and Mode are a wheel event's deltas and their DOM delta mode.
+	// DX, DY and Mode are a wheel event's deltas and their DOM delta mode;
+	// DX and DY are also a "pan"'s distances, in pixels.
 	DX, DY float64
 	Mode   int
 	// W and H are the window's size, for "resize", and the page's height
@@ -58,6 +59,8 @@ func (m Message) Event() (platform.Event, bool) {
 		return platform.PointerEvent{Kind: platform.Enter, X: m.X, Y: m.Y, Mods: m.mods()}, true
 	case "pointerleave":
 		return platform.PointerEvent{Kind: platform.Leave, X: m.X, Y: m.Y, Mods: m.mods()}, true
+	case "pan":
+		return platform.PanEvent{DX: m.DX, DY: m.DY, X: m.X, Y: m.Y}, true
 	case "pinch":
 		return platform.ZoomEvent{Factor: m.Factor, X: m.X, Y: m.Y}, m.Factor > 0
 	case "wheel":

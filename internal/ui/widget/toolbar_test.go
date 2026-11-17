@@ -492,35 +492,26 @@ func TestToolbarButtonRect(t *testing.T) {
 }
 
 // TestToolbarCompactsToFitNarrowBars verifies that a narrow bar leaves out
-// zoom in and out, then the page buttons, then the zoom drop-down, then the
-// page count, until the find field fits, and never lets controls overlap.
+// the steps of compact in order until the find field fits, and never lets
+// controls overlap.
 func TestToolbarCompactsToFitNarrowBars(t *testing.T) {
 	tb := newToolbar(t)
 	tb.Controls = false
-	for _, c := range []struct {
-		width   int
-		gone    []ButtonID
-		noCount bool
-	}{
-		{900, nil, false},
-		{560, []ButtonID{ButtonZoomOut, ButtonZoomIn}, false},
-		{480, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext}, false},
-		{393, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, false},
-		{320, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, true},
-		{200, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, true},
-	} {
+	for _, c := range []struct{ width, steps int }{{900, 0}, {560, 1}, {480, 2}, {393, 3}, {320, 4}, {200, 4}} {
 		tb.Layout(c.width)
-		for id := range buttonCount {
-			gone := false
-			for _, g := range c.gone {
-				gone = gone || g == id
-			}
-			if !isControl(id) && tb.shown(id) == gone {
-				t.Errorf("width %d: control %d shown %v, want %v", c.width, id, tb.shown(id), !gone)
+		gone := map[ButtonID]bool{}
+		for _, step := range compact[:c.steps] {
+			for _, id := range step {
+				gone[id] = true
 			}
 		}
-		if (tb.pagesBox.Empty()) != c.noCount {
-			t.Errorf("width %d: page count box %v, want empty %v", c.width, tb.pagesBox, c.noCount)
+		for id := range buttonCount {
+			if !isControl(id) && tb.shown(id) == gone[id] {
+				t.Errorf("width %d: control %d shown %v, want %v", c.width, id, tb.shown(id), !gone[id])
+			}
+		}
+		if tb.pagesBox.Empty() != gone[pageCount] {
+			t.Errorf("width %d: page count box %v, want it left out %v", c.width, tb.pagesBox, gone[pageCount])
 		}
 		if c.width < 300 {
 			continue // too narrow for anything to fit

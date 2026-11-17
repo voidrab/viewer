@@ -34,6 +34,7 @@ func TestMessageEvent(t *testing.T) {
 		{"drag leave", Message{Type: "dragleave"}, platform.DragEvent{Kind: platform.DragLeave}},
 		{"resize", Message{Type: "resize", W: 800, H: 600},
 			platform.ResizeEvent{Size: platform.Size{W: 800, H: 600}, Scale: 1}},
+		{"pan", Message{Type: "pan", DX: 1.5, DY: -3, X: 3, Y: 4}, platform.PanEvent{DX: 1.5, DY: -3, X: 3, Y: 4}},
 		{"pinch", Message{Type: "pinch", Factor: 1.1, X: 3, Y: 4}, platform.ZoomEvent{Factor: 1.1, X: 3, Y: 4}},
 		{"pinch to nothing", Message{Type: "pinch"}, nil},
 		{"resize on a dense display", Message{Type: "resize", W: 393, H: 852, Scale: 2.75},

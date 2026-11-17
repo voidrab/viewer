@@ -89,6 +89,7 @@ type Toolbar struct {
 	logo     image.Rectangle
 	pagesBox image.Rectangle // where "/ Pages" is drawn
 	width    int
+	end      int // where the controls from the left edge end
 	laid     bool
 	hover    ButtonID // -1 when none
 	press    ButtonID // -1 when none
@@ -138,27 +139,38 @@ func (t *Toolbar) zoomWidth() int {
 // if shown, the menu button, the theme switch, PDF/A and the find field from
 // the right edge.
 // The find field shrinks, down to FindMinWidth, to fit a narrow bar. On a bar
-// narrower still, as a phone's is, controls the bar can do without are left
-// out until the find field fits: see compactLevels.
+// narrower still, as a phone's is, the controls of compact are left out, a
+// step at a time, until the find field fits.
 func (t *Toolbar) Layout(width int) {
-	for level := range compactLevels {
-		if t.layout(width, level) || level == compactLevels-1 {
-			break
+	zoom, count := t.zoomWidth(), t.Face.Width(t.pagesText())
+	hidden := map[ButtonID]bool{}
+	t.laid = true
+	for _, step := range compact {
+		if t.layout(width, zoom, count, hidden) {
+			return
+		}
+		for _, id := range step {
+			hidden[id] = true
 		}
 	}
-	t.laid = true
+	t.layout(width, zoom, count, hidden)
 }
 
-// compactLevels is the number of ways the bar is laid out, from all controls
-// to the fewest. Each level leaves out more: first zoom in and out, which a
-// pinch or the keyboard also does; then the previous and next page buttons,
-// which scrolling stands in for; then the zoom drop-down; then the page count
-// after the page field.
-const compactLevels = 5
+// pageCount stands in compact for the page count after the page field.
+const pageCount ButtonID = -2
 
-// layout places the controls on a bar of width, leaving out those of the
-// compact level, and reports whether the find field has the room it needs.
-func (t *Toolbar) layout(width, level int) bool {
+// compact lists, in the order a narrow bar leaves them out, the controls it
+// can do without: zoom in and out, which a pinch or the keyboard also does;
+// the previous and next page buttons, which scrolling stands in for; the zoom
+// drop-down; and the page count.
+var compact = [][]ButtonID{
+	{ButtonZoomOut, ButtonZoomIn}, {ButtonPrev, ButtonNext}, {ButtonZoomMode}, {pageCount},
+}
+
+// layout places the controls on a bar of width, leaving out those hidden,
+// with zoom and count the widths of the zoom drop-down and the page count,
+// and reports whether the find field has the room it needs.
+func (t *Toolbar) layout(width, zoom, count int, hidden map[ButtonID]bool) bool {
 	t.width = width
 	t.rects = [buttonCount]image.Rectangle{}
 	t.pagesBox = image.Rectangle{}
@@ -167,34 +179,29 @@ func (t *Toolbar) layout(width, level int) bool {
 	t.logo = image.Rect(toolPad, ly, toolPad+logoSize, ly+logoSize)
 	x := t.logo.Max.X + 4 + toolGap
 	place := func(id ButtonID, w, gap int) {
+		if hidden[id] {
+			return
+		}
 		t.rects[id] = image.Rect(x, y, x+w, y+toolButton)
 		x += w + gap
 	}
 	place(ButtonOpen, toolButton, toolGap)
 	x += groupLead
-	if level < 2 {
-		place(ButtonPrev, toolButton, groupGap)
-	}
+	place(ButtonPrev, toolButton, groupGap)
 	place(ButtonPage, pageWidth, groupGap)
-	if level < 4 {
-		pw := t.Face.Width(t.pagesText())
-		t.pagesBox = image.Rect(x, y, x+pw, y+toolButton)
-		x += pw + 2 + groupGap
+	if !hidden[pageCount] {
+		t.pagesBox = image.Rect(x, y, x+count, y+toolButton)
+		x += count + 2 + groupGap
 	}
-	if level < 2 {
-		place(ButtonNext, toolButton, toolGap)
-	}
-	if level < 3 {
+	place(ButtonNext, toolButton, toolGap)
+	if !hidden[ButtonZoomMode] {
 		x += groupLead
-		if level < 1 {
-			place(ButtonZoomOut, toolButton, groupGap)
-		}
-		place(ButtonZoomMode, t.zoomWidth(), groupGap)
-		if level < 1 {
-			place(ButtonZoomIn, toolButton, toolGap)
-		}
 	}
+	place(ButtonZoomOut, toolButton, groupGap)
+	place(ButtonZoomMode, zoom, groupGap)
+	place(ButtonZoomIn, toolButton, toolGap)
 	left := x
+	t.end = left
 
 	right := width - winPad
 	if t.Controls {
@@ -310,7 +317,7 @@ func (t *Toolbar) Draw(c *paint.Canvas, origin image.Point) {
 		t.Layout(t.width)
 	}
 	p := t.Palette
-	bar := image.Rect(origin.X, origin.Y, origin.X+max(t.width, t.rects[ButtonZoomIn].Max.X+toolPad), origin.Y+theme.ToolbarHeight)
+	bar := image.Rect(origin.X, origin.Y, origin.X+max(t.width, t.end+toolPad), origin.Y+theme.ToolbarHeight)
 	c.Fill(bar, p.Chrome)
 	c.Fill(image.Rect(bar.Min.X, bar.Max.Y-1, bar.Max.X, bar.Max.Y), p.Border)
 	icon.DrawLogo(c, t.logo.Add(origin))
