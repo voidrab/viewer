@@ -61,8 +61,7 @@
   <releases>
     <release version="0.2.0" date="2026-11-17">
       <description>
-        <p>Select text with the left button and copy it from a context menu, and
-        documents now open at 150%.</p>
+        <p>New in this release:</p>
         <ul>
           <li>Text selection by dragging, with a context menu to copy or select all</li>
           <li>Documents open at 150%, or at fit width where that is too wide</li>
