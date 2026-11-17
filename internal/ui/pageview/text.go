@@ -200,20 +200,18 @@ func (v *View) pressText(p image.Point) bool {
 	t.selecting = true
 	x, y := v.toPage(page, p)
 	count := v.clickCount(p)
-	if onPage {
-		t.pressed = d.linkAt(x, y)
+	c := caret{page, d.text.Caret(x, y)}
+	t.anchor, t.focus = c, c
+	if !onPage {
+		return true
 	}
-	idx, onText := d.text.At(x, y)
-	switch {
-	case onPage && onText && count == 2:
+	t.pressed = d.linkAt(x, y)
+	if idx, onText := d.text.At(x, y); onText && count > 1 {
 		lo, hi := d.text.Word(idx)
+		if count == 3 {
+			lo, hi = d.text.Line(idx)
+		}
 		t.anchor, t.focus = caret{page, lo}, caret{page, hi}
-	case onPage && onText && count == 3:
-		lo, hi := d.text.Line(idx)
-		t.anchor, t.focus = caret{page, lo}, caret{page, hi}
-	default:
-		c := caret{page, d.text.Caret(x, y)}
-		t.anchor, t.focus = c, c
 	}
 	return true
 }
@@ -374,8 +372,9 @@ func (v *View) setHover(p image.Point, active bool) bool {
 		if d := v.ensureData(pg); d != nil {
 			x, y := v.toPage(pg, p)
 			link, page = d.linkAt(x, y), pg
-			_, onText := d.text.At(x, y)
-			overText = onText && link == nil
+			if link == nil {
+				_, overText = d.text.At(x, y)
+			}
 		}
 	}
 	changed := link != t.hovered || link != nil && page != t.hoveredPage

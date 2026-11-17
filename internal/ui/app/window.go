@@ -61,13 +61,13 @@ func (a *App) setCursor(c platform.Cursor) {
 
 // showLinkCursor sets the hand cursor when the pointer, over section under, is
 // on a link of the current page, the text cursor when it is on the page's
-// text, and the default cursor otherwise or while a menu is open. It must run
+// text, and the default cursor otherwise. It must run
 // after the page view has handled the event, because the page view finds the
 // link and the text.
 func (a *App) showLinkCursor(under section) {
 	c := platform.CursorDefault
 	d := a.current()
-	content := d != nil && under == sectionContent && !a.menu.Open && !a.about.Open
+	content := d != nil && under == sectionContent
 	switch {
 	case content && d.view.OverLink() || a.about.OverLink():
 		c = platform.CursorPointer

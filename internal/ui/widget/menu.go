@@ -40,6 +40,7 @@ type Menu struct {
 	Open bool
 
 	anchor  image.Rectangle // the control the menu drops from
+	gap     int             // between the anchor and the menu
 	limit   image.Rectangle // what the menu must stay inside
 	hover   int             // the highlighted item, or -1
 	swallow bool            // the release of the press that closed the menu is still to come
@@ -64,7 +65,14 @@ func (m *Menu) enabled(i int) bool { return i >= 0 && (i >= len(m.Disabled) || !
 // Show opens the menu below anchor, kept inside limit, with the checked item
 // highlighted.
 func (m *Menu) Show(anchor, limit image.Rectangle) {
-	m.Open, m.anchor, m.limit, m.hover = true, anchor, limit, m.Checked
+	m.Open, m.anchor, m.gap, m.limit, m.hover = true, anchor, 2, limit, m.Checked
+}
+
+// ShowAt opens the menu with its top-left corner at p, as a context menu
+// opens at the pointer, kept inside limit.
+func (m *Menu) ShowAt(p image.Point, limit image.Rectangle) {
+	m.Show(image.Rectangle{Min: p, Max: p}, limit)
+	m.gap = 0
 }
 
 // Close closes the menu.
@@ -83,7 +91,7 @@ func (m *Menu) Rect() image.Rectangle {
 	}
 	w = max(w+menuCheck+menuRight+2*menuPad, m.anchor.Dx())
 	h := len(m.Items)*menuItem + 2*menuPad
-	r := image.Rect(m.anchor.Min.X, m.anchor.Max.Y+2, m.anchor.Min.X+w, m.anchor.Max.Y+2+h)
+	r := image.Rect(m.anchor.Min.X, m.anchor.Max.Y+m.gap, m.anchor.Min.X+w, m.anchor.Max.Y+m.gap+h)
 	if d := r.Max.X - m.limit.Max.X; d > 0 {
 		r = r.Sub(image.Pt(min(d, r.Min.X-m.limit.Min.X), 0))
 	}

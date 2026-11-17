@@ -1307,7 +1307,7 @@ func TestTheContextMenuCopiesAndSelectsAll(t *testing.T) {
 	if r := f.a.menu.Rect(); r.Min != p {
 		t.Errorf("menu at %v, want its corner at %v", r.Min, p)
 	}
-	if !f.a.menu.Disabled[contextCopy] || f.a.menu.Disabled[contextSelectAll] {
+	if d := f.a.menu.Disabled; !d[contextCopy] || len(d) > contextSelectAll && d[contextSelectAll] {
 		t.Errorf("disabled = %v", f.a.menu.Disabled)
 	}
 	if f.win.Cursor() != platform.CursorDefault {

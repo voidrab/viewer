@@ -195,14 +195,19 @@ type anchor struct {
 	page int
 	frac float64
 	x    float64
+	// above is how far above the first page the view's top is, in the
+	// margin, which keeps its size whatever the zoom.
+	above int
 }
 
 func (l *Layout) anchor() anchor {
 	if len(l.pages) == 0 {
 		return anchor{}
 	}
+	if l.scroll.Y < l.tops[0] {
+		return anchor{above: l.tops[0] - l.scroll.Y, x: l.xFrac()}
+	}
 	i := sort.Search(len(l.pages), func(i int) bool { return l.tops[i] > l.scroll.Y }) - 1
-	i = max(i, 0)
 	h := max(l.pixelSize(i).Y, 1)
 	return anchor{page: i, frac: float64(l.scroll.Y-l.tops[i]) / float64(h), x: l.xFrac()}
 }
@@ -212,7 +217,7 @@ func (l *Layout) restore(a anchor) {
 		l.scroll = image.Point{}
 		return
 	}
-	y := l.tops[a.page] + int(math.Round(a.frac*float64(l.pixelSize(a.page).Y)))
+	y := l.tops[a.page] + int(math.Round(a.frac*float64(l.pixelSize(a.page).Y))) - a.above
 	l.ScrollTo(image.Pt(int(math.Round(a.x*float64(max(0, l.width+2*l.margin-l.viewport.X)))), y))
 }
 

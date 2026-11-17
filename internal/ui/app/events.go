@@ -112,9 +112,7 @@ func (a *App) pointer(ev platform.PointerEvent) {
 	o := a.origin(target)
 	local.X, local.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
 	a.deliver(target, local)
-	if ev.Kind == platform.Release || a.menu.Open {
-		// A menu opened by the press takes the release, so no section keeps
-		// the pointer.
+	if ev.Kind == platform.Release {
 		a.capture = sectionNone
 	}
 	a.win.Invalidate()
@@ -149,7 +147,6 @@ func (a *App) deliver(s section, ev platform.PointerEvent) {
 			return
 		}
 		if ev.Kind == platform.Press && ev.Button == platform.Right {
-			d.view.HandlePointer(platform.PointerEvent{Kind: platform.Leave})
 			o := a.origin(sectionContent)
 			a.openContextMenu(image.Pt(int(ev.X)+o.X, int(ev.Y)+o.Y))
 			return
@@ -255,18 +252,26 @@ var (
 // showMenu opens the menu of kind with items, checked at checked, below
 // anchor, in window coordinates.
 func (a *App) showMenu(kind menuKind, items []string, checked int, anchor image.Rectangle) {
-	a.menuKind = kind
-	a.menu.Items, a.menu.Checked = items, checked
-	a.menu.Shortcuts, a.menu.Disabled = nil, nil
+	a.setMenu(kind, items, checked, nil, nil)
 	a.menu.Show(anchor, a.bounds())
 }
 
 // openContextMenu opens the page's context menu at at, in window coordinates.
 // Copy is offered only while text is selected.
 func (a *App) openContextMenu(at image.Point) {
-	a.showMenu(menuContext, contextMenu, -1, image.Rectangle{Min: at, Max: at}.Sub(image.Pt(0, 2)))
-	a.menu.Shortcuts = contextShortcuts
-	a.menu.Disabled = []bool{contextCopy: !a.current().view.HasSelection(), contextSelectAll: false}
+	a.setMenu(menuContext, contextMenu, -1, contextShortcuts, []bool{contextCopy: !a.current().view.HasSelection()})
+	a.menu.ShowAt(at, a.bounds())
+}
+
+// setMenu fills the menu for kind, and takes the pointer from the sections:
+// the open menu takes every event, including the release of a press that
+// opened it.
+func (a *App) setMenu(kind menuKind, items []string, checked int, shortcuts []string, disabled []bool) {
+	a.deliver(a.hover, platform.PointerEvent{Kind: platform.Leave})
+	a.hover, a.capture = sectionNone, sectionNone
+	a.menuKind = kind
+	m := a.menu
+	m.Items, m.Checked, m.Shortcuts, m.Disabled = items, checked, shortcuts, disabled
 }
 
 // openZoomMenu opens the zoom presets below the zoom drop-down.
