@@ -237,15 +237,19 @@
 	const script = document.currentScript;
 	const version = script ? new URL(script.src).search : "";
 	const programSize = Number(script?.dataset.size) || 0;
+	// asset returns the address of the build's file at path.
+	const asset = (path) => new URL(path + version, location.href).href;
 
 	// loadModule downloads and compiles the program at url as it arrives,
-	// calling progress with the bytes so far. A copy of the download counts
-	// them, so that the browser still caches the compiled code, which it does
-	// only for a response of its own. If this fails, the worker compiles the
-	// program itself.
+	// calling progress, if given, with the bytes so far. A copy of the
+	// download counts them, so that the browser still caches the compiled
+	// code, which it does only for a response of its own. A server that does
+	// not give the program the application/wasm type streaming needs has it
+	// compiled from all of it.
 	const loadModule = async (url, progress) => {
 		const res = await fetch(url);
-		const reader = res.clone().body?.getReader();
+		if (!res.ok) throw new Error(res.status + " " + res.statusText);
+		const reader = progress && res.clone().body?.getReader();
 		if (reader) {
 			(async () => {
 				let n = 0;
@@ -256,13 +260,16 @@
 				}
 			})().catch(() => {});
 		}
-		return WebAssembly.compileStreaming(res);
+		try {
+			return await WebAssembly.compileStreaming(res);
+		} catch {
+			return WebAssembly.compile(await (await fetch(url)).arrayBuffer());
+		}
 	};
 
 	// start runs the program at wasm in a worker, on the canvas with the id
 	// viewrab, whose parent sets the window's size.
 	const start = (wasm, worker = "worker.js") => {
-		wasm = new URL(wasm + version, location.href).href;
 		const canvas = document.getElementById("viewrab");
 		const box = canvas.parentElement;
 		if (!canvas.transferControlToOffscreen || !globalThis.Worker) {
@@ -274,11 +281,11 @@
 		let shown = "";
 		const mb = (n) => (n / 1e6).toFixed(1);
 		status("Loading Viewrab…");
-		const module = loadModule(wasm, (n) => {
+		const module = loadModule(asset(wasm), programSize > 0 && ((n) => {
 			const text = `Loading Viewrab… ${mb(Math.min(n, programSize))} of ${mb(programSize)} MB`;
-			if (loading && programSize > 0 && text !== shown) status(shown = text);
-		});
-		const w = new Worker(worker + version);
+			if (loading && text !== shown) status(shown = text);
+		}));
+		const w = new Worker(asset(worker));
 		const send = (msg, transfer = []) => w.postMessage(msg, transfer);
 		const reply = (id, p) => Promise.resolve(p).then(
 			(value) => send({ type: "reply", id, value }),
@@ -318,11 +325,10 @@
 		const size = () => ({ w: box.clientWidth, h: box.clientHeight, scale: devicePixelRatio || 1 });
 		const offscreen = canvas.transferControlToOffscreen();
 		send({
-			type: "init", canvas: offscreen, wasm,
+			type: "init", canvas: offscreen,
 			...size(), params, storage: storage(), prefersDark: dark.matches,
 		}, [offscreen]);
-		// The worker waits for the module compiled here, or compiles it itself
-		// if that failed.
+		// The worker runs the module compiled here.
 		module.then((m) => send({ type: "module", module: m }), (err) => send({ type: "module", error: String(err) }));
 
 		// The canvas fills its parent; the worker draws it at the parent's size.
