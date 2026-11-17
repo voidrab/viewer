@@ -184,3 +184,17 @@ func TestMenuDisabledItemsAndShortcuts(t *testing.T) {
 		t.Errorf("Enter on item 2 chose %d", i)
 	}
 }
+
+func TestMenuShowAtOpensAtThePoint(t *testing.T) {
+	m := newMenu(t)
+	at := image.Pt(120, 80)
+	m.ShowAt(at, menuLimit)
+	if r := m.Rect(); !m.Open || r.Min != at {
+		t.Errorf("open %v, menu at %v, want its corner at %v", m.Open, r.Min, at)
+	}
+	// Show after ShowAt drops below its anchor again.
+	m.Show(menuAnchor, menuLimit)
+	if r := m.Rect(); r.Min.Y != menuAnchor.Max.Y+2 {
+		t.Errorf("menu top %d, want %d", r.Min.Y, menuAnchor.Max.Y+2)
+	}
+}

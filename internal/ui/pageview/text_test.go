@@ -404,3 +404,38 @@ func TestHoveringALinkHighlightsIt(t *testing.T) {
 		t.Error("still over a link after the pointer left")
 	}
 }
+
+func TestOverTextFollowsThePointer(t *testing.T) {
+	v, _, _ := textView(t, 1, []gopdfrab.Link{
+		{Box: gopdfrab.Rect{X0: 10, Y0: 0, X1: 30, Y1: 30}, URI: "https://example.com", Page: -1},
+	})
+	c := paint.New(124, 300)
+	ready(t, v, c, 0)
+	for _, tc := range []struct {
+		what   string
+		p      image.Point
+		over   bool
+		onLink bool
+	}{
+		{"on the text", at(v, 0, 50, 16), true, false},
+		{"on the text under a link", at(v, 0, 15, 16), false, true},
+		{"on empty paper", at(v, 0, 90, 90), false, false},
+	} {
+		move(v, tc.p)
+		if v.OverText() != tc.over || v.OverLink() != tc.onLink {
+			t.Errorf("%s: over text %v, over link %v", tc.what, v.OverText(), v.OverLink())
+		}
+	}
+	move(v, at(v, 0, 50, 16))
+	v.HandlePointer(ptr(platform.Leave, platform.None, 0, 0))
+	if v.OverText() {
+		t.Error("still over text after the pointer left")
+	}
+}
+
+func TestPressOnADocumentWithNoPagesSelectsNothing(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 0), image.Pt(124, 300), Options{})
+	if v.HandlePointer(ptr(platform.Press, platform.Left, 50, 50)) || v.text.selecting {
+		t.Error("a press with no pages started a selection")
+	}
+}
