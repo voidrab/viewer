@@ -2,7 +2,9 @@
 
 // Command web is Viewrab for browsers, built to WebAssembly: the same viewer
 // as the native program, run in a web worker that web/viewrab.js starts for
-// the page web/index.html and drawn on the page's canvas. Files
+// the page web/index.html and drawn on the page's canvas. It is built with
+// the gopdfrab_nofonts tag, and fetches gopdfrab's substitute fonts from the
+// fonts directory next to the page when a document needs one. Files
 // are opened from the browser's file chooser, dropped on the page or named by
 // the page's ?file= parameters, which are fetched; converted copies are saved
 // among the user's downloads.
@@ -16,6 +18,8 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+
+	"github.com/voidrab/gopdfrab"
 
 	"viewrab/internal/pdfa"
 	"viewrab/internal/ui/app"
@@ -34,6 +38,9 @@ func main() {
 	// The heap is mostly bitmaps, which the collector does not scan, so
 	// frequent collections cost little.
 	debug.SetGCPercent(25)
+	// The build leaves gopdfrab's substitute fonts out, nearly half of what
+	// the page would download first; a document that needs one fetches it.
+	gopdfrab.SetFontSource(web.FetchFont)
 	if web.IsRenderer() {
 		serveRenders()
 		return

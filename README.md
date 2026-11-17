@@ -74,6 +74,12 @@ files come from the browser: the open button's file chooser, files dropped
 on the page, or `?file=<url>` in the address. Files are held in memory, in
 the in-memory file system of `web/memfs.js`, and never leave the page.
 
+To keep the download small, the build leaves out gopdfrab's substitute fonts
+for documents that do not embed theirs. They are served from `bin/web/fonts`
+and fetched only when a document needs one. On a touch screen, drag to
+scroll, pinch to zoom, and long-press for the context menu; a long press
+dragged on selects text.
+
 ## Layout
 
 ```

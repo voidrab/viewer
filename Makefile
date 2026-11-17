@@ -52,13 +52,24 @@ build-windows: winres
 	@ls -lh $(BIN).exe | awk '{print "built " $$9 " (" $$5 ")"}'
 
 ## build-web: bin/web, the WebAssembly build with the page that runs it,
-##            for any static HTTP server (make serve-web serves it locally)
+##            for any static HTTP server (make serve-web serves it locally).
+##            gopdfrab's substitute fonts are left out of the program and
+##            served from bin/web/fonts, fetched when a document needs one.
+##            The page names its files with the program's hash, so that a
+##            browser never mixes the files of two builds.
 WEB := bin/web
 build-web:
-	mkdir -p $(WEB)
-	GOOS=js GOARCH=wasm CGO_ENABLED=0 go build $(GO_FLAGS) -o $(WEB)/viewrab.wasm ./cmd/web
-	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" web/index.html web/viewrab.js web/worker.js web/memfs.js $(WEB)/
+	rm -rf $(WEB) && mkdir -p $(WEB)/fonts
+	GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -tags gopdfrab_nofonts $(GO_FLAGS) -o $(WEB)/viewrab.wasm ./cmd/web
+	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" web/viewrab.js web/worker.js web/memfs.js $(WEB)/
 	cp build/appicon.png $(WEB)/icon.png
+	fonts="$$(go list -m -f '{{.Dir}}' github.com/voidrab/gopdfrab)/internal/fontsubst/fonts" && \
+		install -m644 "$$fonts"/*.ttf.gz "$$fonts"/OFL.txt $(WEB)/fonts/
+	v=$$(sha256sum $(WEB)/viewrab.wasm | cut -c1-12) && size=$$(wc -c < $(WEB)/viewrab.wasm) && \
+		sed -e "s|src=\"viewrab.js\"|src=\"viewrab.js?v=$$v\"|" \
+			-e "s|viewrab.start(\"viewrab.wasm\")|viewrab.start(\"viewrab.wasm?v=$$v\", { size: $$size, worker: \"worker.js?v=$$v\" })|" \
+			web/index.html > $(WEB)/index.html
+	@grep -q 'viewrab.wasm?v=' $(WEB)/index.html || { echo "web/index.html: the version was not stamped"; exit 1; }
 	@ls -lh $(WEB)/viewrab.wasm | awk '{print "built " $$9 " (" $$5 ")"}'
 
 ## serve-web: serve bin/web on http://127.0.0.1:$(PORT)
