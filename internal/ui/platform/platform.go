@@ -106,16 +106,16 @@ type ScrollEvent struct {
 }
 
 // PanEvent reports content dragged by (DX, DY) pixels at (X, Y), as a finger
-// on a touch screen drags it. Unlike a ScrollEvent's, its distances are
-// exact, so that the content follows the finger. A positive DY moves content
-// up.
+// on a touch screen drags it. Unlike a ScrollEvent's, its distances are not
+// scaled by the scroll speed, so that the content follows the finger. A
+// positive DY moves content up.
 type PanEvent struct {
 	DX, DY float64
 	X, Y   float64
 }
 
-// ZoomEvent reports a pinch: the content is to be zoomed by Factor, keeping
-// the point (X, Y), between the fingers, in place.
+// ZoomEvent reports a pinch that zooms the content by Factor, keeping the
+// point (X, Y) between the fingers in place.
 type ZoomEvent struct {
 	Factor float64
 	X, Y   float64

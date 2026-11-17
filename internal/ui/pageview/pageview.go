@@ -582,8 +582,8 @@ func (v *View) ZoomPercent() string {
 	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()/CSSScale*100)))
 }
 
-// HandleEvent applies a resize, scroll, pan, zoom or key event and reports whether the
-// view needs redrawing. Events it does not use return false.
+// HandleEvent applies a resize, scroll, pan, zoom or key event and reports
+// whether the view needs redrawing. Events it does not use return false.
 func (v *View) HandleEvent(ev platform.Event) bool {
 	switch ev := ev.(type) {
 	case platform.ResizeEvent:

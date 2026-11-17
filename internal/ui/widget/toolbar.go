@@ -167,9 +167,9 @@ var compact = [][]ButtonID{
 	{ButtonZoomOut, ButtonZoomIn}, {ButtonPrev, ButtonNext}, {ButtonZoomMode}, {pageCount},
 }
 
-// layout places the controls on a bar of width, leaving out those hidden,
-// with zoom and count the widths of the zoom drop-down and the page count,
-// and reports whether the find field has the room it needs.
+// layout places the controls on a bar of width, leaving out the hidden ones.
+// zoom and count are the widths of the zoom drop-down and the page count. It
+// reports whether the find field has the room it needs.
 func (t *Toolbar) layout(width, zoom, count int, hidden map[ButtonID]bool) bool {
 	t.width = width
 	t.rects = [buttonCount]image.Rectangle{}

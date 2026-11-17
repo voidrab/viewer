@@ -378,7 +378,8 @@ func writeFile(path, content string) error {
 }
 
 // TestAPanScrollsWhatItIsOver verifies that a touch pan scrolls the pages by
-// its distance exactly, and over the panel scrolls the panel instead.
+// its distance exactly, and that a pan over the panel leaves the pages
+// unscrolled.
 func TestAPanScrollsWhatItIsOver(t *testing.T) {
 	f := newFixture(t)
 	f.open(f.pdf("a.pdf", 12))

@@ -35,8 +35,8 @@ func TestPagesRenderAtTheDisplayDensity(t *testing.T) {
 }
 
 // TestDefaultZoomFitsNarrowViews verifies that a view too narrow for the
-// default zoom's pages opens, and goes back on Ctrl+0, at fit width, and
-// that a wide one keeps the default zoom.
+// default zoom's pages opens at fit width, that a wide one opens at the
+// default zoom, and that Ctrl+0 returns each to the mode it opened in.
 func TestDefaultZoomFitsNarrowViews(t *testing.T) {
 	// A page of 100 points at 150% is 200 pixels wide, 224 with the margins.
 	for _, c := range []struct {
