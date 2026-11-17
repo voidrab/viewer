@@ -99,9 +99,14 @@ func FetchFont(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := make([]byte, v.Length())
-	js.CopyBytesToGo(b, v)
-	return b, nil
+	return bytesOf(v), nil
+}
+
+// bytesOf copies the bytes of a Uint8Array.
+func bytesOf(a js.Value) []byte {
+	b := make([]byte, a.Length())
+	js.CopyBytesToGo(b, a)
+	return b
 }
 
 // Download hands the file at path, in the in-memory file system, to the
@@ -187,8 +192,7 @@ func decodeImage(v js.Value) *image.RGBA {
 		Rect:   image.Rect(v.Get("x0").Int(), v.Get("y0").Int(), v.Get("x1").Int(), v.Get("y1").Int()),
 		Stride: v.Get("stride").Int(),
 	}
-	img.Pix = make([]byte, v.Get("pix").Length())
-	js.CopyBytesToGo(img.Pix, v.Get("pix"))
+	img.Pix = bytesOf(v.Get("pix"))
 	return img
 }
 

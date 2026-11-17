@@ -230,13 +230,21 @@
 		return { down, move, up };
 	};
 
+	// The build's version, which make build-web adds to this script's address
+	// for the page to add to every other file's, so that a browser never mixes
+	// the files of two deployments, and the program's size in bytes, which it
+	// gives the script as data-size.
+	const script = document.currentScript;
+	const version = script ? new URL(script.src).search : "";
+	const programSize = Number(script?.dataset.size) || 0;
+
 	// loadModule downloads and compiles the program at url as it arrives,
 	// calling progress with the bytes so far. A copy of the download counts
 	// them, so that the browser still caches the compiled code, which it does
-	// only for a response of its own.
+	// only for a response of its own. If this fails, the worker compiles the
+	// program itself.
 	const loadModule = async (url, progress) => {
 		const res = await fetch(url);
-		if (!res.ok) throw new Error(res.status + " " + res.statusText);
 		const reader = res.clone().body?.getReader();
 		if (reader) {
 			(async () => {
@@ -248,19 +256,13 @@
 				}
 			})().catch(() => {});
 		}
-		try {
-			return await WebAssembly.compileStreaming(res);
-		} catch {
-			// Served without the application/wasm type, say.
-			return WebAssembly.compile(await (await fetch(url)).arrayBuffer());
-		}
+		return WebAssembly.compileStreaming(res);
 	};
 
 	// start runs the program at wasm in a worker, on the canvas with the id
-	// viewrab, whose parent sets the window's size. size is the program's size
-	// in bytes, for the progress shown while it downloads, and worker the
-	// worker's script.
-	const start = (wasm, { size: bytes = 0, worker = "worker.js" } = {}) => {
+	// viewrab, whose parent sets the window's size.
+	const start = (wasm, worker = "worker.js") => {
+		wasm = new URL(wasm + version, location.href).href;
 		const canvas = document.getElementById("viewrab");
 		const box = canvas.parentElement;
 		if (!canvas.transferControlToOffscreen || !globalThis.Worker) {
@@ -269,12 +271,14 @@
 		}
 		// The download starts at once, while the worker's scripts load.
 		let loading = true;
+		let shown = "";
 		const mb = (n) => (n / 1e6).toFixed(1);
 		status("Loading Viewrab…");
-		const module = loadModule(new URL(wasm, location.href).href, (n) => {
-			if (loading && bytes > 0) status(`Loading Viewrab… ${mb(Math.min(n, bytes))} of ${mb(bytes)} MB`);
+		const module = loadModule(wasm, (n) => {
+			const text = `Loading Viewrab… ${mb(Math.min(n, programSize))} of ${mb(programSize)} MB`;
+			if (loading && programSize > 0 && text !== shown) status(shown = text);
 		});
-		const w = new Worker(worker);
+		const w = new Worker(worker + version);
 		const send = (msg, transfer = []) => w.postMessage(msg, transfer);
 		const reply = (id, p) => Promise.resolve(p).then(
 			(value) => send({ type: "reply", id, value }),
@@ -314,7 +318,7 @@
 		const size = () => ({ w: box.clientWidth, h: box.clientHeight, scale: devicePixelRatio || 1 });
 		const offscreen = canvas.transferControlToOffscreen();
 		send({
-			type: "init", canvas: offscreen, wasm: new URL(wasm, location.href).href,
+			type: "init", canvas: offscreen, wasm,
 			...size(), params, storage: storage(), prefersDark: dark.matches,
 		}, [offscreen]);
 		// The worker waits for the module compiled here, or compiles it itself

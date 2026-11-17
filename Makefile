@@ -55,8 +55,9 @@ build-windows: winres
 ##            for any static HTTP server (make serve-web serves it locally).
 ##            gopdfrab's substitute fonts are left out of the program and
 ##            served from bin/web/fonts, fetched when a document needs one.
-##            The page names its files with the program's hash, so that a
-##            browser never mixes the files of two builds.
+##            The page's script is named with the program's hash, which it
+##            adds to every other file's name, so that a browser never mixes
+##            the files of two builds.
 WEB := bin/web
 build-web:
 	rm -rf $(WEB) && mkdir -p $(WEB)/fonts
@@ -66,10 +67,9 @@ build-web:
 	fonts="$$(go list -m -f '{{.Dir}}' github.com/voidrab/gopdfrab)/internal/fontsubst/fonts" && \
 		install -m644 "$$fonts"/*.ttf.gz "$$fonts"/OFL.txt $(WEB)/fonts/
 	v=$$(sha256sum $(WEB)/viewrab.wasm | cut -c1-12) && size=$$(wc -c < $(WEB)/viewrab.wasm) && \
-		sed -e "s|src=\"viewrab.js\"|src=\"viewrab.js?v=$$v\"|" \
-			-e "s|viewrab.start(\"viewrab.wasm\")|viewrab.start(\"viewrab.wasm?v=$$v\", { size: $$size, worker: \"worker.js?v=$$v\" })|" \
+		sed "s|<script src=\"viewrab.js\">|<script src=\"viewrab.js?v=$$v\" data-size=\"$$size\">|" \
 			web/index.html > $(WEB)/index.html
-	@grep -q 'viewrab.wasm?v=' $(WEB)/index.html || { echo "web/index.html: the version was not stamped"; exit 1; }
+	@grep -q 'viewrab.js?v=' $(WEB)/index.html || { echo "web/index.html: the version was not stamped"; exit 1; }
 	@ls -lh $(WEB)/viewrab.wasm | awk '{print "built " $$9 " (" $$5 ")"}'
 
 ## serve-web: serve bin/web on http://127.0.0.1:$(PORT)

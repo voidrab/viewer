@@ -14,7 +14,8 @@
 // of the files it renders, sent when it first needs them.
 "use strict";
 
-// The scripts of the same build, which the page names with its version.
+// The build's version, which the page adds to the worker's address, for the
+// files of the same build.
 const version = location.search;
 importScripts("memfs.js" + version, "wasm_exec.js" + version);
 
@@ -32,6 +33,13 @@ importScripts("memfs.js" + version, "wasm_exec.js" + version);
 		calls.set(id, { resolve, reject });
 		postMessage({ op, arg, id }, transfer);
 	});
+
+	// fetchOK fetches url, failing unless the server answers with it.
+	const fetchOK = async (url) => {
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(res.status + " " + res.statusText);
+		return res;
+	};
 
 	const importFiles = async (files) => {
 		files = Array.from(files);
@@ -142,16 +150,14 @@ importScripts("memfs.js" + version, "wasm_exec.js" + version);
 		importFiles,
 		pickFiles: async () => importFiles(await ask("pickFiles")),
 		fetchFile: async (url) => {
-			const res = await fetch(url);
-			if (!res.ok) throw new Error(res.status + " " + res.statusText);
+			const res = await fetchOK(url);
 			const name = decodeURIComponent(new URL(res.url).pathname.split("/").pop()) || "document.pdf";
 			return memfs.put(name, new Uint8Array(await res.arrayBuffer()));
 		},
 		// fetchFont fetches a substitute font for gopdfrab, which the build
 		// leaves out of the program, from the fonts directory.
 		fetchFont: async (name) => {
-			const res = await fetch("fonts/" + encodeURIComponent(name));
-			if (!res.ok) throw new Error(res.status + " " + res.statusText);
+			const res = await fetchOK("fonts/" + encodeURIComponent(name) + version);
 			return new Uint8Array(await res.arrayBuffer());
 		},
 		download(path) {
@@ -206,11 +212,14 @@ importScripts("memfs.js" + version, "wasm_exec.js" + version);
 		return Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
 	};
 
+	// compile compiles the program at url, as the page does unless that
+	// failed, from all of it if the server does not give it the
+	// application/wasm type streaming needs.
 	const compile = async (url) => {
 		try {
-			return await WebAssembly.compileStreaming(fetch(url));
+			return await WebAssembly.compileStreaming(fetchOK(url));
 		} catch {
-			return WebAssembly.compile(await (await fetch(url)).arrayBuffer());
+			return WebAssembly.compile(await (await fetchOK(url)).arrayBuffer());
 		}
 	};
 
@@ -221,15 +230,14 @@ importScripts("memfs.js" + version, "wasm_exec.js" + version);
 	};
 
 	// The module the page compiles while the worker starts.
-	let pageModule;
-	const fromPage = new Promise((resolve) => { pageModule = resolve; });
+	const fromPage = Promise.withResolvers();
 
 	const startViewer = async (init) => {
 		Object.assign(host, {
 			canvas: init.canvas, params: init.params, storage: init.storage, prefersDark: init.prefersDark,
 		});
 		deliver({ type: "resize", w: init.w, h: init.h, scale: init.scale });
-		const got = await fromPage;
+		const got = await fromPage.promise;
 		if (got.error) console.warn("viewrab: the page could not compile the program:", got.error);
 		const module = got.module ?? await compile(init.wasm);
 		host.renderers = startRenderers(module, renderWorkers(init.params));
@@ -258,7 +266,7 @@ importScripts("memfs.js" + version, "wasm_exec.js" + version);
 			break;
 		}
 		case "module": // the program, compiled by the page
-			pageModule(data);
+			fromPage.resolve(data);
 			break;
 		case "dark":
 			darkWatch?.(data.dark);
