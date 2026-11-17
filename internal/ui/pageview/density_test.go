@@ -72,3 +72,16 @@ func TestPinchZoomsAroundItsMiddle(t *testing.T) {
 		t.Errorf("the point under the fingers moved from %v to %v", pt, after)
 	}
 }
+
+// TestPanScrollsByItsDistance verifies that a pan scrolls the pages by its
+// distance, rounded to whole pixels, without the wheel's scroll speed.
+func TestPanScrollsByItsDistance(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 6), image.Pt(200, 300), Options{Gap: 12, Margin: 12, Zoom: ZoomPresets[4]})
+	before := v.lay.Scroll()
+	if !v.HandleEvent(platform.PanEvent{DY: 40.6}) {
+		t.Fatal("a pan asked for no redraw")
+	}
+	if got := v.lay.Scroll(); got != before.Add(image.Pt(0, 41)) {
+		t.Errorf("a pan of 40.6 pixels scrolled from %v to %v, want 41 down", before, got)
+	}
+}
