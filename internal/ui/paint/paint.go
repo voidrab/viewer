@@ -58,9 +58,9 @@ func (c *Canvas) devicePoint(p image.Point) image.Point {
 // dev maps a logical coordinate to device pixels.
 func (c *Canvas) dev(v int) int { return int(math.Round(float64(v) * c.scale)) }
 
-// DeviceLen maps a logical length, a width or radius, to device pixels: at
+// deviceLen maps a logical length, a width or radius, to device pixels: at
 // least one pixel for a positive length, so that a hairline stays visible.
-func (c *Canvas) DeviceLen(v int) int {
+func (c *Canvas) deviceLen(v int) int {
 	if v <= 0 {
 		return v
 	}
@@ -124,7 +124,7 @@ func (c *Canvas) fill(r image.Rectangle, col color.NRGBA) {
 
 // Stroke paints a border of the given width just inside r.
 func (c *Canvas) Stroke(r image.Rectangle, width int, col color.NRGBA) {
-	c.stroke(c.Device(r), c.DeviceLen(width), col)
+	c.stroke(c.Device(r), c.deviceLen(width), col)
 }
 
 // stroke is Stroke in device pixels.
@@ -143,7 +143,7 @@ func (c *Canvas) stroke(r image.Rectangle, width int, col color.NRGBA) {
 // and their edges anti-aliased. A radius of half the shorter side or more
 // makes the ends round, and a square r a circle.
 func (c *Canvas) FillRound(r image.Rectangle, radius int, col color.NRGBA) {
-	c.round(c.Device(r), c.DeviceLen(radius), 0, col)
+	c.round(c.Device(r), c.deviceLen(radius), 0, col)
 }
 
 // StrokeRound paints a border of the given width just inside r like Stroke,
@@ -152,7 +152,7 @@ func (c *Canvas) StrokeRound(r image.Rectangle, radius, width int, col color.NRG
 	if width <= 0 {
 		return
 	}
-	c.round(c.Device(r), c.DeviceLen(radius), c.DeviceLen(width), col)
+	c.round(c.Device(r), c.deviceLen(radius), c.deviceLen(width), col)
 }
 
 // round paints the rounded rectangle r, or with a positive width only the
