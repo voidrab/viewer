@@ -174,3 +174,13 @@ func TestDrawAtDeviceSize(t *testing.T) {
 		t.Errorf("ink %v, want it within the device box %v and wider than the logical one", ink, box)
 	}
 }
+
+// TestDrawLogoAtDeviceSize verifies that the logo fills the device size of
+// its square on a scaled canvas.
+func TestDrawLogoAtDeviceSize(t *testing.T) {
+	c := paint.NewScaled(20, 20, 2)
+	DrawLogo(c, image.Rect(2, 2, 18, 18))
+	if ink := inkRect(c); ink.Empty() || !ink.In(image.Rect(4, 4, 36, 36)) || ink.Dx() <= 16 {
+		t.Errorf("logo ink %v, want it to fill the device square (4,4)-(36,36)", ink)
+	}
+}

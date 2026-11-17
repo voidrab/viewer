@@ -274,7 +274,7 @@ func (a *About) Draw(c *paint.Canvas, window image.Rectangle) {
 		fg = p.Text
 	}
 	icon.Draw(c, l.close.Inset((aboutClose-toolIcon)/2), icon.Close, fg, 1.6)
-	c.DrawImage(l.logo.Min, icon.Logo(c.DeviceLen(aboutLogo)))
+	icon.DrawLogo(c, l.logo)
 
 	link := 0
 	for _, s := range l.spans {

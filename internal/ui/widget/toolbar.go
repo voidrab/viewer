@@ -281,7 +281,7 @@ func (t *Toolbar) Draw(c *paint.Canvas, origin image.Point) {
 	bar := image.Rect(origin.X, origin.Y, origin.X+max(t.width, t.rects[ButtonZoomIn].Max.X+toolPad), origin.Y+theme.ToolbarHeight)
 	c.Fill(bar, p.Chrome)
 	c.Fill(image.Rect(bar.Min.X, bar.Max.Y-1, bar.Max.X, bar.Max.Y), p.Border)
-	c.DrawImage(t.logo.Min.Add(origin), icon.Logo(c.DeviceLen(logoSize)))
+	icon.DrawLogo(c, t.logo.Add(origin))
 
 	for id := range buttonCount {
 		if !t.shown(id) || id == ButtonFind {

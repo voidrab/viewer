@@ -128,21 +128,13 @@ func (a *App) setTitle(title string) {
 	}
 }
 
-// pixelScale returns the window's device pixels per logical pixel.
-func (a *App) pixelScale() float64 {
-	if a.scale > 0 {
-		return a.scale
-	}
-	return 1
-}
-
 // draw paints the whole window and presents it.
 func (a *App) draw() {
 	if a.size == (platform.Size{}) {
 		return
 	}
-	if c := a.canvas; c == nil || c.Bounds().Size() != image.Pt(a.size.W, a.size.H) || c.Scale() != a.pixelScale() {
-		a.canvas = paint.NewScaled(a.size.W, a.size.H, a.pixelScale())
+	if c := a.canvas; c == nil || c.Bounds().Size() != image.Pt(a.size.W, a.size.H) || c.Scale() != a.scale {
+		a.canvas = paint.NewScaled(a.size.W, a.size.H, a.scale)
 	}
 	a.chrome()
 	c := a.canvas
@@ -211,7 +203,7 @@ func (a *App) hint(r image.Rectangle) {
 	p := a.opts.Palette
 	c := a.canvas
 	logo, y1, y2, button := a.hintLayout(r)
-	c.DrawImage(logo.Min, icon.Logo(c.DeviceLen(hintLogo)))
+	icon.DrawLogo(c, logo)
 	f := a.face
 	f.Draw(c, r.Min.X+(r.Dx()-f.Width(hintTitle))/2, y1, hintTitle, p.Muted)
 

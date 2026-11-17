@@ -169,7 +169,7 @@ type App struct {
 	active int
 
 	size    platform.Size
-	scale   float64 // the window's device pixels per logical pixel; 0 means 1
+	scale   float64 // the window's device pixels per logical pixel
 	canvas  *paint.Canvas
 	pending []string // files to open once the window has a size
 	// pendingDocs are documents moved here from another window before this
@@ -557,7 +557,7 @@ func (a *App) afterChange() {
 	a.tabs.Layout(a.size.W)
 	_, _, content, _ := a.layout()
 	for _, d := range a.docs {
-		d.view.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: content.Dx(), H: content.Dy()}, Scale: a.pixelScale()})
+		d.view.HandleEvent(platform.ResizeEvent{Size: platform.Size{W: content.Dx(), H: content.Dy()}, Scale: a.scale})
 	}
 	a.win.Invalidate()
 }

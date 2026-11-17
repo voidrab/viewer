@@ -481,11 +481,11 @@ func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi 
 		// only while parts are missing.
 		c.Fill(vr, color.NRGBA{255, 255, 255, 255})
 		for _, old := range v.pool.standIns(v, pg.page, dpi) {
-			c.DrawScaledDevice(place(dvr, old.k.rect, v.pixelSize(pg.page, old.k.dpi)), old.img)
+			c.DrawScaled(place(dvr, old.k.rect, v.pixelSize(pg.page, old.k.dpi)), old.img)
 		}
 	}
 	for _, d := range done {
-		c.DrawScaledDevice(d.at, d.img)
+		c.DrawScaled(d.at, d.img)
 	}
 }
 

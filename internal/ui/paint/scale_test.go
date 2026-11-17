@@ -65,7 +65,7 @@ func TestScaledDrawing(t *testing.T) {
 		t.Errorf("DrawImage does not place its device pixels at the logical point: %v", at(c, 16, 0))
 	}
 
-	c.DrawScaled(image.Rect(8, 8, 9, 9), img)
+	c.DrawScaled(c.Device(image.Rect(8, 8, 9, 9)), img)
 	if at(c, 16, 16) != (color.RGBA{0, 0, 255, 255}) || at(c, 17, 17) != (color.RGBA{}) {
 		t.Errorf("DrawScaled does not copy a device-sized image one to one: %v %v", at(c, 16, 16), at(c, 17, 17))
 	}

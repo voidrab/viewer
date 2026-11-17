@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -97,8 +98,29 @@ type Face struct {
 	fam             *Family
 	size            float64
 	bold            bool
+	scaled          atomic.Pointer[scaledFace] // the face last drawn on a scaled canvas
 	face            font.Face
 	ascent, descent int
+}
+
+// scaledFace is a face at a canvas's scale.
+type scaledFace struct {
+	scale float64
+	face  *Face
+}
+
+// at returns the face at scale times f's size, made once for the scale drawn
+// at last, or f itself when it cannot be made.
+func (f *Face) at(scale float64) *Face {
+	if s := f.scaled.Load(); s != nil && s.scale == scale {
+		return s.face
+	}
+	df, err := f.fam.Face(f.size*scale, f.bold)
+	if err != nil {
+		return f
+	}
+	f.scaled.Store(&scaledFace{scale, df})
+	return df
 }
 
 // Ascent returns the pixels from the baseline up to the top of a line.
@@ -116,9 +138,7 @@ func (f *Face) Width(s string) int { return font.MeasureString(f.face, s).Ceil()
 // its width stays close to what Width measures.
 func (f *Face) Draw(c *paint.Canvas, x, y int, s string, col color.NRGBA) {
 	if scale := c.Scale(); scale != 1 {
-		if df, err := f.fam.Face(f.size*scale, f.bold); err == nil {
-			f = df
-		}
+		f = f.at(scale)
 	}
 	w := f.Width(s)
 	if s == "" || w == 0 || col.A == 0 {

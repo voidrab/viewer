@@ -47,11 +47,11 @@ func (c *Canvas) Bounds() image.Rectangle { return image.Rectangle{Max: c.size} 
 // coordinate is mapped alone, so rectangles that share an edge share it in
 // device pixels too and leave no seam.
 func (c *Canvas) Device(r image.Rectangle) image.Rectangle {
-	return image.Rectangle{Min: c.DevicePoint(r.Min), Max: c.DevicePoint(r.Max)}
+	return image.Rectangle{Min: c.devicePoint(r.Min), Max: c.devicePoint(r.Max)}
 }
 
-// DevicePoint returns where the logical point p lies in the bitmap.
-func (c *Canvas) DevicePoint(p image.Point) image.Point {
+// devicePoint returns where the logical point p lies in the bitmap.
+func (c *Canvas) devicePoint(p image.Point) image.Point {
 	return image.Pt(c.dev(p.X), c.dev(p.Y))
 }
 
@@ -254,7 +254,7 @@ func coverage(px, py, hx, hy, r float64) float64 {
 // pixels is made 32 pixels wide. It must be premultiplied, as image.RGBA
 // samples are.
 func (c *Canvas) DrawImage(p image.Point, src *image.RGBA) {
-	p = c.DevicePoint(p)
+	p = c.devicePoint(p)
 	dst := src.Rect.Sub(src.Rect.Min).Add(p).Intersect(c.clip())
 	if dst.Empty() {
 		return
@@ -282,21 +282,16 @@ func blend(d []uint8, src color.RGBA) {
 	d[3] = uint8(uint32(src.A) + (uint32(d[3])*inv+127)/255)
 }
 
-// DrawScaled replaces the pixels of dst with src stretched to fill it, using
-// nearest-neighbour sampling. src must be opaque, because its pixels replace
+// DrawScaled replaces the pixels of dst, a rectangle in device pixels, with
+// src stretched to fill it, using nearest-neighbour sampling. src must be opaque, because its pixels replace
 // the canvas's rather than blend over them. It is meant for showing a page
 // rendered at a slightly different size than its slot.
 //
-// dst is in logical pixels, src in its own: a page rendered at the device
-// size of dst is copied one to one.
+// dst is in device pixels because what is drawn this way is laid out in
+// them: the tiles of a page, which must meet with no seam, each copied one to
+// one when rendered at the size of its place. Device maps a logical
+// rectangle.
 func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
-	c.DrawScaledDevice(c.Device(dst), src)
-}
-
-// DrawScaledDevice is DrawScaled with dst in device pixels, for bitmaps laid
-// out in device pixels, such as the tiles of a page, which must meet with no
-// seam.
-func (c *Canvas) DrawScaledDevice(dst image.Rectangle, src *image.RGBA) {
 	sw, sh := src.Rect.Dx(), src.Rect.Dy()
 	if dst.Empty() || sw == 0 || sh == 0 {
 		return

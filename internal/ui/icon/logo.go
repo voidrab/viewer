@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"golang.org/x/image/draw"
+
+	"viewrab/internal/ui/paint"
 )
 
 //go:embed gopher.png
@@ -18,6 +20,12 @@ var (
 	logoSrc   image.Image
 	logoSizes = map[int]*image.RGBA{}
 )
+
+// DrawLogo draws the app's gopher icon to fill the square r of c, at the
+// device size of r, so that it is sharp on a scaled canvas.
+func DrawLogo(c *paint.Canvas, r image.Rectangle) {
+	c.DrawImage(r.Min, Logo(c.Device(r).Dx()))
+}
 
 // Logo returns the app's gopher icon, size device pixels square and premultiplied for
 // paint.Canvas.DrawImage. Each size is scaled once and then reused, so the
