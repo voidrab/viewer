@@ -215,7 +215,7 @@ importScripts("memfs.js", "wasm_exec.js");
 		Object.assign(host, {
 			canvas: init.canvas, params: init.params, storage: init.storage, prefersDark: init.prefersDark,
 		});
-		deliver({ type: "resize", w: init.w, h: init.h });
+		deliver({ type: "resize", w: init.w, h: init.h, scale: init.scale });
 		const module = await compile(init.wasm);
 		host.renderers = startRenderers(module, renderWorkers(init.params));
 		await run(module);

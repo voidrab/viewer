@@ -34,6 +34,8 @@ func TestMessageEvent(t *testing.T) {
 		{"drag leave", Message{Type: "dragleave"}, platform.DragEvent{Kind: platform.DragLeave}},
 		{"resize", Message{Type: "resize", W: 800, H: 600},
 			platform.ResizeEvent{Size: platform.Size{W: 800, H: 600}, Scale: 1}},
+		{"resize on a dense display", Message{Type: "resize", W: 393, H: 852, Scale: 2.75},
+			platform.ResizeEvent{Size: platform.Size{W: 393, H: 852}, Scale: 2.75}},
 		{"resize to nothing", Message{Type: "resize", W: 0, H: 600}, nil},
 		{"drop", Message{Type: "drop"}, nil},
 		{"paste", Message{Type: "paste", Text: "x"}, nil},

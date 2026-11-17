@@ -87,13 +87,16 @@ func (fam *Family) Face(size float64, bold bool) (*Face, error) {
 		return nil, err
 	}
 	m := face.Metrics()
-	out := &Face{face: face, ascent: m.Ascent.Ceil(), descent: m.Descent.Ceil()}
+	out := &Face{fam: fam, size: size, bold: bold, face: face, ascent: m.Ascent.Ceil(), descent: m.Descent.Ceil()}
 	fam.faces[key] = out
 	return out, nil
 }
 
 // Face is a typeface at one size.
 type Face struct {
+	fam             *Family
+	size            float64
+	bold            bool
 	face            font.Face
 	ascent, descent int
 }
@@ -108,8 +111,15 @@ func (f *Face) Height() int { return f.ascent + f.descent }
 func (f *Face) Width(s string) int { return font.MeasureString(f.face, s).Ceil() }
 
 // Draw paints s in col with the top-left of its line at (x, y), within the
-// canvas's clip.
+// canvas's clip. On a scaled canvas the text is set in the face of the
+// device size, so that it is sharp; its line keeps the logical place, and
+// its width stays close to what Width measures.
 func (f *Face) Draw(c *paint.Canvas, x, y int, s string, col color.NRGBA) {
+	if scale := c.Scale(); scale != 1 {
+		if df, err := f.fam.Face(f.size*scale, f.bold); err == nil {
+			f = df
+		}
+	}
 	w := f.Width(s)
 	if s == "" || w == 0 || col.A == 0 {
 		return

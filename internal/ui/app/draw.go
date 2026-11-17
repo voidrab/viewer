@@ -133,8 +133,8 @@ func (a *App) draw() {
 	if a.size == (platform.Size{}) {
 		return
 	}
-	if a.canvas == nil || a.canvas.Bounds().Size() != image.Pt(a.size.W, a.size.H) {
-		a.canvas = paint.New(a.size.W, a.size.H)
+	if c := a.canvas; c == nil || c.Bounds().Size() != image.Pt(a.size.W, a.size.H) || c.Scale() != a.scale {
+		a.canvas = paint.NewScaled(a.size.W, a.size.H, a.scale)
 	}
 	a.chrome()
 	c := a.canvas
@@ -203,7 +203,7 @@ func (a *App) hint(r image.Rectangle) {
 	p := a.opts.Palette
 	c := a.canvas
 	logo, y1, y2, button := a.hintLayout(r)
-	c.DrawImage(logo.Min, icon.Logo(hintLogo))
+	icon.DrawLogo(c, logo)
 	f := a.face
 	f.Draw(c, r.Min.X+(r.Dx()-f.Width(hintTitle))/2, y1, hintTitle, p.Muted)
 

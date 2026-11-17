@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -35,9 +36,13 @@ func serve(t *testing.T, conn *Conn, fn func(s *server, ev Event, d *Decoder)) *
 	return s
 }
 
+// send sends an event to the client. A client that has hung up, as one does
+// when its test ends while the server is still answering a request, is not
+// an error.
 func (s *server) send(obj uint32, opcode uint16, build func(*Encoder)) {
 	s.t.Helper()
-	if err := s.conn.Send(obj, opcode, build); err != nil && !errors.Is(err, net.ErrClosed) {
+	err := s.conn.Send(obj, opcode, build)
+	if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
 		s.t.Errorf("server send: %v", err)
 	}
 }

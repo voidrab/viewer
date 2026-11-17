@@ -27,7 +27,7 @@ func face(t *testing.T, size float64, bold bool) *Face {
 // inkBounds returns the rectangle covering every pixel c has painted.
 func inkBounds(c *paint.Canvas) image.Rectangle {
 	var r image.Rectangle
-	b := c.Bounds()
+	b := c.Img.Rect
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
 			if c.Img.RGBAAt(x, y).A != 0 {
@@ -200,5 +200,28 @@ func TestFaceFailuresAreReported(t *testing.T) {
 	newFace = func(*opentype.Font, *opentype.FaceOptions) (font.Face, error) { return nil, boom }
 	if _, err := Mono().Face(12, false); !errors.Is(err, boom) {
 		t.Errorf("face failure = %v", err)
+	}
+}
+
+// TestDrawScaled verifies that on a scaled canvas the text is set in the face
+// of the device size, at its logical place, and in the face it has when no
+// face of that size can be made.
+func TestDrawScaled(t *testing.T) {
+	f := face(t, 16, false)
+	c := paint.NewScaled(60, 30, 2)
+	f.Draw(c, 5, 5, "Hi", black)
+	ink := inkBounds(c)
+	line := image.Rect(10, 10, 10+2*f.Width("Hi")+2, 10+2*f.Height()+2)
+	if ink.Empty() || !ink.In(line) || ink.Dx() <= f.Width("Hi") {
+		t.Errorf("ink %v, want text twice the logical size within %v", ink, line)
+	}
+
+	orig := newFace
+	defer func() { newFace = orig }()
+	newFace = func(*opentype.Font, *opentype.FaceOptions) (font.Face, error) { return nil, errors.New("boom") }
+	c = paint.NewScaled(60, 30, 3)
+	f.Draw(c, 0, 0, "Hi", black)
+	if ink := inkBounds(c); ink.Empty() || ink.Dx() > f.Width("Hi") {
+		t.Errorf("ink %v, want the text in its own face when no other can be made", ink)
 	}
 }

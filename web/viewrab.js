@@ -120,15 +120,23 @@
 		for (const [k, v] of new URLSearchParams(location.search)) {
 			(params[k] ??= []).push(k === "file" ? new URL(v, location.href).href : v);
 		}
+		// The window's size, in CSS pixels, and the device pixels to each,
+		// which the worker draws the canvas in, so that it is sharp.
+		const size = () => ({ w: box.clientWidth, h: box.clientHeight, scale: devicePixelRatio || 1 });
 		const offscreen = canvas.transferControlToOffscreen();
 		send({
 			type: "init", canvas: offscreen, wasm: new URL(wasm, location.href).href,
-			w: box.clientWidth, h: box.clientHeight,
-			params, storage: storage(), prefersDark: dark.matches,
+			...size(), params, storage: storage(), prefersDark: dark.matches,
 		}, [offscreen]);
 
 		// The canvas fills its parent; the worker draws it at the parent's size.
-		new ResizeObserver(() => send({ type: "resize", w: box.clientWidth, h: box.clientHeight })).observe(box);
+		const resized = () => send({ type: "resize", ...size() });
+		new ResizeObserver(resized).observe(box);
+		// The density changes without a resize when the window moves to
+		// another display.
+		const watchDensity = () => matchMedia(`(resolution: ${devicePixelRatio}dppx)`)
+			.addEventListener("change", () => { resized(); watchDensity(); }, { once: true });
+		watchDensity();
 
 		canvas.tabIndex = 0;
 		const on = (name, f, passive = false) => canvas.addEventListener(name, f, { passive });
