@@ -137,9 +137,31 @@ func (t *Toolbar) zoomWidth() int {
 // Open, and the page and zoom groups from the left edge; the window controls,
 // if shown, the menu button, the theme switch, PDF/A and the find field from
 // the right edge.
-// The find field shrinks, down to FindMinWidth, to fit a narrow bar.
+// The find field shrinks, down to FindMinWidth, to fit a narrow bar. On a bar
+// narrower still, as a phone's is, controls the bar can do without are left
+// out until the find field fits: see compactLevels.
 func (t *Toolbar) Layout(width int) {
+	for level := range compactLevels {
+		if t.layout(width, level) || level == compactLevels-1 {
+			break
+		}
+	}
+	t.laid = true
+}
+
+// compactLevels is the number of ways the bar is laid out, from all controls
+// to the fewest. Each level leaves out more: first zoom in and out, which a
+// pinch or the keyboard also does; then the previous and next page buttons,
+// which scrolling stands in for; then the zoom drop-down; then the page count
+// after the page field.
+const compactLevels = 5
+
+// layout places the controls on a bar of width, leaving out those of the
+// compact level, and reports whether the find field has the room it needs.
+func (t *Toolbar) layout(width, level int) bool {
 	t.width = width
+	t.rects = [buttonCount]image.Rectangle{}
+	t.pagesBox = image.Rectangle{}
 	y := (theme.ToolbarHeight - toolButton) / 2
 	ly := (theme.ToolbarHeight - logoSize) / 2
 	t.logo = image.Rect(toolPad, ly, toolPad+logoSize, ly+logoSize)
@@ -150,22 +172,31 @@ func (t *Toolbar) Layout(width int) {
 	}
 	place(ButtonOpen, toolButton, toolGap)
 	x += groupLead
-	place(ButtonPrev, toolButton, groupGap)
+	if level < 2 {
+		place(ButtonPrev, toolButton, groupGap)
+	}
 	place(ButtonPage, pageWidth, groupGap)
-	pw := t.Face.Width(t.pagesText())
-	t.pagesBox = image.Rect(x, y, x+pw, y+toolButton)
-	x += pw + 2 + groupGap
-	place(ButtonNext, toolButton, toolGap)
-	x += groupLead
-	place(ButtonZoomOut, toolButton, groupGap)
-	place(ButtonZoomMode, t.zoomWidth(), groupGap)
-	place(ButtonZoomIn, toolButton, toolGap)
+	if level < 4 {
+		pw := t.Face.Width(t.pagesText())
+		t.pagesBox = image.Rect(x, y, x+pw, y+toolButton)
+		x += pw + 2 + groupGap
+	}
+	if level < 2 {
+		place(ButtonNext, toolButton, toolGap)
+	}
+	if level < 3 {
+		x += groupLead
+		if level < 1 {
+			place(ButtonZoomOut, toolButton, groupGap)
+		}
+		place(ButtonZoomMode, t.zoomWidth(), groupGap)
+		if level < 1 {
+			place(ButtonZoomIn, toolButton, toolGap)
+		}
+	}
 	left := x
 
 	right := width - winPad
-	for id := ButtonMinimize; id <= ButtonCloseWindow; id++ {
-		t.rects[id] = image.Rectangle{}
-	}
 	if t.Controls {
 		x = right - 3*winButton - 2*winGap
 		right = x - winPad - toolGap
@@ -182,8 +213,9 @@ func (t *Toolbar) Layout(width int) {
 	placeLeft(ButtonTheme, toolButton)
 	placeLeft(ButtonPDFA, toolButton)
 	right -= 4 // the find field's margin
-	placeLeft(ButtonFind, min(max(right-left-groupLead, FindMinWidth), FindWidth))
-	t.laid = true
+	room := right - left - groupLead
+	placeLeft(ButtonFind, min(max(room, FindMinWidth), FindWidth))
+	return room >= FindMinWidth
 }
 
 // shown reports whether control id is on the bar.

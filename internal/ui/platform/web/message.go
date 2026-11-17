@@ -31,6 +31,8 @@ type Message struct {
 	Scale float64
 	// Text is the text of a "paste".
 	Text string
+	// Factor is the zoom of a "pinch" since the one before, at (X, Y).
+	Factor float64
 }
 
 // mods returns the modifiers m reports held.
@@ -56,6 +58,8 @@ func (m Message) Event() (platform.Event, bool) {
 		return platform.PointerEvent{Kind: platform.Enter, X: m.X, Y: m.Y, Mods: m.mods()}, true
 	case "pointerleave":
 		return platform.PointerEvent{Kind: platform.Leave, X: m.X, Y: m.Y, Mods: m.mods()}, true
+	case "pinch":
+		return platform.ZoomEvent{Factor: m.Factor, X: m.X, Y: m.Y}, m.Factor > 0
 	case "wheel":
 		dx, dy := Wheel(m.DX, m.DY, m.Mode, float64(m.H))
 		return platform.ScrollEvent{DX: dx, DY: dy, X: m.X, Y: m.Y, Mods: m.mods()}, true

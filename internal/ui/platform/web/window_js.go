@@ -131,6 +131,8 @@ func decode(v js.Value) Message {
 		mods()
 	case "dragenter", "dragover", "dragleave", "drop":
 		m.X, m.Y = num("x"), num("y")
+	case "pinch":
+		m.X, m.Y, m.Factor = num("x"), num("y"), num("factor")
 	case "resize":
 		m.W, m.H, m.Scale = int(num("w")), int(num("h")), num("scale")
 	case "paste", "clipboard":

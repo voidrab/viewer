@@ -400,11 +400,11 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 			a.win.Invalidate()
 			break
 		}
-		o := a.origin(sectionContent)
-		ev.X, ev.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
-		if d := a.current(); d != nil && d.view.HandleEvent(ev) {
-			a.win.Invalidate()
-		}
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
+	case platform.ZoomEvent:
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
 	case platform.KeyEvent:
 		return a.key(ev)
 	case platform.PasteEvent:
@@ -414,6 +414,20 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		}
 	}
 	return a.quitting
+}
+
+// inContent returns the window point (x, y) relative to the content.
+func (a *App) inContent(x, y float64) (float64, float64) {
+	o := a.origin(sectionContent)
+	return x - float64(o.X), y - float64(o.Y)
+}
+
+// viewEvent hands ev to the active document's view, and asks for a frame if
+// it changed the view.
+func (a *App) viewEvent(ev platform.Event) {
+	if d := a.current(); d != nil && d.view.HandleEvent(ev) {
+		a.win.Invalidate()
+	}
 }
 
 // current returns the active document, or nil.

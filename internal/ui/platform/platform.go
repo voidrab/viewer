@@ -105,6 +105,13 @@ type ScrollEvent struct {
 	Mods   Modifiers
 }
 
+// ZoomEvent reports a pinch: the content is to be zoomed by Factor, keeping
+// the point (X, Y), between the fingers, in place.
+type ZoomEvent struct {
+	Factor float64
+	X, Y   float64
+}
+
 // PasteEvent delivers the clipboard's text, in answer to Window.RequestPaste.
 type PasteEvent struct{ Text string }
 
@@ -172,6 +179,7 @@ func (CloseEvent) isEvent()   {}
 func (FocusEvent) isEvent()   {}
 func (PointerEvent) isEvent() {}
 func (ScrollEvent) isEvent()  {}
+func (ZoomEvent) isEvent()    {}
 func (KeyEvent) isEvent()     {}
 func (PasteEvent) isEvent()   {}
 func (StateEvent) isEvent()   {}

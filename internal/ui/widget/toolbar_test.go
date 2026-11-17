@@ -490,3 +490,50 @@ func TestToolbarButtonRect(t *testing.T) {
 		t.Error("an unlaid toolbar has no button rectangle")
 	}
 }
+
+// TestToolbarCompactsToFitNarrowBars verifies that a narrow bar leaves out
+// zoom in and out, then the page buttons, then the zoom drop-down, then the
+// page count, until the find field fits, and never lets controls overlap.
+func TestToolbarCompactsToFitNarrowBars(t *testing.T) {
+	tb := newToolbar(t)
+	tb.Controls = false
+	for _, c := range []struct {
+		width   int
+		gone    []ButtonID
+		noCount bool
+	}{
+		{900, nil, false},
+		{560, []ButtonID{ButtonZoomOut, ButtonZoomIn}, false},
+		{480, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext}, false},
+		{393, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, false},
+		{320, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, true},
+		{200, []ButtonID{ButtonZoomOut, ButtonZoomIn, ButtonPrev, ButtonNext, ButtonZoomMode}, true},
+	} {
+		tb.Layout(c.width)
+		for id := range buttonCount {
+			gone := false
+			for _, g := range c.gone {
+				gone = gone || g == id
+			}
+			if !isControl(id) && tb.shown(id) == gone {
+				t.Errorf("width %d: control %d shown %v, want %v", c.width, id, tb.shown(id), !gone)
+			}
+		}
+		if (tb.pagesBox.Empty()) != c.noCount {
+			t.Errorf("width %d: page count box %v, want empty %v", c.width, tb.pagesBox, c.noCount)
+		}
+		if c.width < 300 {
+			continue // too narrow for anything to fit
+		}
+		if w := tb.rects[ButtonFind].Dx(); w < FindMinWidth {
+			t.Errorf("width %d: find field %d wide, want at least %d", c.width, w, FindMinWidth)
+		}
+		for a := range buttonCount {
+			for b := a + 1; b < buttonCount; b++ {
+				if tb.shown(a) && tb.shown(b) && tb.rects[a].Overlaps(tb.rects[b]) {
+					t.Errorf("width %d: controls %d %v and %d %v overlap", c.width, a, tb.rects[a], b, tb.rects[b])
+				}
+			}
+		}
+	}
+}
