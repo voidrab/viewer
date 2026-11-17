@@ -105,6 +105,22 @@ type ScrollEvent struct {
 	Mods   Modifiers
 }
 
+// PanEvent reports content dragged by (DX, DY) pixels at (X, Y), as a finger
+// on a touch screen drags it. Unlike a ScrollEvent's, its distances are not
+// scaled by the scroll speed, so that the content follows the finger. A
+// positive DY moves content up.
+type PanEvent struct {
+	DX, DY float64
+	X, Y   float64
+}
+
+// ZoomEvent reports a pinch that zooms the content by Factor, keeping the
+// point (X, Y) between the fingers in place.
+type ZoomEvent struct {
+	Factor float64
+	X, Y   float64
+}
+
 // PasteEvent delivers the clipboard's text, in answer to Window.RequestPaste.
 type PasteEvent struct{ Text string }
 
@@ -172,6 +188,8 @@ func (CloseEvent) isEvent()   {}
 func (FocusEvent) isEvent()   {}
 func (PointerEvent) isEvent() {}
 func (ScrollEvent) isEvent()  {}
+func (ZoomEvent) isEvent()    {}
+func (PanEvent) isEvent()     {}
 func (KeyEvent) isEvent()     {}
 func (PasteEvent) isEvent()   {}
 func (StateEvent) isEvent()   {}

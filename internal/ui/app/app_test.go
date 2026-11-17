@@ -877,20 +877,33 @@ func TestScrollbarThumbDragsInTheWindow(t *testing.T) {
 }
 
 func TestWheelZoomUsesPointerPositionRelativeToTheContent(t *testing.T) {
-	f := newFixture(t)
-	f.open(f.pdf("a.pdf", 6))
-	c := f.content()
-	view := f.a.current().view
-	view.Layout().ScrollTo(image.Pt(0, 500))
-	at := image.Pt(c.Dx()/2, c.Dy()/3) // in content coordinates
-	page, pt, ok := view.Layout().HitPage(at)
-	if !ok {
-		t.Fatal("no page under the pointer")
-	}
-	f.a.Handle(platform.ScrollEvent{DY: -10, X: float64(c.Min.X + at.X), Y: float64(c.Min.Y + at.Y), Mods: platform.Ctrl})
-	got, gpt, ok := view.Layout().HitPage(at)
-	if !ok || got != page || gpt.H-pt.H > 1 || pt.H-gpt.H > 1 {
-		t.Errorf("under the pointer: page %d at %.1f, was page %d at %.1f", got, gpt.H, page, pt.H)
+	for name, zoom := range map[string]func(x, y float64) platform.Event{
+		"ctrl+wheel": func(x, y float64) platform.Event {
+			return platform.ScrollEvent{DY: -10, X: x, Y: y, Mods: platform.Ctrl}
+		},
+		"pinch": func(x, y float64) platform.Event { return platform.ZoomEvent{Factor: 1.25, X: x, Y: y} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.open(f.pdf("a.pdf", 6))
+			c := f.content()
+			view := f.a.current().view
+			view.Layout().ScrollTo(image.Pt(0, 500))
+			at := image.Pt(c.Dx()/2, c.Dy()/3) // in content coordinates
+			page, pt, ok := view.Layout().HitPage(at)
+			if !ok {
+				t.Fatal("no page under the pointer")
+			}
+			scale := view.Layout().Scale()
+			f.a.Handle(zoom(float64(c.Min.X+at.X), float64(c.Min.Y+at.Y)))
+			if view.Layout().Scale() == scale {
+				t.Error("the zoom did not change")
+			}
+			got, gpt, ok := view.Layout().HitPage(at)
+			if !ok || got != page || gpt.H-pt.H > 1 || pt.H-gpt.H > 1 {
+				t.Errorf("under the pointer: page %d at %.1f, was page %d at %.1f", got, gpt.H, page, pt.H)
+			}
+		})
 	}
 }
 

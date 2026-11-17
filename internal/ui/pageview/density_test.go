@@ -2,8 +2,10 @@ package pageview
 
 import (
 	"image"
+	"math"
 	"testing"
 
+	"viewrab/internal/ui/layout"
 	"viewrab/internal/ui/paint"
 	"viewrab/internal/ui/platform"
 )
@@ -29,5 +31,57 @@ func TestPagesRenderAtTheDisplayDensity(t *testing.T) {
 		if got := canvas.Img.RGBAAt(mid.X, mid.Y); got != red {
 			t.Errorf("scale %v: the page's middle in device pixels is %v, want red", c.scale, got)
 		}
+	}
+}
+
+// TestDefaultZoomFitsNarrowViews verifies that a view too narrow for the
+// default zoom's pages opens at fit width, that a wide one opens at the
+// default zoom, and that Ctrl+0 returns each to the mode it opened in.
+func TestDefaultZoomFitsNarrowViews(t *testing.T) {
+	// A page of 100 points at 150% is 200 pixels wide, 224 with the margins.
+	for _, c := range []struct {
+		width int
+		mode  layout.ZoomMode
+	}{{400, layout.ZoomFixed}, {150, layout.ZoomFitWidth}} {
+		v, _ := newView(t, openDoc(t, 1), image.Pt(c.width, 300), Options{Gap: 12, Margin: 12, Zoom: DefaultZoom})
+		if v.lay.Mode() != c.mode {
+			t.Errorf("width %d: opened in mode %v, want %v", c.width, v.lay.Mode(), c.mode)
+		}
+		v.ZoomIn()
+		v.HandleEvent(platform.KeyEvent{Rune: '0', Down: true, Mods: platform.Ctrl})
+		if v.lay.Mode() != c.mode {
+			t.Errorf("width %d: Ctrl+0 went to mode %v, want %v", c.width, v.lay.Mode(), c.mode)
+		}
+	}
+}
+
+// TestPinchZoomsAroundItsMiddle verifies that a pinch zooms by its factor,
+// keeping the point between the fingers in place.
+func TestPinchZoomsAroundItsMiddle(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 3), image.Pt(200, 300), Options{Gap: 12, Margin: 12, Zoom: ZoomPresets[4]})
+	before := v.lay.Scale()
+	at := image.Pt(100, 150)
+	_, pt, _ := v.lay.HitPage(at)
+	if !v.HandleEvent(platform.ZoomEvent{Factor: 1.5, X: float64(at.X), Y: float64(at.Y)}) {
+		t.Fatal("a pinch asked for no redraw")
+	}
+	if got := v.lay.Scale(); math.Abs(got-before*1.5) > 1e-9 {
+		t.Errorf("scale %v after a pinch of 1.5 from %v", got, before)
+	}
+	if _, after, _ := v.lay.HitPage(at); math.Abs(after.W-pt.W) > 1 || math.Abs(after.H-pt.H) > 1 {
+		t.Errorf("the point under the fingers moved from %v to %v", pt, after)
+	}
+}
+
+// TestPanScrollsByItsDistance verifies that a pan scrolls the pages by its
+// distance, rounded to whole pixels, without the wheel's scroll speed.
+func TestPanScrollsByItsDistance(t *testing.T) {
+	v, _ := newView(t, openDoc(t, 6), image.Pt(200, 300), Options{Gap: 12, Margin: 12, Zoom: ZoomPresets[4]})
+	before := v.lay.Scroll()
+	if !v.HandleEvent(platform.PanEvent{DY: 40.6}) {
+		t.Fatal("a pan asked for no redraw")
+	}
+	if got := v.lay.Scroll(); got != before.Add(image.Pt(0, 41)) {
+		t.Errorf("a pan of 40.6 pixels scrolled from %v to %v, want 41 down", before, got)
 	}
 }

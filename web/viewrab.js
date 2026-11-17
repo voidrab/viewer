@@ -43,6 +43,8 @@
 	const mods = (e) => ({
 		shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey, altGraph: altGraph(e),
 	});
+	// noMods is mods for an event made with no key held, as a touch makes.
+	const noMods = mods({});
 
 	const storage = () => {
 		const out = {};
@@ -73,6 +75,159 @@
 		a.click();
 		a.remove();
 		setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+	};
+
+	// touchGestures turns the touches on the canvas into what the viewer
+	// takes from a mouse: a tap clicks; a drag pans, and flung, pans on and
+	// slows to a stop; two fingers zoom by their spread and pan by their
+	// middle; a long press opens the context menu when the finger lifts, or,
+	// dragged on, selects text as the left button does, and then opens it.
+	// Pans and zooms are sent once a frame, however often the fingers move.
+	const touchGestures = (send) => {
+		const slop = 8; // the move, in pixels, below which a touch is a tap
+		const holdTime = 500;
+		const points = new Map(); // pointer id → its last position
+		let g = null; // the gesture going on
+		let fling = 0; // the animation frame of a fling, or 0
+
+		// The pan and zoom gathered for the next frame. Pans are sent in whole
+		// pixels, and what is left over goes with the next.
+		const due = { dx: 0, dy: 0, factor: 1, at: null, frame: 0 };
+		const flush = () => {
+			due.frame = 0;
+			const dx = Math.round(due.dx), dy = Math.round(due.dy);
+			due.dx -= dx;
+			due.dy -= dy;
+			if (due.factor !== 1) send({ type: "pinch", factor: due.factor, ...due.at });
+			if (dx || dy) send({ type: "pan", dx, dy, ...due.at });
+			due.factor = 1;
+		};
+		const pan = (dx, dy, at) => {
+			Object.assign(due, { dx: due.dx + dx, dy: due.dy + dy, at });
+			due.frame ||= requestAnimationFrame(flush);
+		};
+		const zoom = (factor, at) => {
+			Object.assign(due, { factor: due.factor * factor, at });
+			due.frame ||= requestAnimationFrame(flush);
+		};
+
+		const hover = (p) => send({ type: "pointermove", ...p, ...noMods });
+		const button = (type, b, p) => send({ type, button: b, ...p, ...noMods });
+		const click = (b, p) => { button("pointerdown", b, p); button("pointerup", b, p); };
+		const begin = (kind, p) => ({ kind, start: p, last: p, t: performance.now(), v: { x: 0, y: 0 } });
+		const moved = (p) => Math.hypot(p.x - g.start.x, p.y - g.start.y) >= slop;
+		const stopFling = () => { cancelAnimationFrame(fling); fling = 0; };
+		const spread = () => {
+			const [a, b] = [...points.values()];
+			return { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+		};
+		// startFling pans on at velocity v, in pixels a millisecond, slowing
+		// as a thrown sheet of paper does.
+		const startFling = (v, p) => {
+			let last = performance.now();
+			const step = (now) => {
+				const dt = now - last;
+				last = now;
+				v = { x: v.x * Math.pow(0.996, dt), y: v.y * Math.pow(0.996, dt) };
+				if (Math.hypot(v.x, v.y) < 0.02) { fling = 0; return; }
+				pan(-v.x * dt, -v.y * dt, p);
+				fling = requestAnimationFrame(step);
+			};
+			fling = requestAnimationFrame(step);
+		};
+
+		const down = (id, p) => {
+			stopFling();
+			points.set(id, p);
+			if (points.size === 1) {
+				g = begin("tap", p);
+				g.timer = setTimeout(() => {
+					if (g?.kind === "tap") g.kind = "hold";
+				}, holdTime);
+				return;
+			}
+			if (points.size === 2) {
+				clearTimeout(g?.timer);
+				if (g?.kind === "select") button("pointerup", 0, g.last);
+				g = { kind: "pinch", ...spread() };
+			}
+		};
+
+		const move = (id, p) => {
+			if (!points.has(id) || !g) return;
+			points.set(id, p);
+			switch (g.kind) {
+			case "tap":
+				if (!moved(p)) return;
+				clearTimeout(g.timer);
+				g.kind = "pan";
+				// fall through: the move so far pans
+			case "pan": {
+				const now = performance.now();
+				const dt = Math.max(now - g.t, 1);
+				const dx = p.x - g.last.x, dy = p.y - g.last.y;
+				// The velocity, smoothed over the last few moves.
+				g.v = { x: 0.8 * dx / dt + 0.2 * g.v.x, y: 0.8 * dy / dt + 0.2 * g.v.y };
+				g.t = now;
+				g.last = p;
+				pan(-dx, -dy, p);
+				return;
+			}
+			case "hold":
+				if (!moved(p)) return;
+				g.kind = "select";
+				hover(g.start);
+				button("pointerdown", 0, g.start);
+				// fall through
+			case "select":
+				g.last = p;
+				hover(p);
+				return;
+			case "pinch": {
+				if (points.size < 2) return;
+				const now = spread();
+				if (g.d > 0 && now.d > 0) zoom(now.d / g.d, now.mid);
+				pan(g.mid.x - now.mid.x, g.mid.y - now.mid.y, now.mid);
+				Object.assign(g, now);
+			}
+			}
+		};
+
+		const up = (id, p, cancelled = false) => {
+			if (!points.delete(id) || !g) return;
+			clearTimeout(g.timer);
+			if (g.kind === "pinch") {
+				// The finger left goes on panning, as a new drag.
+				const [rest] = [...points.values()];
+				g = rest ? begin("pan", rest) : null;
+				return;
+			}
+			const done = g;
+			g = null;
+			if (cancelled) {
+				if (done.kind === "select") button("pointerup", 0, done.last);
+				return;
+			}
+			switch (done.kind) {
+			case "tap":
+				hover(done.start);
+				click(0, done.start);
+				break;
+			case "pan":
+				// A flick: only a finger still moving as it lifts flings.
+				if (performance.now() - done.t < 50) startFling(done.v, p);
+				break;
+			case "hold":
+				click(2, done.start);
+				break;
+			case "select":
+				button("pointerup", 0, p);
+				click(2, p);
+				break;
+			}
+		};
+
+		return { down, move, up };
 	};
 
 	// start runs the program at wasm in a worker, on the canvas with the id
@@ -141,16 +296,27 @@
 		canvas.tabIndex = 0;
 		const on = (name, f, passive = false) => canvas.addEventListener(name, f, { passive });
 		const at = (e) => ({ x: e.offsetX, y: e.offsetY });
+		const touch = touchGestures(send);
+		const isTouch = (e) => e.pointerType === "touch";
 		on("pointerdown", (e) => {
 			if (e.button > 2) return;
 			e.preventDefault(); // no middle-button autoscroll, no text selection
 			canvas.focus();
 			try { canvas.setPointerCapture(e.pointerId); } catch { /* lifted already */ }
-			send({ type: "pointerdown", button: e.button, ...at(e), ...mods(e) });
+			if (isTouch(e)) touch.down(e.pointerId, at(e));
+			else send({ type: "pointerdown", button: e.button, ...at(e), ...mods(e) });
 		});
-		on("pointerup", (e) => send({ type: "pointerup", button: e.button, ...at(e), ...mods(e) }));
-		for (const t of ["pointermove", "pointerenter", "pointerleave"]) {
-			on(t, (e) => send({ type: t, ...at(e), ...mods(e) }), true);
+		on("pointerup", (e) => {
+			if (isTouch(e)) touch.up(e.pointerId, at(e));
+			else send({ type: "pointerup", button: e.button, ...at(e), ...mods(e) });
+		});
+		on("pointercancel", (e) => isTouch(e) && touch.up(e.pointerId, at(e), true));
+		on("pointermove", (e) => {
+			if (isTouch(e)) touch.move(e.pointerId, at(e));
+			else send({ type: "pointermove", ...at(e), ...mods(e) });
+		}, true);
+		for (const t of ["pointerenter", "pointerleave"]) {
+			on(t, (e) => isTouch(e) || send({ type: t, ...at(e), ...mods(e) }), true);
 		}
 		on("contextmenu", (e) => e.preventDefault());
 		on("wheel", (e) => {

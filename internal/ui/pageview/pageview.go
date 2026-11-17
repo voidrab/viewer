@@ -193,7 +193,7 @@ func New(doc Document, viewport image.Point, opts Options, invalidate func()) (*
 	}
 	v.sizes = sizes
 	v.lay = layout.New(sizes, viewport, opts.Gap, opts.Margin)
-	v.SetZoomPreset(v.opts.Zoom)
+	v.defaultZoom()
 	if v.pool == nil {
 		v.pool, v.ownsPool = NewPool(PoolOptions{Workers: opts.Workers, CacheBytes: opts.CacheBytes}), true
 	}
@@ -547,6 +547,15 @@ func (v *View) SetZoomPreset(p ZoomPreset) {
 	v.lay.SetMode(p.Mode)
 }
 
+// defaultZoom applies the zoom the view opens at, or fit width where that
+// zoom would make the pages wider than the view, as on a phone.
+func (v *View) defaultZoom() {
+	v.SetZoomPreset(v.opts.Zoom)
+	if w := v.lay.Viewport().X; w > 0 && v.lay.DocumentSize().X > w {
+		v.lay.SetMode(layout.ZoomFitWidth)
+	}
+}
+
 // ZoomPresetIndex returns the index in ZoomPresets of the zoom in use, or -1
 // for a scale no preset has.
 func (v *View) ZoomPresetIndex() int {
@@ -573,8 +582,8 @@ func (v *View) ZoomPercent() string {
 	return fmt.Sprintf("%d%%", int(math.Round(v.lay.Scale()/CSSScale*100)))
 }
 
-// HandleEvent applies a resize, scroll or key event and reports whether the
-// view needs redrawing. Events it does not use return false.
+// HandleEvent applies a resize, scroll, pan, zoom or key event and reports
+// whether the view needs redrawing. Events it does not use return false.
 func (v *View) HandleEvent(ev platform.Event) bool {
 	switch ev := ev.(type) {
 	case platform.ResizeEvent:
@@ -588,6 +597,12 @@ func (v *View) HandleEvent(ev platform.Event) bool {
 			return true
 		}
 		v.lay.ScrollBy(image.Pt(int(ev.DX*v.opts.ScrollSpeed), int(ev.DY*v.opts.ScrollSpeed)))
+		return true
+	case platform.ZoomEvent:
+		v.zoomAt(ev.Factor, image.Pt(int(ev.X), int(ev.Y)))
+		return true
+	case platform.PanEvent:
+		v.lay.ScrollBy(image.Pt(int(math.Round(ev.DX)), int(math.Round(ev.DY))))
 		return true
 	case platform.KeyEvent:
 		if ev.Down {
@@ -607,7 +622,7 @@ func (v *View) key(ev platform.KeyEvent) bool {
 		case '-':
 			v.zoomBy(1 / zoomStep)
 		case '0':
-			v.SetZoomPreset(v.opts.Zoom)
+			v.defaultZoom()
 		case 'a':
 			v.SelectAll()
 		default:

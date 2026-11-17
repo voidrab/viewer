@@ -490,3 +490,41 @@ func TestToolbarButtonRect(t *testing.T) {
 		t.Error("an unlaid toolbar has no button rectangle")
 	}
 }
+
+// TestToolbarCompactsToFitNarrowBars verifies that a narrow bar leaves out
+// the steps of compact in order until the find field fits, and never lets
+// controls overlap.
+func TestToolbarCompactsToFitNarrowBars(t *testing.T) {
+	tb := newToolbar(t)
+	tb.Controls = false
+	for _, c := range []struct{ width, steps int }{{900, 0}, {560, 1}, {480, 2}, {393, 3}, {320, 4}, {200, 4}} {
+		tb.Layout(c.width)
+		gone := map[ButtonID]bool{}
+		for _, step := range compact[:c.steps] {
+			for _, id := range step {
+				gone[id] = true
+			}
+		}
+		for id := range buttonCount {
+			if !isControl(id) && tb.shown(id) == gone[id] {
+				t.Errorf("width %d: control %d shown %v, want %v", c.width, id, tb.shown(id), !gone[id])
+			}
+		}
+		if tb.pagesBox.Empty() != gone[pageCount] {
+			t.Errorf("width %d: page count box %v, want it left out %v", c.width, tb.pagesBox, gone[pageCount])
+		}
+		if c.width < 300 {
+			continue // too narrow for anything to fit
+		}
+		if w := tb.rects[ButtonFind].Dx(); w < FindMinWidth {
+			t.Errorf("width %d: find field %d wide, want at least %d", c.width, w, FindMinWidth)
+		}
+		for a := range buttonCount {
+			for b := a + 1; b < buttonCount; b++ {
+				if tb.shown(a) && tb.shown(b) && tb.rects[a].Overlaps(tb.rects[b]) {
+					t.Errorf("width %d: controls %d %v and %d %v overlap", c.width, a, tb.rects[a], b, tb.rects[b])
+				}
+			}
+		}
+	}
+}

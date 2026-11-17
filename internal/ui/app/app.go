@@ -395,16 +395,20 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		a.decorated, a.maximized = ev.Decorated, ev.Maximized
 		a.win.Invalidate()
 	case platform.ScrollEvent:
-		if r := a.panelRect(); image.Pt(int(ev.X), int(ev.Y)).In(r) {
-			a.panel.Scroll(ev.DY*panelScrollSpeed, r.Size())
-			a.win.Invalidate()
+		if a.scrollPanel(ev.X, ev.Y, ev.DY*panelScrollSpeed) {
 			break
 		}
-		o := a.origin(sectionContent)
-		ev.X, ev.Y = ev.X-float64(o.X), ev.Y-float64(o.Y)
-		if d := a.current(); d != nil && d.view.HandleEvent(ev) {
-			a.win.Invalidate()
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
+	case platform.PanEvent:
+		if a.scrollPanel(ev.X, ev.Y, ev.DY) {
+			break
 		}
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
+	case platform.ZoomEvent:
+		ev.X, ev.Y = a.inContent(ev.X, ev.Y)
+		a.viewEvent(ev)
 	case platform.KeyEvent:
 		return a.key(ev)
 	case platform.PasteEvent:
@@ -414,6 +418,32 @@ func (a *App) Handle(ev platform.Event) (quit bool) {
 		}
 	}
 	return a.quitting
+}
+
+// scrollPanel scrolls the PDF/A panel by dy pixels if (x, y) is on it, and
+// reports whether it is.
+func (a *App) scrollPanel(x, y, dy float64) bool {
+	r := a.panelRect()
+	if !image.Pt(int(x), int(y)).In(r) {
+		return false
+	}
+	a.panel.Scroll(dy, r.Size())
+	a.win.Invalidate()
+	return true
+}
+
+// inContent returns the window point (x, y) relative to the content.
+func (a *App) inContent(x, y float64) (float64, float64) {
+	o := a.origin(sectionContent)
+	return x - float64(o.X), y - float64(o.Y)
+}
+
+// viewEvent hands ev to the active document's view, and asks for a frame if
+// it changed the view.
+func (a *App) viewEvent(ev platform.Event) {
+	if d := a.current(); d != nil && d.view.HandleEvent(ev) {
+		a.win.Invalidate()
+	}
 }
 
 // current returns the active document, or nil.

@@ -89,6 +89,7 @@ type Toolbar struct {
 	logo     image.Rectangle
 	pagesBox image.Rectangle // where "/ Pages" is drawn
 	width    int
+	end      int // where the controls from the left edge end
 	laid     bool
 	hover    ButtonID // -1 when none
 	press    ButtonID // -1 when none
@@ -137,14 +138,50 @@ func (t *Toolbar) zoomWidth() int {
 // Open, and the page and zoom groups from the left edge; the window controls,
 // if shown, the menu button, the theme switch, PDF/A and the find field from
 // the right edge.
-// The find field shrinks, down to FindMinWidth, to fit a narrow bar.
+// The find field shrinks, down to FindMinWidth, to fit a narrow bar. On a bar
+// narrower still, as a phone's is, the controls of compact are left out, a
+// step at a time, until the find field fits.
 func (t *Toolbar) Layout(width int) {
+	zoom, count := t.zoomWidth(), t.Face.Width(t.pagesText())
+	hidden := map[ButtonID]bool{}
+	t.laid = true
+	for _, step := range compact {
+		if t.layout(width, zoom, count, hidden) {
+			return
+		}
+		for _, id := range step {
+			hidden[id] = true
+		}
+	}
+	t.layout(width, zoom, count, hidden)
+}
+
+// pageCount stands in compact for the page count after the page field.
+const pageCount ButtonID = -2
+
+// compact lists, in the order a narrow bar leaves them out, the controls it
+// can do without: zoom in and out, which a pinch or the keyboard also does;
+// the previous and next page buttons, which scrolling stands in for; the zoom
+// drop-down; and the page count.
+var compact = [][]ButtonID{
+	{ButtonZoomOut, ButtonZoomIn}, {ButtonPrev, ButtonNext}, {ButtonZoomMode}, {pageCount},
+}
+
+// layout places the controls on a bar of width, leaving out the hidden ones.
+// zoom and count are the widths of the zoom drop-down and the page count. It
+// reports whether the find field has the room it needs.
+func (t *Toolbar) layout(width, zoom, count int, hidden map[ButtonID]bool) bool {
 	t.width = width
+	t.rects = [buttonCount]image.Rectangle{}
+	t.pagesBox = image.Rectangle{}
 	y := (theme.ToolbarHeight - toolButton) / 2
 	ly := (theme.ToolbarHeight - logoSize) / 2
 	t.logo = image.Rect(toolPad, ly, toolPad+logoSize, ly+logoSize)
 	x := t.logo.Max.X + 4 + toolGap
 	place := func(id ButtonID, w, gap int) {
+		if hidden[id] {
+			return
+		}
 		t.rects[id] = image.Rect(x, y, x+w, y+toolButton)
 		x += w + gap
 	}
@@ -152,20 +189,21 @@ func (t *Toolbar) Layout(width int) {
 	x += groupLead
 	place(ButtonPrev, toolButton, groupGap)
 	place(ButtonPage, pageWidth, groupGap)
-	pw := t.Face.Width(t.pagesText())
-	t.pagesBox = image.Rect(x, y, x+pw, y+toolButton)
-	x += pw + 2 + groupGap
+	if !hidden[pageCount] {
+		t.pagesBox = image.Rect(x, y, x+count, y+toolButton)
+		x += count + 2 + groupGap
+	}
 	place(ButtonNext, toolButton, toolGap)
-	x += groupLead
+	if !hidden[ButtonZoomMode] {
+		x += groupLead
+	}
 	place(ButtonZoomOut, toolButton, groupGap)
-	place(ButtonZoomMode, t.zoomWidth(), groupGap)
+	place(ButtonZoomMode, zoom, groupGap)
 	place(ButtonZoomIn, toolButton, toolGap)
 	left := x
+	t.end = left
 
 	right := width - winPad
-	for id := ButtonMinimize; id <= ButtonCloseWindow; id++ {
-		t.rects[id] = image.Rectangle{}
-	}
 	if t.Controls {
 		x = right - 3*winButton - 2*winGap
 		right = x - winPad - toolGap
@@ -182,8 +220,9 @@ func (t *Toolbar) Layout(width int) {
 	placeLeft(ButtonTheme, toolButton)
 	placeLeft(ButtonPDFA, toolButton)
 	right -= 4 // the find field's margin
-	placeLeft(ButtonFind, min(max(right-left-groupLead, FindMinWidth), FindWidth))
-	t.laid = true
+	room := right - left - groupLead
+	placeLeft(ButtonFind, min(max(room, FindMinWidth), FindWidth))
+	return room >= FindMinWidth
 }
 
 // shown reports whether control id is on the bar.
@@ -278,7 +317,7 @@ func (t *Toolbar) Draw(c *paint.Canvas, origin image.Point) {
 		t.Layout(t.width)
 	}
 	p := t.Palette
-	bar := image.Rect(origin.X, origin.Y, origin.X+max(t.width, t.rects[ButtonZoomIn].Max.X+toolPad), origin.Y+theme.ToolbarHeight)
+	bar := image.Rect(origin.X, origin.Y, origin.X+max(t.width, t.end+toolPad), origin.Y+theme.ToolbarHeight)
 	c.Fill(bar, p.Chrome)
 	c.Fill(image.Rect(bar.Min.X, bar.Max.Y-1, bar.Max.X, bar.Max.Y), p.Border)
 	icon.DrawLogo(c, t.logo.Add(origin))
