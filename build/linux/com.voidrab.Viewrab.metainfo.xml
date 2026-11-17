@@ -59,6 +59,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.2.0" date="2026-11-17">
+      <description>
+        <p>New in this release:</p>
+        <ul>
+          <li>Text selection by dragging, with a context menu to copy or select all</li>
+          <li>Documents open at 150%, or at fit width where that is too wide</li>
+          <li>Ending a tab drag outside every window on Wayland is recognised reliably</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-15">
       <description>
         <p>The first release.</p>
