@@ -15,7 +15,7 @@ func alphaAt(c *paint.Canvas, x, y int) uint8 { return c.Img.RGBAAt(x, y).A }
 // inkRect returns the bounds of the painted pixels.
 func inkRect(c *paint.Canvas) image.Rectangle {
 	var r image.Rectangle
-	b := c.Bounds()
+	b := c.Img.Rect
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
 			if alphaAt(c, x, y) != 0 {
@@ -161,5 +161,16 @@ func TestLogoIsScaledOnceForEachSize(t *testing.T) {
 	}
 	if Logo(-1).Rect.Dx() != 0 {
 		t.Error("a negative size gave a non-empty logo")
+	}
+}
+
+// TestDrawAtDeviceSize verifies that on a scaled canvas an icon is drawn at
+// the device size of its box, not stretched from the logical size.
+func TestDrawAtDeviceSize(t *testing.T) {
+	c := paint.NewScaled(20, 20, 2)
+	Draw(c, image.Rect(2, 2, 18, 18), Plus, black, 2)
+	ink := inkRect(c)
+	if box := image.Rect(4, 4, 36, 36); ink.Empty() || !ink.In(box) || ink.Dx() <= 16 {
+		t.Errorf("ink %v, want it within the device box %v and wider than the logical one", ink, box)
 	}
 }

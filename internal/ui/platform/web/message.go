@@ -26,6 +26,9 @@ type Message struct {
 	// W and H are the window's size, for "resize", and the page's height
 	// for "wheel", which deltas in pages are measured in.
 	W, H int
+	// Scale is the device pixels per CSS pixel, for "resize": the page's
+	// devicePixelRatio. Zero means 1.
+	Scale float64
 	// Text is the text of a "paste".
 	Text string
 }
@@ -71,7 +74,11 @@ func (m Message) Event() (platform.Event, bool) {
 		if m.W <= 0 || m.H <= 0 {
 			return nil, false
 		}
-		return platform.ResizeEvent{Size: platform.Size{W: m.W, H: m.H}, Scale: 1}, true
+		scale := m.Scale
+		if !(scale > 0) {
+			scale = 1
+		}
+		return platform.ResizeEvent{Size: platform.Size{W: m.W, H: m.H}, Scale: scale}, true
 	}
 	return nil, false
 }

@@ -169,7 +169,10 @@ func Draw(c *paint.Canvas, rect image.Rectangle, ic Icon, col color.NRGBA, width
 	if rect.Empty() || col.A == 0 {
 		return
 	}
-	w, h := rect.Dx(), rect.Dy()
+	// The icon is rasterized at the device size of rect, so that it is sharp
+	// on a scaled canvas.
+	dr := c.Device(rect)
+	w, h := dr.Dx(), dr.Dy()
 	sx, sy := float64(w)/Grid, float64(h)/Grid
 	var r vector.Rasterizer
 	r.Reset(w, h)

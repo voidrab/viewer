@@ -19,7 +19,7 @@ var (
 	logoSizes = map[int]*image.RGBA{}
 )
 
-// Logo returns the app's gopher icon, size pixels square and premultiplied for
+// Logo returns the app's gopher icon, size device pixels square and premultiplied for
 // paint.Canvas.DrawImage. Each size is scaled once and then reused, so the
 // result must not be modified.
 func Logo(size int) *image.RGBA {

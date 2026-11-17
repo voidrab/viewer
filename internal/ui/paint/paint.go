@@ -1,6 +1,11 @@
 // Package paint is a small software painter over an RGBA bitmap: filled and
 // stroked rectangles, square or rounded, image blits and a clip stack. Text
 // and icons build on it.
+//
+// A canvas has a scale, the device pixels of its bitmap per logical pixel, as
+// a high-density display has two or three. Everything is drawn at logical
+// coordinates, which the canvas maps to device pixels, so that the interface
+// keeps its size and gets sharper; bitmaps are drawn at device resolution.
 package paint
 
 import (
@@ -9,27 +14,70 @@ import (
 	"math"
 )
 
-// Canvas draws into Img, limited to the current clip rectangle.
+// Canvas draws into Img, its bitmap in device pixels, limited to the current
+// clip rectangle.
 type Canvas struct {
 	Img   *image.RGBA
-	clips []image.Rectangle
+	scale float64
+	size  image.Point       // in logical pixels
+	clips []image.Rectangle // in logical pixels
 }
 
-// New returns a canvas over a fresh w x h bitmap.
-func New(w, h int) *Canvas {
-	return &Canvas{Img: image.NewRGBA(image.Rect(0, 0, w, h))}
+// New returns a canvas over a fresh w x h bitmap, at scale 1.
+func New(w, h int) *Canvas { return NewScaled(w, h, 1) }
+
+// NewScaled returns a canvas of w x h logical pixels at scale s, over a fresh
+// bitmap of w*s x h*s device pixels. A scale that is not positive is 1.
+func NewScaled(w, h int, s float64) *Canvas {
+	if !(s > 0) { // also rejects NaN
+		s = 1
+	}
+	c := &Canvas{scale: s, size: image.Pt(w, h)}
+	c.Img = image.NewRGBA(c.Device(c.Bounds()))
+	return c
 }
 
-// Bounds returns the bitmap's rectangle.
-func (c *Canvas) Bounds() image.Rectangle { return c.Img.Rect }
+// Scale returns the canvas's device pixels per logical pixel.
+func (c *Canvas) Scale() float64 { return c.scale }
 
-// Clip returns the rectangle drawing is currently limited to.
+// Bounds returns the canvas's rectangle, in logical pixels.
+func (c *Canvas) Bounds() image.Rectangle { return image.Rectangle{Max: c.size} }
+
+// Device returns where the logical rectangle r lies in the bitmap. Every
+// coordinate is mapped alone, so rectangles that share an edge share it in
+// device pixels too and leave no seam.
+func (c *Canvas) Device(r image.Rectangle) image.Rectangle {
+	return image.Rectangle{Min: c.DevicePoint(r.Min), Max: c.DevicePoint(r.Max)}
+}
+
+// DevicePoint returns where the logical point p lies in the bitmap.
+func (c *Canvas) DevicePoint(p image.Point) image.Point {
+	return image.Pt(c.dev(p.X), c.dev(p.Y))
+}
+
+// dev maps a logical coordinate to device pixels.
+func (c *Canvas) dev(v int) int { return int(math.Round(float64(v) * c.scale)) }
+
+// DeviceLen maps a logical length, a width or radius, to device pixels: at
+// least one pixel for a positive length, so that a hairline stays visible.
+func (c *Canvas) DeviceLen(v int) int {
+	if v <= 0 {
+		return v
+	}
+	return max(1, c.dev(v))
+}
+
+// Clip returns the rectangle drawing is currently limited to, in logical
+// pixels.
 func (c *Canvas) Clip() image.Rectangle {
 	if n := len(c.clips); n > 0 {
 		return c.clips[n-1]
 	}
-	return c.Img.Rect
+	return c.Bounds()
 }
+
+// clip returns the clip in device pixels.
+func (c *Canvas) clip() image.Rectangle { return c.Device(c.Clip()) }
 
 // PushClip narrows the clip to its intersection with r.
 func (c *Canvas) PushClip(r image.Rectangle) {
@@ -45,8 +93,11 @@ func (c *Canvas) PopClip() {
 }
 
 // Fill paints r with col, blending source-over; col is non-premultiplied.
-func (c *Canvas) Fill(r image.Rectangle, col color.NRGBA) {
-	r = r.Intersect(c.Clip())
+func (c *Canvas) Fill(r image.Rectangle, col color.NRGBA) { c.fill(c.Device(r), col) }
+
+// fill is Fill in device pixels.
+func (c *Canvas) fill(r image.Rectangle, col color.NRGBA) {
+	r = r.Intersect(c.clip())
 	if r.Empty() || col.A == 0 {
 		return
 	}
@@ -73,21 +124,26 @@ func (c *Canvas) Fill(r image.Rectangle, col color.NRGBA) {
 
 // Stroke paints a border of the given width just inside r.
 func (c *Canvas) Stroke(r image.Rectangle, width int, col color.NRGBA) {
+	c.stroke(c.Device(r), c.DeviceLen(width), col)
+}
+
+// stroke is Stroke in device pixels.
+func (c *Canvas) stroke(r image.Rectangle, width int, col color.NRGBA) {
 	w := min(width, r.Dx()/2+1, r.Dy()/2+1)
 	if w <= 0 {
 		return
 	}
-	c.Fill(image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+w), col)
-	c.Fill(image.Rect(r.Min.X, r.Max.Y-w, r.Max.X, r.Max.Y), col)
-	c.Fill(image.Rect(r.Min.X, r.Min.Y+w, r.Min.X+w, r.Max.Y-w), col)
-	c.Fill(image.Rect(r.Max.X-w, r.Min.Y+w, r.Max.X, r.Max.Y-w), col)
+	c.fill(image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+w), col)
+	c.fill(image.Rect(r.Min.X, r.Max.Y-w, r.Max.X, r.Max.Y), col)
+	c.fill(image.Rect(r.Min.X, r.Min.Y+w, r.Min.X+w, r.Max.Y-w), col)
+	c.fill(image.Rect(r.Max.X-w, r.Min.Y+w, r.Max.X, r.Max.Y-w), col)
 }
 
 // FillRound paints r with col like Fill, with its corners rounded to radius
 // and their edges anti-aliased. A radius of half the shorter side or more
 // makes the ends round, and a square r a circle.
 func (c *Canvas) FillRound(r image.Rectangle, radius int, col color.NRGBA) {
-	c.round(r, radius, 0, col)
+	c.round(c.Device(r), c.DeviceLen(radius), 0, col)
 }
 
 // StrokeRound paints a border of the given width just inside r like Stroke,
@@ -96,19 +152,19 @@ func (c *Canvas) StrokeRound(r image.Rectangle, radius, width int, col color.NRG
 	if width <= 0 {
 		return
 	}
-	c.round(r, radius, width, col)
+	c.round(c.Device(r), c.DeviceLen(radius), c.DeviceLen(width), col)
 }
 
 // round paints the rounded rectangle r, or with a positive width only the
-// band of that width inside its edge. The straight parts are plain fills; only
+// band of that width inside its edge, all in device pixels. The straight parts are plain fills; only
 // the corner squares are worked out pixel by pixel.
 func (c *Canvas) round(r image.Rectangle, radius, width int, col color.NRGBA) {
 	radius = min(radius, r.Dx()/2, r.Dy()/2)
 	if radius <= 0 {
 		if width > 0 {
-			c.Stroke(r, width, col)
+			c.stroke(r, width, col)
 		} else {
-			c.Fill(r, col)
+			c.fill(r, col)
 		}
 		return
 	}
@@ -133,7 +189,7 @@ func (c *Canvas) round(r image.Rectangle, radius, width int, col color.NRGBA) {
 		}
 	}
 	for _, s := range straight {
-		c.Fill(s, col)
+		c.fill(s, col)
 	}
 	for _, corner := range []image.Rectangle{
 		image.Rect(x0, y0, x0+k, y0+k), image.Rect(x1-k, y0, x1, y0+k),
@@ -146,7 +202,7 @@ func (c *Canvas) round(r image.Rectangle, radius, width int, col color.NRGBA) {
 // curve paints the part within area of the rounded rectangle r, or of its
 // band of the given width, blending each pixel by how much of it is covered.
 func (c *Canvas) curve(r, area image.Rectangle, radius, width int, col color.NRGBA) {
-	area = area.Intersect(c.Clip())
+	area = area.Intersect(c.clip())
 	cx, cy := float64(r.Min.X+r.Max.X)/2, float64(r.Min.Y+r.Max.Y)/2
 	hx, hy := float64(r.Dx())/2, float64(r.Dy())/2
 	inner := float64(max(radius-width, 0))
@@ -192,10 +248,14 @@ func coverage(px, py, hx, hy, r float64) float64 {
 	return max(min(0.5-d, 1), 0)
 }
 
-// DrawImage blends src over the canvas with its top-left corner at p. src
-// must be premultiplied, as image.RGBA samples are.
+// DrawImage blends src over the canvas with its top-left corner at the
+// logical point p. src is in device pixels, one to each of the bitmap's, so
+// that it is drawn sharp: on a canvas at scale 2, an icon to fill 16 logical
+// pixels is made 32 pixels wide. It must be premultiplied, as image.RGBA
+// samples are.
 func (c *Canvas) DrawImage(p image.Point, src *image.RGBA) {
-	dst := src.Rect.Sub(src.Rect.Min).Add(p).Intersect(c.Clip())
+	p = c.DevicePoint(p)
+	dst := src.Rect.Sub(src.Rect.Min).Add(p).Intersect(c.clip())
 	if dst.Empty() {
 		return
 	}
@@ -226,12 +286,22 @@ func blend(d []uint8, src color.RGBA) {
 // nearest-neighbour sampling. src must be opaque, because its pixels replace
 // the canvas's rather than blend over them. It is meant for showing a page
 // rendered at a slightly different size than its slot.
+//
+// dst is in logical pixels, src in its own: a page rendered at the device
+// size of dst is copied one to one.
 func (c *Canvas) DrawScaled(dst image.Rectangle, src *image.RGBA) {
+	c.DrawScaledDevice(c.Device(dst), src)
+}
+
+// DrawScaledDevice is DrawScaled with dst in device pixels, for bitmaps laid
+// out in device pixels, such as the tiles of a page, which must meet with no
+// seam.
+func (c *Canvas) DrawScaledDevice(dst image.Rectangle, src *image.RGBA) {
 	sw, sh := src.Rect.Dx(), src.Rect.Dy()
 	if dst.Empty() || sw == 0 || sh == 0 {
 		return
 	}
-	clip := dst.Intersect(c.Clip())
+	clip := dst.Intersect(c.clip())
 	if clip.Empty() {
 		return
 	}

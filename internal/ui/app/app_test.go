@@ -1345,3 +1345,19 @@ func TestTheContextMenuCopiesAndSelectsAll(t *testing.T) {
 		t.Error("the zoom menu kept the context menu's shortcuts")
 	}
 }
+
+// TestDrawAtTheWindowScale verifies that a window of a dense display is
+// presented at its device size, and made again when its scale changes.
+func TestDrawAtTheWindowScale(t *testing.T) {
+	f := newFixture(t)
+	f.open(f.pdf("doc.pdf", 1))
+	for _, scale := range []float64{2, 1.5} {
+		f.a.Handle(platform.ResizeEvent{Size: platform.Size{W: winW, H: winH}, Scale: scale})
+		f.a.Handle(platform.FrameEvent{})
+		shots := f.win.Presented()
+		img := shots[len(shots)-1]
+		if want := image.Rect(0, 0, int(winW*scale), int(winH*scale)); img.Rect != want {
+			t.Errorf("scale %v: presented %v, want %v", scale, img.Rect, want)
+		}
+	}
+}

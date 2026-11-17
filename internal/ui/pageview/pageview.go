@@ -151,6 +151,7 @@ type View struct {
 	now       func() time.Time
 	after     func(d time.Duration, f func()) stopper
 	dpi       int       // the dpi last drawn at
+	density   float64   // device pixels per view pixel, from the last resize
 	changedAt time.Time // when it last changed
 	quietAt   time.Time // the time before which renders at a new dpi wait
 	timer     stopper
@@ -230,6 +231,17 @@ func (v *View) Prefetch() { v.want(nil, image.Rectangle{}) }
 // dpiFor returns the whole dpi, at least 1, that a page is rendered at for
 // scale. Cached bitmaps are keyed by this value.
 func dpiFor(scale float64) int { return max(1, int(math.Round(72*scale))) }
+
+// maxDensity bounds the device pixels per view pixel pages are rendered at.
+// A display of three, as phones have, would cost more than twice the renders
+// and memory of two for a difference hard to see.
+const maxDensity = 2
+
+// renderDPI returns the dpi pages are rendered at: the zoom's, at the
+// display's density, so that a page's pixels are the display's.
+func (v *View) renderDPI() int {
+	return dpiFor(v.lay.Scale() * min(max(v.density, 1), maxDensity))
+}
 
 // Rapid zooming, as the mouse wheel makes it, goes through many resolutions,
 // each of which would be rendered and thrown away by the next step. A change of
@@ -333,7 +345,7 @@ func place(vr image.Rectangle, r image.Rectangle, px image.Point) image.Rectangl
 // nothing cached, and drops all other requests. With a canvas, it also draws
 // each visible page.
 func (v *View) want(c *paint.Canvas, rect image.Rectangle) {
-	dpi := dpiFor(v.lay.Scale())
+	dpi := v.renderDPI()
 	view := image.Rectangle{Max: v.lay.Viewport()}
 	plan := v.plan(dpi, view, true)
 	if plan.bytes > v.pool.budgetBytes()/2 {
@@ -439,6 +451,8 @@ func (v *View) plan(dpi int, view image.Rectangle, ahead bool) framePlan {
 // then each part cached at dpi over that.
 func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi int) {
 	vr := pg.vr.Add(rect.Min)
+	// The parts are placed in device pixels, where they meet with no seam.
+	dvr, drect := c.Device(vr), c.Device(rect)
 	px := v.pixelSize(pg.page, dpi)
 	// A soft shadow, fading out over a few pixels, lifts the paper off the
 	// backdrop as in the webview build.
@@ -450,8 +464,8 @@ func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi 
 	var done []placed
 	covered := true
 	for _, r := range parts(px) {
-		at := place(vr, r, px)
-		if !at.Overlaps(rect) {
+		at := place(dvr, r, px)
+		if !at.Overlaps(drect) {
 			continue
 		}
 		if img := v.pool.lookup(v, key{pg.page, dpi, r}); img != nil {
@@ -467,11 +481,11 @@ func (v *View) drawPage(c *paint.Canvas, rect image.Rectangle, pg pagePlan, dpi 
 		// only while parts are missing.
 		c.Fill(vr, color.NRGBA{255, 255, 255, 255})
 		for _, old := range v.pool.standIns(v, pg.page, dpi) {
-			c.DrawScaled(place(vr, old.k.rect, v.pixelSize(pg.page, old.k.dpi)), old.img)
+			c.DrawScaledDevice(place(dvr, old.k.rect, v.pixelSize(pg.page, old.k.dpi)), old.img)
 		}
 	}
 	for _, d := range done {
-		c.DrawScaled(d.at, d.img)
+		c.DrawScaledDevice(d.at, d.img)
 	}
 }
 
@@ -564,6 +578,7 @@ func (v *View) ZoomPercent() string {
 func (v *View) HandleEvent(ev platform.Event) bool {
 	switch ev := ev.(type) {
 	case platform.ResizeEvent:
+		v.density = ev.Scale
 		v.lay.SetViewport(ev.Size.W, ev.Size.H)
 		v.pool.setViewport(v, v.lay.Viewport())
 		return true

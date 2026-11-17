@@ -132,7 +132,7 @@ func decode(v js.Value) Message {
 	case "dragenter", "dragover", "dragleave", "drop":
 		m.X, m.Y = num("x"), num("y")
 	case "resize":
-		m.W, m.H = int(num("w")), int(num("h"))
+		m.W, m.H, m.Scale = int(num("w")), int(num("h")), num("scale")
 	case "paste", "clipboard":
 		m.Text = str("text")
 	}
